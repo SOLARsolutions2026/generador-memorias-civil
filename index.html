@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<title>Generador de Memorias</title>
+<meta name="theme-color" content="#0f2d5e"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="stylesheet" href="app.css"/>
+</head>
+<body>
+<header class="topbar no-print">
+  <img src="icons/logo-pe.png" alt="P. Electric S.A.S."/>
+  <div class="tt"><div class="ttl">Generador de Memorias de Cálculo</div><div class="sub">P. Electric S.A.S. · Departamento Civil · NSR-10</div></div>
+  <div class="sp"></div>
+  <div id="userbox" hidden>
+    <button type="button" class="tbtn" id="btnCfg">⚙ Configuración</button>
+    <button type="button" class="tbtn" id="btnSalir">Salir</button>
+  </div>
+</header>
+<main class="wrap no-print" id="app"><p class="muted">Cargando…</p></main>
+<div id="print-area"></div>
+<div class="toast" id="toast" hidden></div>
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
