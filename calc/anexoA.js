@@ -79,7 +79,7 @@ function interpTabla(tabla, theta, sacar, minAng){
 function defaults(){
   return {
     tipo:{ paneles:true, lamina:false },
-    panel:{ nombre:'TRINASOLAR 700-720W', L:2.382, W:1.31, peso:38.3 },
+    panel:{ nombre:'TRINASOLAR 700-720W', L:2.384, W:1.303, H:0.033, peso:38.3, cargaF:5400, cargaP:2400 },
     riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906 },
     dBorde:0.40, tribRiel:'', qMant:15,
     lamina:{ perfil:'ninguna', calibre:24, wManual:'', sep:1.61 },
@@ -193,7 +193,17 @@ function viento(A, elementos){
     const dPres = Math.max(pPres, pMin), dSucc = Math.max(pSucc, pMin);
     return { ...el, luz, Ae, clase, cyr, fuente, pPres, pSucc, dPres, dSucc, Wp: r3(dPres * el.trib), Ws: r3(dSucc * el.trib) };
   });
-  return { ok:true, theta, hm, aviso18: hm > 18, I, grupo:g.nombre, V, ex, kztCumple, Kzt, Kd, Kz1, Kz2, qh1, qh2,
+  // Panel como componente: presión y succión de componentes (zona más desfavorable) frente a la carga mecánica del fabricante
+  let panelChk = null;
+  const pan = A.panel || {};
+  if(A.tipo.paneles && (num(pan.cargaF) > 0 || num(pan.cargaP) > 0)){
+    const Ap = num(pan.L) * num(pan.W), clase = Ap <= a*a ? 'a1' : Ap <= 4*a*a ? 'a2' : 'a3';
+    const cn = interpTabla(CN_CYR, theta, t => t[clase][v.flujo === 'obst' ? 'obst' : 'libre']);
+    const pp = Math.max(cn[0], cn[2], cn[4]) * qh1 * Gr / 1000, ps = -Math.min(cn[1], cn[3], cn[5]) * qh1 * Gr / 1000;
+    const dP = Math.max(pp, pMin), dS = Math.max(ps, pMin), capF = num(pan.cargaF) / 1000, capP = num(pan.cargaP) / 1000;
+    panelChk = { Ap, clase, dP, dS, capF, capP, okF: !capF || dP <= capF, okP: !capP || dS <= capP };
+  }
+  return { ok:true, panelChk, theta, hm, aviso18: hm > 18, I, grupo:g.nombre, V, ex, kztCumple, Kzt, Kd, Kz1, Kz2, qh1, qh2,
     sis, Ta, f, rigida, G:Gr, sp, a, aCalc, aMin, zonas, pMin, porElem };
 }
 

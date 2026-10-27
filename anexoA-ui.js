@@ -85,7 +85,8 @@ muerta(A, R){
     const bib = S.cfg.biblioteca || {}, pans = bib.paneles || [], rie = bib.rieles || [];
     h += `<div class="card"><div class="ct">A.1 Paneles solares — datos</div>
       <div class="fg g4"><div class="f span2"><label>Panel de la biblioteca</label><select id="selPanel" ${ro()}><option value="">— Escribir datos —</option>${pans.map((p,i) => `<option value="${i}" ${p.nombre===A.panel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
-        ${fIn(A,'panel.nombre','Referencia del panel',{cls:'span2',num:false})}${fIn(A,'panel.L','Longitud [m]')}${fIn(A,'panel.W','Ancho [m]')}${fIn(A,'panel.peso','Peso [kg/un]')}
+        ${fIn(A,'panel.nombre','Referencia del panel',{cls:'span2',num:false})}${fIn(A,'panel.L','Longitud L [m]')}${fIn(A,'panel.W','Ancho A [m]')}${fIn(A,'panel.H','Espesor H [m]')}${fIn(A,'panel.peso','Peso [kg/un]')}
+        ${fIn(A,'panel.cargaF','Carga mecánica frontal [Pa]',{h:'De la ficha técnica'})}${fIn(A,'panel.cargaP','Carga mecánica posterior [Pa]')}
         <div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibPanel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px"><div class="f span2"><label>Riel de la biblioteca</label><select id="selRiel" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         ${fIn(A,'riel.nombre','Referencia del riel',{cls:'span2',num:false})}${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/ml]')}
@@ -178,6 +179,12 @@ viento(A, R){
     `<h4 class="sub">Componentes — Figura B.6.5-19A · a = ${fx(W.a,3)} m</h4>`;
   for(const e of W.porElem) h += `<div class="hint" style="margin:6px 0 4px"><b>${esc(e.nombre)}</b>: área efectiva ${fx(e.Ae,2)} m² (${{a1:'≤ a²',a2:'entre a² y 4a²',a3:'> 4a²'}[e.clase]})</div>` +
     tabla(['Zona','CN +','CN −','p+ [kN/m²]','p− [kN/m²]'], e.cyr.map(z => ['Zona '+z.zona, fx(z.CNp,2), fx(z.CNs,2), z.pp, z.ps]));
+  if(W.panelChk){ const c = W.panelChk;
+    h += `<h4 class="sub">Verificación del panel contra su carga mecánica (ficha técnica)</h4>` +
+      tabla(['Cara','Viento de diseño [kN/m²]','Carga del fabricante [kN/m²]',''], [
+        ['Frontal (presión)', fx(c.dP,3), c.capF ? fx(c.capF,2) : '—', c.capF ? pill(c.okF?'ok':'no', c.okF?'Cumple':'No cumple') : ''],
+        ['Posterior (succión)', fx(c.dS,3), c.capP ? fx(c.capP,2) : '—', c.capP ? pill(c.okP?'ok':'no', c.okP?'Cumple':'No cumple') : '']]) +
+      `<div class="hint">Presiones de componentes (zona más desfavorable) con el área del panel, ${fx(c.Ap,2)} m². La carga del fabricante es la de ensayo según la ficha técnica.</div>`; }
   h += `<h4 class="sub">Carga de viento por elemento</h4>` + tabla(['Elemento','Ancho aferente [m]','p↓ diseño','p↑ diseño','W↓ [kN/ml]','W↑ [kN/ml]'],
     W.porElem.map(e => [esc(e.nombre), e.trib, fx(e.dPres,3)+(e.pPres<W.pMin?' (mín.)':''), fx(e.dSucc,3)+(e.pSucc<W.pMin?' (mín.)':''), `<b>${fx(e.Wp)}</b>`, `<b>${fx(e.Ws)}</b>`]));
   return h;
@@ -203,7 +210,7 @@ cubierta(A){
 },
 muerta(A){
   const bib = S.cfg.biblioteca = S.cfg.biblioteca || {};
-  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value]; if(x){ Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); } }; };
+  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value]; if(x){ if(destino === 'panel') Object.assign(A.panel, { H:'', cargaF:'', cargaP:'' }); Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); } }; };
   usar('#selPanel', 'paneles', 'panel'); usar('#selRiel', 'rieles', 'riel');
   const guardarBib = async (lista, obj) => {
     if(!obj.nombre?.trim()) return toast('Escribe primero la referencia.');
@@ -244,7 +251,7 @@ function anexoAPrintHTML(A, R){
   if(R.paneles){ const p = R.paneles, s = sec();
     h += `<section>${cab('ANÁLISIS DE CARGA MUERTA','NSR-10. B.3.3. Cargas muertas requeridas','Cargas muertas y vivas en estructura')}
       <h3>${s} Cálculo de cargas MUERTAS de paneles solares</h3>
-      <h4>${s}-1 Medidas del panel solar — ${esc(A.panel.nombre)}</h4>${kv([['Longitud [m]',fx(AnexoA.num(A.panel.L),3)],['Ancho [m]',fx(AnexoA.num(A.panel.W),3)],['Peso [kg/un]',fx(AnexoA.num(A.panel.peso),1)],['Peso [kg/m²]',fx(p.wPanel,3)]])}
+      <h4>${s}-1 Medidas del panel solar — ${esc(A.panel.nombre)}</h4>${kv([['Longitud [m]',fx(AnexoA.num(A.panel.L),3)],['Ancho [m]',fx(AnexoA.num(A.panel.W),3)],...(AnexoA.num(A.panel.H)?[['Espesor [m]',fx(AnexoA.num(A.panel.H),3)]]:[]),['Peso [kg/un]',fx(AnexoA.num(A.panel.peso),1)],['Peso [kg/m²]',fx(p.wPanel,3)],...(AnexoA.num(A.panel.cargaF)?[['Carga mecánica frontal / posterior [Pa]',`${AnexoA.num(A.panel.cargaF)} / ${AnexoA.num(A.panel.cargaP)}`]]:[])])}
       <h4>${s}-2 Perfil de soporte — ${esc(A.riel.nombre)}</h4>${kv([['Alto [m]',fx(AnexoA.num(A.riel.alto),3)],['Ancho [m]',fx(AnexoA.num(A.riel.ancho),3)],['Peso [kg/ml]',fx(AnexoA.num(A.riel.peso),3)]])}
       <h4>${s}-3 Cargas lineales sobre el perfil</h4>${svgPanel(A, p)}
       ${kv([['Ubicación del perfil respecto al borde del panel',fx(AnexoA.num(A.dBorde),2)+' m'],['Separación entre perfiles',fx(p.sepRieles,2)+' m'],['Ancho aferente para cada perfil',fx(p.trib,3)+' m'],['Área aferente para cada perfil (por panel)',fx(p.areaTrib,3)+' m²']])}
@@ -290,7 +297,8 @@ function anexoAPrintHTML(A, R){
       <h3>${letra}.${n}.3 Presiones — componentes y revestimiento (Figura B.6.5-19A)</h3>
       ${kv([['a = 10 % de la menor dimensión o 0.4h (mín. 4 % o 1.0 m)',fx(W.a,3)+' m'],['Área zona 3 (franja exterior de ancho a)',fx(W.zonas.z3,2)+' m²'],['Área zona 2',fx(W.zonas.z2,2)+' m²'],['Área zona 1 (interior)',fx(W.zonas.z1,2)+' m²']])}
       ${W.porElem.map(e => `<div style="break-inside:avoid"><p><b>${esc(e.nombre)}</b> — área efectiva ${fx(e.Ae,2)} m²</p>` + tb(['Zona','CN +','CN −','p+ [kN/m²]','p− [kN/m²]'], e.cyr.map(z => [z.zona, fx(z.CNp,2), fx(z.CNs,2), fx(z.pp,4), fx(z.ps,4)])) + '</div>').join('')}
-      <h3>${letra}.${n}.4 Carga de viento sobre los elementos</h3>
+      ${W.panelChk ? `<h3>${letra}.${n}.4 Verificación del panel solar</h3>${tb(['Cara','Viento de diseño [kN/m²]','Carga del fabricante [kN/m²]','Estado'],[['Frontal (presión)',fx(W.panelChk.dP,3),fx(W.panelChk.capF,2),W.panelChk.okF?'Cumple':'No cumple'],['Posterior (succión)',fx(W.panelChk.dS,3),fx(W.panelChk.capP,2),W.panelChk.okP?'Cumple':'No cumple']])}` : ''}
+      <h3>${letra}.${n}.${W.panelChk?5:4} Carga de viento sobre los elementos</h3>
       <p>Se toma la presión de ${v.fuente==='cyr'?'componentes y revestimiento':'sistema principal'} más desfavorable, con mínimo de ${fx(W.pMin,2)} kN/m², multiplicada por el ancho aferente.</p>
       ${tb(['Elemento','Ancho aferente [m]','p↓ [kN/m²]','p↑ [kN/m²]','W↓ [kN/ml]','W↑ [kN/ml]'], W.porElem.map(e => [esc(e.nombre), fx(e.trib,3), fx(e.dPres,3), fx(e.dSucc,3), fx(e.Wp), fx(e.Ws)]))}
       ${W.porElem.map(e => box(`${esc(e.nombre)}: W = ${fx(Math.max(e.Wp,e.Ws))}`,'kN/ml')).join('')}</section>`;
