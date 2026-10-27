@@ -44,8 +44,16 @@ function defaults(){
     area:'', dimX:'', dimY:'', excent:0.05, Vtx:'', Vty:'', irregular:false,
     items:{},                                                   // ① { clave: { on, area } } de las cargas del Anexo A
     estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'SAP2000 — Material List by Section', sapImg:'' },   // ②
-    otras:[] };                                                 // ③ [{ n, cant, unidad, pu, ubic }]
+    otras:[],                                                   // ③ [{ n, cant, unidad, pu, ubic }]
+    iter:[], notaIter:'' };                                     // historial de iteraciones con SAP2000 [{ n, fecha, nota, W, Tx, Ty, VsX, VsY, Vtx, Vty, fX, fY, pct, ok }]
 }
+// Foto de los resultados actuales para el historial de iteraciones
+function foto(B, R){
+  const [mx, my] = R.modal, r3 = v => v == null ? null : Math.round(v * 1000) / 1000;
+  return { W:r3(R.W), Tx:r3(R.tx.T), Ty:r3(R.ty.T), VsX:r3(R.tx.Vs), VsY:r3(R.ty.Vs), Vtx:r3(mx.Vt), Vty:r3(my.Vt),
+    fX: mx.Vt ? r3(mx.factor) : null, fY: my.Vt ? r3(my.factor) : null, pct:R.pct, ok: R.modal.every(r => r.Vt && r.okV) };
+}
+const mismaFoto = (a, b) => !!a && !!b && ['W','Tx','Ty','Vtx','Vty','pct'].every(k => a[k] === b[k]);
 // Sa en fracción de g (A.2.6): meseta, tramo 1/T y tramo 1/T²
 function Sa(T, p){
   if(T <= p.Tc) return 2.5 * p.Aa * p.Fa * p.I;
@@ -123,6 +131,6 @@ function calcular(B, A, RA){
     dimX, dimY, e, MtX, MtY, modal, pct, pts, Tmax };
 }
 
-const api = { G, PERFILES, clave, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };
+const api = { foto, mismaFoto, G, PERFILES, clave, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoB = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -45,6 +45,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Apéndice A-4 (1117 municipios, extraídos del PDF oficial por github.com/Yojemr/Espectra-NSR10) + límites DANE MGN 2018 (@john-guerra/geo-colombia, MIT) simplificados ~900 m; regenerar con tools/build_sismo.py.
   Mapa coloreado Aa/Av por municipio (equivale a figuras A.2.3-2/3), también en el PDF. Fa/Fv interpolados (Tablas A.2.4-3/4, editables), I (A.2.5-1), Ct/α, h = Hr del Anexo A, Tx/Ty de SAP con límite Cu·Ta,
   Sa(T) por tramos To/Tc/TL (corrección: el Excel fijaba la meseta), un solo nivel (Cvx = 1), torsión 5 % de la dimensión perpendicular. B-2.4 comparación modal: Tx/Ty vs Cu·Ta (A.4.2.1) y Vtx/Vty ≥ 80 % (90 % irregular) de Vs con factor de ajuste (A.5.4.5).
+  Historial de iteraciones: `iter[]` = foto (`AnexoB.foto`) {n,fecha,nota,W,Tx,Ty,VsX,VsY,Vtx,Vty,fX,fY,pct,ok}; botón "Guardar iteración y empezar otra" (`notaIter`); la fila Actual = datos vigentes; en el PDF sale B-2.5 con todas + la final.
   W = ① `items{clave:{on,area}}` cargas por área del Anexo A + ② `estructura` {modo lista|sap, perfiles[{perfil,kgm,L,nom}], sapKN, sapImg} + ③ `otras[]` {n,cant,unidad,pu,ubic}.
   Biblioteca `AnexoB.PERFILES` (IPE/HEA/HEB Euronorm; tubos calculados, 120×60×2 = 5.59 de la plantilla). Las cargas sobre la estructura (anuncios…) van en ③, NO en el Anexo A (decisión de Amo).
 

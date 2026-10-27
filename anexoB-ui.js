@@ -84,7 +84,12 @@ function paneAnexoB(){
           ${fIn(B,'Vtx','Cortante basal modal Vtx [kN]',{ph:'de SAP2000'})}${fIn(B,'Vty','Cortante basal modal Vty [kN]',{ph:'de SAP2000'})}
           <div class="f span2">${fChk(B,'irregular','Estructura irregular (exige 90 % en vez de 80 %)')}</div></div>
         <div id="modalB" style="margin-top:10px"></div>
-        <div class="hint" style="margin-top:6px">A.4.2.1: el periodo del análisis no puede ser mayor que Cu·Ta. A.5.4.5: el cortante modal en la base no puede ser menor que el 80 % de Vs (90 % si es irregular); si es menor, los resultados modales se multiplican por el factor de ajuste.</div></div>
+        <div class="hint" style="margin-top:6px">A.4.2.1: el periodo del análisis no puede ser mayor que Cu·Ta. A.5.4.5: el cortante modal en la base no puede ser menor que el 80 % de Vs (90 % si es irregular); si es menor, los resultados modales se multiplican por el factor de ajuste.</div>
+        <div class="iter-box"><div class="iter-t">Historial de iteraciones</div>
+          ${esIng() ? `<div class="iter-row">${fIn(B,'notaIter','Nota de esta iteración (qué cambió)',{num:false, ph:'Ej.: IPE 240 → IPE 270; factor 1.265 aplicado al espectro en SAP'})}
+            <button class="btn sm" type="button" id="guardarIter">📌 Guardar iteración y empezar otra</button></div>
+          <div class="hint">Cada vez que cambies la estructura o el factor de escala en SAP2000, guarda la iteración antes de escribir los nuevos valores. La fila <b>Actual</b> es la que sale completa en la memoria.</div>` : ''}
+          <div id="iterB" style="margin-top:8px"></div></div></div>
       <div class="card"><div class="ct">Páginas del Anexo B</div>
         <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo B con el formato de la memoria (carta).</p>
         <button class="btn grn" type="button" id="printB">🖨 Imprimir / Guardar PDF del Anexo B</button></div>`;
@@ -118,6 +123,17 @@ function paneAnexoB(){
     }catch(e){ err(e, 'No se pudo subir la imagen'); }
   };
   if($('#verSap')) $('#verSap').onclick = async () => { const u = await urlDe(B.estructura.sapImg); u ? window.open(u, '_blank') : toast('No se encontró la imagen.'); };
+  if($('#guardarIter')) $('#guardarIter').onclick = () => {
+    const R = calcB(); if(!R.ok) return toast('Faltan datos: ' + R.faltan.join(', '));
+    const F = AnexoB.foto(B, R);
+    if(AnexoB.mismaFoto(B.iter[B.iter.length-1], F)) return toast('Esta iteración ya está guardada. Cambia los datos de SAP2000 o la estructura primero.');
+    B.iter.push({ n:B.iter.length + 1, fecha:new Date().toISOString().slice(0,10), nota:(B.notaIter||'').trim(), ...F });
+    B.notaIter = ''; guardarMemoria(); toast(`Iteración ${B.iter.length} guardada. Ya puedes escribir los nuevos valores.`); paneAnexoB();
+  };
+  if($('#iterB')) $('#iterB').onclick = e => {
+    const b = e.target.closest('[data-deli]'); if(!b) return;
+    B.iter.splice(+b.dataset.deli, 1); B.iter.forEach((x,i) => x.n = i + 1); guardarMemoria(); pintarResB();
+  };
   if($('#printB')) $('#printB').onclick = async () => {
     const R = calcB(); if(!R.ok) return toast('Faltan datos: ' + R.faltan.join(', '));
     B.estructura._url = B.estructura.modo === 'sap' && B.estructura.sapImg ? await urlDe(B.estructura.sapImg) : null;
@@ -128,8 +144,25 @@ function paneAnexoB(){
   if(B.aplica) pintarResB();
 }
 
+// Historial de iteraciones (pantalla e impresión). La fila "Actual" son los datos de hoy, que salen completos en la memoria.
+const fechaCorta = d => d ? d.split('-').reverse().join('/') : '';
+function iterTablaHTML(B, R, imp){
+  const it = B.iter || [], F = R.ok ? AnexoB.foto(B, R) : null, ult = it[it.length-1];
+  const actualGuardada = F && AnexoB.mismaFoto(ult, F);
+  if(!it.length) return imp ? '' : '<div class="hint">Aún no hay iteraciones guardadas.</div>';
+  const xy = (a, b, d) => `${a == null ? '—' : fx(a,d)} / ${b == null ? '—' : fx(b,d)}`;
+  const est = x => !x.Vtx && !x.Vty ? '—' : imp ? (x.ok ? 'Cumple' : 'Ajustar') : pill(x.ok ? 'ok' : 'no', x.ok ? 'Cumple' : 'Ajustar');
+  const fila = (x, nom, del) => [nom, fechaCorta(x.fecha), fx(x.W,2), xy(x.Tx,x.Ty,3), xy(x.VsX,x.VsY,2), xy(x.Vtx,x.Vty,2), xy(x.fX,x.fY,3), est(x), esc(x.nota||''),
+    ...(imp || !esIng() ? [] : [del == null ? '' : `<button class="btn sm danger" type="button" data-deli="${del}" aria-label="Borrar iteración">✕</button>`])];
+  const filas = it.map((x,i) => fila(x, i === it.length-1 && actualGuardada ? `<b>${x.n} (final)</b>` : String(x.n), i));
+  if(F && !actualGuardada) filas.push(fila({ ...F, fecha:new Date().toISOString().slice(0,10), nota: imp ? (B.notaIter || 'Iteración final') : (B.notaIter ? B.notaIter + ' (sin guardar)' : 'Sin guardar') }, imp ? `<b>${it.length+1} (final)</b>` : '<b>Actual</b>', null));
+  const cab = ['Iter.','Fecha','W [kN]','T x / y [s]','Vs x / y [kN]','Vt x / y [kN]','Factor x / y','Estado','Nota', ...(imp || !esIng() ? [] : [''])];
+  if(imp) return `<table class="ax-tb"><tr>${cab.map(x => `<th>${x}</th>`).join('')}</tr>${filas.map(r => `<tr>${r.map((x,i) => `<td class="${i && i < 8 ? 'c' : ''}">${x}</td>`).join('')}</tr>`).join('')}</table>`;
+  return tabla(cab, filas, 'iter-tb');
+}
+
 function pintarResB(){
-  const R = calcB();
+  const B = datosB(), R = calcB();
   const fa = document.querySelector('[data-a="FaManual"]'), fv = document.querySelector('[data-a="FvManual"]');
   if(fa) fa.placeholder = R.p.Aa ? fx(R.FaT,2) + ' (tabla)' : 'escribe Aa'; if(fv) fv.placeholder = R.p.Av ? fx(R.FvT,2) + ' (tabla)' : 'escribe Av';
   if($('#espB')) $('#espB').innerHTML = svgEspectro(R) + (R.ok ? res([['Fa · Fv', `${fx(R.p.Fa,2)} · ${fx(R.p.Fv,2)}`],['Coeficiente de importancia I', fx(R.p.I,2)],
@@ -144,6 +177,7 @@ function pintarResB(){
       r.Tdin ? fx(r.Tdin,3) : '—', r.relTa ? fx(r.relTa,2) : '—', r.okT == null ? '—' : pill(r.okT ? 'ok' : 'pend', r.okT ? 'Cumple' : `Se usa ${fx(r.CuTa,3)} s`),
       fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', `${fx(r.pct*100,0)} %`,
       r.Vt ? (r.okV ? pill('ok','1.00 — Cumple') : pill('no', fx(r.factor,3))) : '—']));
+  if($('#iterB')) $('#iterB').innerHTML = iterTablaHTML(B, R, false);
   set('w1', fx(R.Wcargas,2)); set('w2', fx(R.Wprop,2)); set('w3', fx(R.Wotras,2)); set('wtot', `${fx(R.W,2)} kN (${fx(R.W*1000/AnexoB.G,0)} kg)`);
   if($('#resA')) $('#resA').innerHTML = !R.ok ? `<div class="note amber">Faltan: ${R.faltan.join(', ')}.</div>` :
     tabla(['Dirección','T usado [s]','Sa [g]','k','Vs [kN]','Momento torsor [kN·m]'], [
@@ -223,6 +257,9 @@ function anexoBPrintHTML(B, R){
       ${tb(['Dirección','T modal [s]','Ta [s]','Cu·Ta [s]','Chequeo periodo','Vs FHE [kN]','Vt modal [kN]','Vt/Vs','Factor de ajuste'], R.modal.map(r => [r.dir, r.Tdin ? fx(r.Tdin,3) : '—', fx(r.Ta,3), fx(r.CuTa,3),
         r.okT == null ? '—' : r.okT ? 'T ≤ Cu·Ta, cumple' : 'Se limita a Cu·Ta', fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', r.Vt ? (r.okV ? '1.00' : fx(r.factor,3)) : '—']))}
       <p>Según A.5.4.5, el cortante dinámico en la base no puede ser menor que el ${fx(R.pct*100,0)} % del cortante de la FHE (${B.irregular ? 'estructura irregular' : 'estructura regular'}). ${R.modal.every(r => !r.Vt || r.okV) ? 'Se cumple en las direcciones evaluadas.' : 'Donde no se cumple, los resultados del análisis modal se multiplican por el factor de ajuste indicado.'}</p>` : ''}
+    ${(B.iter||[]).length ? `<h4>${L}-2.5 Historial de iteraciones</h4>
+      <p>Resumen de las iteraciones realizadas con el modelo de SAP2000. Los cálculos completos de este anexo corresponden a la iteración final.</p>
+      ${iterTablaHTML(B, R, true)}` : ''}
   </section></div>`;
 }
 
