@@ -15,15 +15,27 @@ function sincronizarIrregular(){
   B.irregular = Combos.coefR(K).irregular;
 }
 
+let irrAbierta = null;   // fila de irregularidad abierta (solo una)
 function paneCombos(){
   const K = datosK(), sis = sismoK(), ro_ = esIng() ? '' : 'disabled', M = S.m.anexos?.C?.modelo;
   if(K.patAuto && M?.ok){ const p = Combos.patronesDeModelo(M, AnexoC.categoria); if(p){ for(const k in p) if(p[k]) K.pat[k] = p[k]; K.patAuto = false; guardarMemoria(); } }
   const R = Combos.coefR(K);
   const seg = (attr, val, si) => `<div class="seg sm" role="group"><button type="button" ${attr}="1" class="${val ? 'on' : ''}" ${ro_}>${si || 'Sí'}</button><button type="button" ${attr}="0" class="${!val ? 'on' : ''}" ${ro_}>No</button></div>`;
   const torAuto = !!K.tor?.res?.ok;
+  const nota = (k, v) => `<label>Nota para la memoria</label><input class="nota-irr" data-nirr="${k}" value="${esc(K.notasIrr[k] || '')}" placeholder="${v ? 'Por qué aplica' : 'Justificación (opcional)'}" ${ro_}/>`;
+  const redDet = `<div class="red-box"><div class="f"><label for="redCalc">Cálculo / justificación (sale en la memoria)</label><textarea id="redCalc" rows="4" placeholder="Escribe el cálculo de la redundancia…" ${ro_}>${esc(K.redCalc || '')}</textarea><div class="hint">Sí → φr = 1.00 · No → φr = 0.75</div></div>
+        <div>${K.redImg ? `<div class="drop-img has" id="redImgV" style="max-width:none"><span class="muted">Cargando…</span></div>
+            ${esIng() ? '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" type="button" id="redImgC">🔄 Cambiar</button><button class="btn sm danger" type="button" id="redImgQ">Quitar</button></div>' : ''}`
+          : esIng() ? '<button class="drop-img" type="button" id="redImgC" style="max-width:none;min-height:110px;width:100%"><div class="ph-in"><div style="font-size:20px">📷</div><b>Foto del cálculo</b><br/>toca o arrastra aquí</div></button>' : ''}
+          ${K.redImg ? `<input id="redNota" value="${esc(K.redNota || '')}" placeholder="Pie de la foto" style="margin-top:6px;width:100%" ${ro_}/>` : ''}</div></div>`;
+  // Fila de la lista: ▸ tipo · nombre · φ · Sí/No; al tocarla se abren sus datos debajo (una a la vez)
+  const fila = (k, nombre, phi, ctrl, det, marca) => { const ab = irrAbierta === k;
+    return `<div class="irr-row ${ab ? 'ab' : ''}" data-abre="${k}"><span class="chev">${ab ? '▾' : '▸'}</span><b class="ik">${esc(k === 'red' ? 'φr' : k)}</b><span class="in">${esc(nombre)}${marca || ''}</span><span class="iphi">${phi}</span>${ctrl}</div>
+      ${ab ? `<div class="irr-det">${det}</div>` : ''}`; };
   const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = torAuto && (i.k === '1aP' || i.k === '1bP');
-    return [`<b>${i.k}</b>`, esc(i.n), fx(i.phi,1), auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí' : 'No'} · calculado</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v),
-      `<input class="nota-irr" data-nirr="${i.k}" value="${esc(K.notasIrr[i.k] || '')}" placeholder="${v ? 'Por qué aplica' : 'Justificación (opcional)'}" ${ro_}/>`]; };
+    const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí' : 'No'} · calculado</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
+    const det = (i.k === '1aP' || i.k === '1bP') ? torsionHTML(K, M, ro_) + `<div style="margin-top:10px">${nota(i.k, v)}</div>` : nota(i.k, v);
+    return fila(i.k, i.n, 'φ ' + fx(i.phi,1), ctrl, det, K.notasIrr[i.k] ? ' <span class="hint">· con nota</span>' : ''); };
   let h = '';
   // 1. Irregularidades
   h += `<div class="card"><div class="ct">Irregularidades y coeficiente de capacidad de disipación R (NSR-10 A.3.3)</div>`;
@@ -31,16 +43,11 @@ function paneCombos(){
   else {
     h += `<div class="fg g4">${fSel(K,'sisR','Sistema estructural (Tabla A.3-3)',Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}` : '')]),{cls:'span4',re:1})}
         ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) : ''}</div>
-      ${torsionHTML(K, M, ro_)}
-      <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${tabla(['Tipo','Irregularidad','φp','¿Presenta?','Nota (sale en la memoria)'], Combos.IRR_P.map(i => filaIrr(i, 'irrP')), 'irr-tb')}
-      <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${tabla(['Tipo','Irregularidad','φa','¿Presenta?','Nota (sale en la memoria)'], Combos.IRR_A.map(i => filaIrr(i, 'irrA')), 'irr-tb')}
-      <h4 class="sub">Redundancia (A.3.3.8) → φr</h4>
-      <div class="red-box"><div class="f"><label>¿La estructura tiene redundancia?</label>${seg('data-red', K.redundante !== false)}<div class="hint">Sí → φr = 1.00 · No → φr = 0.75</div>
-          <label for="redCalc" style="margin-top:8px">Cálculo / justificación (sale en la memoria)</label><textarea id="redCalc" rows="4" placeholder="Escribe el cálculo de la redundancia…" ${ro_}>${esc(K.redCalc || '')}</textarea></div>
-        <div>${K.redImg ? `<div class="drop-img has" id="redImgV" style="max-width:none"><span class="muted">Cargando…</span></div>
-            ${esIng() ? '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" type="button" id="redImgC">🔄 Cambiar</button><button class="btn sm danger" type="button" id="redImgQ">Quitar</button></div>' : ''}`
-          : esIng() ? '<button class="drop-img" type="button" id="redImgC" style="max-width:none;min-height:120px;width:100%"><div class="ph-in"><div style="font-size:20px">📷</div><b>Foto del cálculo</b><br/>toca o arrastra aquí</div></button>' : ''}
-          ${K.redImg ? `<input id="redNota" value="${esc(K.redNota || '')}" placeholder="Pie de la foto" style="margin-top:6px;width:100%" ${ro_}/>` : ''}</div></div>
+      <div class="hint" style="margin:8px 0 2px">Toca una fila (▸) para abrir sus datos: la torsión se calcula en 1aP/1bP; las demás llevan una nota.</div>
+      <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${Combos.IRR_P.map(i => filaIrr(i, 'irrP')).join('')}
+      <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${Combos.IRR_A.map(i => filaIrr(i, 'irrA')).join('')}
+      <h4 class="sub">Redundancia (A.3.3.8) → φr</h4>${fila('red', '¿La estructura tiene redundancia?', 'φ ' + fx(R.phiR,2), seg('data-red', K.redundante !== false), redDet,
+        K.redCalc || K.redImg ? ' <span class="hint">· con cálculo</span>' : '')}
       <div class="wtot"><span>R = φa · φp · φr · R0 = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0,1)}</span><span>R = ${fx(R.R,2)}</span></div>
       <div class="hint" style="margin-top:6px">Estructura <b>${R.irregular ? 'irregular' : 'regular'}</b>: en la comparación modal del Anexo B se exige el ${R.irregular ? '90' : '80'} % de Vs (se actualiza solo). Las fuerzas sísmicas de diseño se dividen por R (E = Fs/R).</div></div>`;
   }
@@ -99,6 +106,7 @@ function paneCombos(){
     zr.ondrop = e => { e.preventDefault(); zr.classList.remove('over'); subeRed(e.dataTransfer.files[0]); }; }
   if($('#redImgQ')) $('#redImgQ').onclick = async () => { await sb.storage.from(BUCKET).remove([K.redImg]); K.redImg = ''; guardarMemoria(); paneCombos(); };
   activarTorsion(K, M);
+  $$('[data-abre]').forEach(r => r.onclick = e => { if(e.target.closest('.seg, button, input')) return; irrAbierta = irrAbierta === r.dataset.abre ? null : r.dataset.abre; paneCombos(); });
   $$('[data-nirr]').forEach(i => i.oninput = () => { K.notasIrr[i.dataset.nirr] = i.value; guardarMemoria(); });
   $$('[data-con]').forEach(c => c.onchange = () => { const s = new Set(K.off); c.checked ? s.delete(c.dataset.con) : s.add(c.dataset.con); K.off = [...s]; guardarMemoria(); paneCombos(); });
   $$('#pane [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {

@@ -392,3 +392,10 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 @media (max-width:700px){.red-box{grid-template-columns:minmax(0,1fr)}}
 #redCalc{width:100%;box-sizing:border-box}
 #redNota{font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box}
+/* Irregularidades: lista con desplegable (opción A de Amo) */
+.irr-row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid #f1f5f9;cursor:pointer;border-radius:6px}
+.irr-row:hover{background:#f8fafc}.irr-row.ab{background:#eff6ff}
+.irr-row .chev{color:#94a3b8;width:12px}.irr-row .ik{width:36px}.irr-row .in{flex:1;min-width:0}.irr-row .iphi{color:var(--muted);width:56px;font-size:12px}
+.irr-det{background:#f8fbff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin:4px 0 8px 30px}
+.irr-det .tor-box{margin:0;border:none;background:none;padding:0}
+@media (max-width:560px){.irr-det{margin-left:0}.irr-row .iphi{display:none}}

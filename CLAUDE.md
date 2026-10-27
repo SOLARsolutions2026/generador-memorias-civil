@@ -75,6 +75,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   El Anexo C lee «COMBINATION DEFINITIONS» del .$2k (`modelo.combos`) y revisa que estén con los mismos factores.
   Torsión 1aP/1bP calculada: `tor{nudos,nudosY,casoX,casoY,res}`; desplazamientos de «JOINT DISPLACEMENTS» del mismo .$2k (exportar con Analysis Results → Joint Output → Displacements)
   o de la tabla pegada (`AnexoC.desplazamientos`); Δ = √(U1²+U2²), 1aP si Δmáx > 1.2·prom, 1bP si > 1.4·prom (`Combos.torsion`) → fija irrP 1aP/1bP. `modelo.desp.casos` lista los casos.
+  Pantalla de irregularidades = lista con desplegable por fila (opción A de Amo): `irrAbierta` (una a la vez); 1aP/1bP abren el cálculo de torsión, las demás una nota, φr el cálculo + foto.
   Redundancia: `redundante`, `redCalc` (texto), `redImg` (`<id>/redundancia.jpg`), `redNota`.
   Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
 
