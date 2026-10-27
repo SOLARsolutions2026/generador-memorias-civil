@@ -53,7 +53,7 @@ function rangos(ids){
 // Categoría de un patrón de carga: D muerta, L viva, W viento, E sismo
 function categoria(n, tipo){
   const s = String(n).toUpperCase();
-  if(/^IMP|NOCIONAL|NOTIONAL|IMPERF/.test(s)) return 'N';            // cargas nocionales (imperfecciones): sin tipo esperado
+  if(/^IMP|IMPACT|CHOQUE|NOCIONAL|NOTIONAL/.test(s)) return 'N';     // impacto de vehículos u otras especiales: sin tipo esperado
   if(/WIND|VIENTO/.test(s) || /^W\d*$/.test(s)) return 'W';
   if(/LIVE|VIVA/.test(s) || /^L[RV]?\d*$/.test(s)) return 'L';
   if(/^(QUAKE|SEISMIC)$/i.test(tipo) || /SISMO|QUAKE|^[FTSE][XY]\b/.test(s)) return 'E';
@@ -62,7 +62,7 @@ function categoria(n, tipo){
   return 'D';
 }
 const TIPO_ESPERADO = { L:/^(live|roof live|reducible live)$/i, W:/^wind$/i, E:/^quake$/i, D:/^(dead|super dead)$/i };
-const NOM_CAT = { D:'muerta', L:'viva', W:'viento', E:'sismo', N:'nocional (imperfecciones)' };
+const NOM_CAT = { D:'muerta', L:'viva', W:'viento', E:'sismo', N:'impacto u otra especial' };
 
 // ─── 2. Resumen del modelo (lo que se guarda en la memoria) ───
 function analizar(texto){
