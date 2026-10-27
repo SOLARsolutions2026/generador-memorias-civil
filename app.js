@@ -345,6 +345,19 @@ function portadaHTML(imprimir, urlImg, urlFirma){
   </div>`;
 }
 
+// Sube la imagen de portada de la memoria abierta (se usa en la ficha y en la portada)
+async function subirPortada(file, luego){
+  const m = S.m;
+  try{
+    toast('Subiendo imagen…', 15000);
+    const blob = await comprimir(file, { max:2000, type:'image/jpeg', q:0.85 });
+    const path = `${m.id}/modelo3d.jpg`;
+    await subir(path, blob, 'image/jpeg');
+    if(m.imagen_path !== path){ const { error } = await sb.from('mem_memorias').update({ imagen_path:path }).eq('id', m.id); if(error) throw error; m.imagen_path = path; }
+    toast(`Imagen guardada (${(blob.size/1024).toFixed(0)} KB).`); luego && luego();
+  }catch(e){ err(e, 'No se pudo subir la imagen'); }
+}
+
 // ═══ PANELES DE CADA PASO ═══
 const PANES = {
 ficha(){
@@ -361,6 +374,11 @@ ficha(){
       ${inp('titulo_doc','Título en la portada',{cls:'span2',ph:TITULO_DEF})}
       ${inp('titulo_archivo','Nombre del documento (código)',{cls:'span2',ph:tituloArchivo({...F,titulo_archivo:''}),h:'Va arriba a la derecha y debajo de la firma. Vacío = se arma con el nombre del proyecto.'})}
     </div></div>
+  <div class="card"><div class="ct">Imagen de portada del proyecto${m.imagen_path?pill('ok','Cargada'):pill('pend','Falta')}</div>
+    <div class="drop-img ${m.imagen_path?'has':''}" id="dropImg" ${esIng()?'role="button" tabindex="0" aria-label="Subir imagen de portada"':''}>
+      <div class="ph-in" id="thumb">${m.imagen_path?'Cargando imagen…':`<div style="font-size:30px">🖼️</div><b>${esIng()?'Toca aquí para subir la imagen':'Sin imagen'}</b>${esIng()?'<br/>o arrástrala desde tu carpeta (JPG o PNG)':''}`}</div></div>
+    ${esIng()?`<div class="nav-btns" style="margin-top:8px"><button class="btn sm pri" type="button" id="upImg">${m.imagen_path?'Cambiar imagen':'Subir imagen'}</button>${m.imagen_path?'<button class="btn sm danger" type="button" id="delImg">Quitar</button>':''}
+      <span class="hint">Captura del modelo de SAP2000 o render. Va en el recuadro grande de la portada; se reduce sola para ahorrar espacio.</span></div>`:''}</div>
   <div class="card"><div class="ct">Propietario / cliente</div>
     <div style="margin-bottom:10px"><div class="seg" role="group" aria-label="Tipo de propietario"><button type="button" data-tipo="natural" class="${!emp?'on':''}" ${ro}>Persona natural</button><button type="button" data-tipo="empresa" class="${emp?'on':''}" ${ro}>Empresa / persona jurídica</button></div></div>
     <div class="fg g3">${inp('prop', emp ? 'Razón social' : 'Nombre completo', { ph: emp ? 'Ej: Inversiones La Brasa S.A.S.' : 'Nombre y apellidos' })}
@@ -371,14 +389,11 @@ ficha(){
     <div class="fg g4">${inp('proyecto','Nombre exacto del proyecto',{cls:'span2',ph:'Ej: Estructura metálica parqueadero — Proyecto AGPE La Brasa'})}${inp('uso','Uso proyectado',{cls:'span2',ph:'Ej: Cubierta parqueadero con paneles solares'})}
       ${inp('dir','Dirección del predio',{cls:'span2'})}${inp('lote','Lote')}${inp('mz','Manzana')}${inp('mun','Municipio')}${inp('depto','Departamento')}${inp('coord','Coordenadas',{cls:'span2',ph:'8.311705, -73.597054',h:'Se usarán para sismo y viento'})}
       ${inp('matricula','Matrícula inmobiliaria',{cls:'span2',ph:'196-84811'})}${inp('predial','Número predial / cédula catastral',{cls:'span2',ph:'01-01-0434-0017-000'})}</div></div>
-  <div class="card"><div class="ct">Imagen del modelo 3D (portada)</div>
-    <div class="imgbox"><div class="th" id="thumb">Sin imagen</div><div>${esIng()?`<button class="btn sm pri" type="button" id="upImg">${m.imagen_path?'Cambiar imagen':'Subir imagen'}</button> ${m.imagen_path?'<button class="btn sm danger" type="button" id="delImg">Quitar</button>':''}`:''}
-      <div class="hint" style="margin-top:6px">Captura de SAP2000 o render. Se reduce automáticamente para ahorrar espacio.</div></div></div></div>
   <div class="card"><div class="ct">Vista previa en la portada${pill('wip','Se actualiza al escribir')}</div><div class="prev" id="fprev"></div></div>`);
 
   const prev = () => { $('#fprev').innerHTML = tablasHTML(F, false) + pieHTML(perfilDe(m)); };
   prev();
-  if(m.imagen_path) urlDe(m.imagen_path).then(u => { if(u && $('#thumb')) $('#thumb').innerHTML = `<img src="${esc(u)}" alt="Modelo 3D"/>`; });
+  if(m.imagen_path) urlDe(m.imagen_path).then(u => { if(u && $('#thumb')) $('#thumb').innerHTML = `<img src="${esc(u)}" alt="Imagen de portada"/>`; });
   if(!esIng()) return;
   $$('#pane [data-k]').forEach(el => el.addEventListener(el.tagName==='SELECT' ? 'change' : 'input', () => {
     F[el.dataset.k] = el.value;
@@ -394,17 +409,14 @@ ficha(){
     if(F.tipo === 'empresa') F.docTipo = 'NIT';
     guardarMemoria(); PANES.ficha();
   });
-  $('#upImg').onclick = async () => {
-    const file = await elegirArchivo('image/*'); if(!file) return;
-    try{
-      toast('Subiendo imagen…', 10000);
-      const blob = await comprimir(file, { max:2000, type:'image/jpeg', q:0.85 });
-      const path = `${m.id}/modelo3d.jpg`;
-      await subir(path, blob, 'image/jpeg');
-      if(m.imagen_path !== path){ const { error } = await sb.from('mem_memorias').update({ imagen_path:path }).eq('id', m.id); if(error) throw error; m.imagen_path = path; }
-      toast(`Imagen guardada (${(blob.size/1024).toFixed(0)} KB).`); PANES.ficha();
-    }catch(e){ err(e, 'No se pudo subir'); }
-  };
+  const elegir = async () => { const f = await elegirArchivo('image/*'); if(f) subirPortada(f, () => PANES.ficha()); };
+  $('#upImg').onclick = elegir;
+  const dz = $('#dropImg');
+  dz.onclick = elegir; dz.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); elegir(); } };
+  dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); };
+  dz.ondragleave = () => dz.classList.remove('over');
+  dz.ondrop = e => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files[0];
+    if(f && f.type.startsWith('image/')) subirPortada(f, () => PANES.ficha()); else toast('Ese archivo no es una imagen.'); };
   if($('#delImg')) $('#delImg').onclick = async () => {
     if(!confirm('¿Quitar la imagen de la portada?')) return;
     await sb.storage.from(BUCKET).remove([m.imagen_path]);
@@ -454,9 +466,11 @@ revisiones(){
 
 async portada(){
   pane(`<div class="nav-btns" style="margin-bottom:12px"><button class="btn grn" type="button" id="btnPrint">🖨 Imprimir / Guardar PDF</button>
+    ${esIng()?`<button class="btn" type="button" id="btnImgP">🖼️ ${S.m.imagen_path?'Cambiar':'Subir'} imagen de portada</button>`:''}
     <span class="hint">En el cuadro de impresión elige <b>Guardar como PDF</b>, tamaño <b>Carta</b> y márgenes <b>Ninguno</b>.</span></div>
     <div class="sheet-wrap" id="sw"><div class="sheet-scale" id="ss"><p class="muted" style="padding:20px">Preparando portada…</p></div></div>
     ${!S.cfg.firma_path && esIng() ? '<div class="note amber" style="margin-top:12px"><b>Falta la firma.</b> Súbela en ⚙ Configuración → Datos del ingeniero y firma.</div>' : ''}`);
+  if($('#btnImgP')) $('#btnImgP').onclick = async () => { const f = await elegirArchivo('image/*'); if(f) subirPortada(f, () => PANES.portada()); };
   const [uImg, uFirma] = await Promise.all([urlDe(S.m.imagen_path), urlDe(S.cfg.firma_path)]);
   if(!$('#ss')) return;
   $('#ss').innerHTML = portadaHTML(false, uImg, uFirma);
