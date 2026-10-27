@@ -239,7 +239,7 @@ const STEPS = [
   { id:'revisiones', ph:'Proyecto',   n:'1', t:'Control de revisiones',   s:'Tabla de la portada' },
   { id:'portada',    ph:'Proyecto',   n:'2', t:'Portada',                 s:'Vista previa e impresión' },
   { id:'A',  ph:'Cálculos',   n:'A', t:'Anexo A — Cargas',        s:'Muerta, viva y viento' },
-  { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Próximamente', off:1 },
+  { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Análisis sísmico' },
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — SAP2000',       s:'Próximamente', off:1 },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Próximamente', off:1 },
   { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Próximamente', off:1 },
@@ -261,7 +261,7 @@ async function abrirMemoria(id, paso){
 }
 function renderWS(cur){
   const m = S.m, pasos = esIng() ? STEPS : STEPS.filter(s => s.id === 'portada');
-  const st = s => s.off ? '' : s.id === 'ficha' ? (fichaCompleta() ? 'ok' : 'wip') : s.id === 'revisiones' ? (S.revs.length ? 'ok' : 'wip') : s.id === 'A' ? (m.anexos?.A ? 'wip' : '') : '';
+  const st = s => s.off ? '' : s.id === 'ficha' ? (fichaCompleta() ? 'ok' : 'wip') : s.id === 'revisiones' ? (S.revs.length ? 'ok' : 'wip') : s.id === 'A' ? (m.anexos?.A ? 'wip' : '') : s.id === 'B' ? (m.anexos?.B?.aplica === false ? 'ok' : m.anexos?.B ? 'wip' : '') : '';
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
     side += `<button type="button" class="step ${s.id===cur?'on':''}" data-step="${s.id}" ${s.off?'disabled':''}><span class="dot ${st(s)}">${st(s)==='ok'?'✓':s.n}</span><span class="lbl">${s.t}<small>${s.s}</small></span></button>`; });
@@ -369,6 +369,7 @@ async function subirPortada(file, luego){
 // ═══ PANELES DE CADA PASO ═══
 const PANES = {
 A(){ paneAnexoA(); },
+B(){ paneAnexoB(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;

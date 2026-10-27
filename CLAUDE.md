@@ -40,6 +40,8 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - Exposición: botón 📘 abre `modalCondiciones()` (texto B.6.5.6.2/.3 con límites del proyecto); `viento.imgsExpo[]` = {path,nota} imágenes de comprobación de distancias (`<memoria_id>/exposicion-*.jpg`, máx. 4), se imprimen en el Anexo A.
 - Impresión de anexos: `imprimirConMargen()` agrega `@page` con márgenes solo al imprimir (la portada usa margen 0).
 
+- `anexos.B` = { aplica:bool, texto } — si no lleva sismo, el paso queda completo y se usa la nota de alcance (`TXT_SIN_SISMO` si `texto` vacío). Cálculo FHE pendiente de la plantilla.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
