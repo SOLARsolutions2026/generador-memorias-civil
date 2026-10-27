@@ -61,6 +61,10 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   guarda `X.listo` = huella de los datos (B incluye los del A) y `X.listoFecha`. Si los datos cambian, la huella ya no coincide y el paso vuelve a «en proceso» solo. B sin sismo = ✓ directo.
   Pendiente: agregar D y E a `ANEXOS_LISTO` cuando existan.
 
+- Observaciones internas (app.js `pintarNotas`): pestaña amarilla plegable al borde derecho (opción B de Amo) que abre un panel; `anexos.notas = {paso:[{id,t,fecha,autor,hecha}]}`
+  para cualquier paso; casilla «resuelta» (tachada). Circulito amarillo (`.ydot`) en la lista de pasos si hay pendientes. No salen en la memoria; solo rol ingeniero.
+  Anexo C: patrones IMP*/nocionales = categoría N (sin aviso de tipo).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

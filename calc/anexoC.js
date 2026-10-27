@@ -53,6 +53,7 @@ function rangos(ids){
 // Categoría de un patrón de carga: D muerta, L viva, W viento, E sismo
 function categoria(n, tipo){
   const s = String(n).toUpperCase();
+  if(/^IMP|NOCIONAL|NOTIONAL|IMPERF/.test(s)) return 'N';            // cargas nocionales (imperfecciones): sin tipo esperado
   if(/WIND|VIENTO/.test(s) || /^W\d*$/.test(s)) return 'W';
   if(/LIVE|VIVA/.test(s) || /^L[RV]?\d*$/.test(s)) return 'L';
   if(/^(QUAKE|SEISMIC)$/i.test(tipo) || /SISMO|QUAKE|^[FTSE][XY]\b/.test(s)) return 'E';
@@ -61,7 +62,7 @@ function categoria(n, tipo){
   return 'D';
 }
 const TIPO_ESPERADO = { L:/^(live|roof live|reducible live)$/i, W:/^wind$/i, E:/^quake$/i, D:/^(dead|super dead)$/i };
-const NOM_CAT = { D:'muerta', L:'viva', W:'viento', E:'sismo' };
+const NOM_CAT = { D:'muerta', L:'viva', W:'viento', E:'sismo', N:'nocional (imperfecciones)' };
 
 // ─── 2. Resumen del modelo (lo que se guarda en la memoria) ───
 function analizar(texto){
@@ -182,7 +183,7 @@ function revisar(M, RA, RB){
     else { const hay = [...new Set(M.dist.filter(d => d.cat === r.cat).map(d => f2(d.a)))];
       out.push({ grupo:'Cargas del Anexo A', estado:'no', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m no aparece en SAP2000.${hay.length ? ' Valores de carga ' + NOM_CAT[r.cat] + ' en el modelo: ' + hay.join(', ') + ' kN/m.' : ''}` }); }
   }
-  for(const d of M.dist.filter(d => !usados.has(d) && d.cat !== 'E' && (d.a || d.b)))
+  for(const d of M.dist.filter(d => !usados.has(d) && !['E','N'].includes(d.cat) && (d.a || d.b)))
     out.push({ grupo:'Cargas sin referencia', estado:'info', txt:`${d.pat} ${f2(d.a)}${d.b !== d.a ? '→' + f2(d.b) : ''} kN/m (${d.dir === 'Gravity' ? 'gravedad' : (d.sis === 'Local' ? 'local ' : '') + d.dir}) en ${d.n} elemento${d.n>1?'s':''} (${d.ids}). No corresponde a un valor del Anexo A; verifica de dónde sale (p. ej. otras cargas del Anexo B).` });
 
   // Fuerzas sísmicas frente a la FHE del Anexo B

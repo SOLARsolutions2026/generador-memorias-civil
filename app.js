@@ -264,7 +264,7 @@ function renderWS(cur){
   const st = estadoPaso;
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
-    side += `<button type="button" class="step ${s.id===cur?'on':''}" data-step="${s.id}" ${s.off?'disabled':''}><span class="dot ${st(s)}">${st(s)==='ok'?'✓':s.n}</span><span class="lbl">${s.t}<small>${s.s}</small></span></button>`; });
+    side += `<button type="button" class="step ${s.id===cur?'on':''}" data-step="${s.id}" ${s.off?'disabled':''}><span class="dot ${st(s)}">${st(s)==='ok'?'✓':s.n}</span><span class="lbl">${s.t}<small>${s.s}</small></span><span class="ydot" ${notasPend(s.id) ? '' : 'hidden'} title="Tiene observaciones pendientes"></span></button>`; });
   const s = pasos.find(x => x.id === cur), activos = pasos.filter(x => !x.off), i = activos.indexOf(s);
   $('#app').innerHTML = `
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
@@ -275,14 +275,16 @@ function renderWS(cur){
   <div class="ws"><nav class="steps" id="stepsNav" aria-label="Pasos"><div class="drawer-hd"><b>Pasos de la memoria</b><button type="button" id="closeSteps" aria-label="Cerrar">✕</button></div>${side}</nav>
   <section><div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">Paso ${s.n} · ${pill(...(ESTADOS[m.estado]||ESTADOS.wip))}</div><h2>${s.t}</h2></div>
     <div class="nav-btns">${activos.length>1?`<button class="btn" type="button" id="prev" ${i<=0?'disabled':''}>← Anterior</button><button class="btn pri" type="button" id="next" ${i>=activos.length-1?'disabled':''}>Siguiente →</button>`:''}</div></div>
-    <div id="pane"></div><div id="listoBar"></div></section></div>`;
+    <div id="pane"></div><div id="listoBar"></div></section></div>
+  ${esIng() ? `<button type="button" class="notas-tab" id="notasTab" aria-label="Observaciones"><span>📝 Observaciones</span><b id="notasN"></b></button>
+  <aside class="notas-dr" id="notasDr" aria-label="Observaciones" hidden></aside>` : ''}`;
   $('#back').onclick = () => ir('#/');
   const nav = $('#stepsNav'), scr = $('#scrim');
   const abrir = () => { nav.classList.add('open'); scr.hidden = false; }, cerrar = () => { nav.classList.remove('open'); scr.hidden = true; };
   $('#openSteps').onclick = abrir; $('#closeSteps').onclick = cerrar; scr.onclick = cerrar;
   $$('[data-step]').forEach(b => b.onclick = () => ir(`#/m/${m.id}/${b.dataset.step}`));
   if($('#prev')){ $('#prev').onclick = () => ir(`#/m/${m.id}/${activos[i-1].id}`); $('#next').onclick = () => ir(`#/m/${m.id}/${activos[i+1].id}`); }
-  S.paso = cur; PANES[cur](); pintarListo();
+  S.paso = cur; PANES[cur](); pintarListo(); pintarNotas();
 }
 const pane = h => $('#pane').innerHTML = h;
 function fichaCompleta(){ const f = S.m.ficha; return ['prop','doc','proyecto','dir','mun','depto'].every(k => (f[k]||'').trim()); }
@@ -427,6 +429,38 @@ function pintarListo(){
     else { delete Y.listo; delete Y.listoFecha; }
     guardarMemoria(); pintarListo();
   };
+}
+
+// ═══ Observaciones internas por paso (no salen en la memoria) ═══
+// anexos.notas = { paso: [{ id, t, fecha, autor, hecha }] }
+const notasDe = id => (S.m?.anexos?.notas || {})[id] || [];
+const notasPend = id => notasDe(id).filter(n => !n.hecha).length;
+let notasAbierto = (() => { try{ return localStorage.getItem('notasAbierto') === '1'; }catch(e){ return false; } })();
+function pintarNotas(){
+  const tab = $('#notasTab'), dr = $('#notasDr'); if(!tab || !dr || !S.m) return;
+  const id = S.paso, paso = STEPS.find(x => x.id === id), lista = notasDe(id), pend = notasPend(id);
+  $('#notasN').textContent = pend || ''; tab.classList.toggle('con', pend > 0);
+  $$('[data-step]').forEach(b => { const y = b.querySelector('.ydot'); if(y) y.hidden = !notasPend(b.dataset.step); });
+  dr.hidden = !notasAbierto; tab.hidden = notasAbierto;
+  const fmt = f => new Date(f).toLocaleString('es-CO', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
+  const orden = [...lista.filter(n => !n.hecha), ...lista.filter(n => n.hecha)];
+  dr.innerHTML = `<div class="notas-hd"><b>📝 Observaciones · ${esc(paso?.t || '')}</b><button type="button" id="notasX" aria-label="Cerrar">✕</button></div>
+    <div class="notas-li">${orden.length ? orden.map(n => `<div class="nota ${n.hecha ? 'hecha' : ''}">
+        <label><input type="checkbox" data-nh="${n.id}" ${n.hecha ? 'checked' : ''}/> <span>${esc(n.t).replace(/\n/g, '<br/>')}</span></label>
+        <div class="nota-m">${esc((n.autor || '').split('@')[0])} · ${esc(fmt(n.fecha))}${n.hecha ? ' · resuelta' : ''}<button type="button" data-nd="${n.id}" aria-label="Borrar">✕</button></div></div>`).join('')
+      : '<p class="hint">No hay observaciones en este paso.</p>'}</div>
+    <textarea id="notaTxt" rows="3" placeholder="Escribe una observación o recordatorio…"></textarea>
+    <button class="btn sm pri" type="button" id="notaAdd" style="margin-top:6px">＋ Agregar</button>
+    <p class="hint" style="margin-top:8px">Son internas: no salen en la memoria. El circulito amarillo en la lista de pasos indica observaciones sin resolver.</p>`;
+  const abrir = v => { notasAbierto = v; try{ localStorage.setItem('notasAbierto', v ? '1' : '0'); }catch(e){} pintarNotas(); if(v) $('#notaTxt')?.focus(); };
+  tab.onclick = () => abrir(true); $('#notasX').onclick = () => abrir(false);
+  const cambiar = fn => { const an = S.m.anexos = S.m.anexos || {}; an.notas = an.notas || {}; an.notas[id] = fn(an.notas[id] || []); guardarMemoria(); pintarNotas(); };
+  const agregar = () => { const t = $('#notaTxt').value.trim(); if(!t) return;
+    cambiar(l => [...l, { id:Date.now().toString(36), t, fecha:new Date().toISOString(), autor:S.user?.email || '', hecha:false }]); $('#notaTxt')?.focus(); };
+  $('#notaAdd').onclick = agregar;
+  $('#notaTxt').onkeydown = e => { if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) agregar(); };
+  $$('[data-nh]').forEach(c => c.onchange = () => cambiar(l => l.map(n => n.id === c.dataset.nh ? { ...n, hecha:c.checked } : n)));
+  $$('[data-nd]').forEach(b => b.onclick = () => cambiar(l => l.filter(n => n.id !== b.dataset.nd)));
 }
 
 // ═══ PANELES DE CADA PASO ═══

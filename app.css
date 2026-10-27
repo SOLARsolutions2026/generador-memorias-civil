@@ -352,3 +352,23 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .listo-t{display:flex;gap:10px;align-items:center;flex:1 1 300px}
 .listo-i{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#059669;color:#fff;font-weight:800}
 .listo-i.no{background:#d97706}.listo-i.wip{background:var(--blue)}
+/* Observaciones internas: pestaña plegable a la derecha */
+.step .ydot{width:10px;height:10px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 3px #fef3c7;flex-shrink:0}
+.notas-tab{position:fixed;right:0;top:40%;z-index:30;writing-mode:vertical-rl;background:#94a3b8;color:#fff;border:none;border-radius:10px 0 0 10px;padding:14px 7px;font-weight:800;font-size:12.5px;cursor:pointer;box-shadow:-2px 2px 8px rgba(0,0,0,.15);display:flex;gap:8px;align-items:center}
+.notas-tab.con{background:#f59e0b}
+.notas-tab b{writing-mode:horizontal-tb;background:#fff;color:#b45309;border-radius:10px;padding:0 6px;font-size:11px}
+.notas-tab b:empty{display:none}
+.notas-dr{position:fixed;right:0;top:0;bottom:0;width:min(340px,92vw);z-index:41;background:#fff;box-shadow:-8px 0 24px rgba(15,23,42,.18);padding:14px;overflow-y:auto;border-left:4px solid #f59e0b}
+.notas-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:2px solid #f59e0b;padding-bottom:8px;margin-bottom:10px;font-size:13px}
+.notas-hd button{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)}
+.nota{border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px;line-height:1.4}
+.nota label{display:flex;gap:7px;align-items:flex-start;cursor:pointer}
+.nota input{margin-top:3px}
+.nota.hecha{background:#f8fafc;border-color:#e2e8f0;color:#94a3b8}
+.nota.hecha label span{text-decoration:line-through}
+.nota-m{font-size:10.5px;color:#92400e;margin-top:4px;display:flex;align-items:center;gap:6px}
+.nota.hecha .nota-m{color:#94a3b8}
+.nota-m button{margin-left:auto;background:none;border:none;color:#b91c1c;cursor:pointer;font-size:12px}
+#notaTxt{width:100%;box-sizing:border-box}
+@media print{.notas-tab,.notas-dr{display:none!important}}
+#notaTxt{font:inherit;font-size:13px;border:1px solid var(--border);border-radius:8px;padding:8px}
