@@ -1,6 +1,6 @@
 // Service worker mínimo: permite instalar la app y guarda los archivos propios.
 // Los datos siempre se piden en vivo a Supabase.
-const CACHE = 'memorias-v7';
+const CACHE = 'memorias-v8';
 const ARCHIVOS = ['./', 'index.html', 'app.css', 'app.js', 'config.js', 'calc/anexoA.js', 'anexoA-ui.js', 'vendor/supabase.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo-pe.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS))); self.skipWaiting(); });
