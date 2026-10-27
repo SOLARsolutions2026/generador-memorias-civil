@@ -40,7 +40,7 @@ function interp(fila, x){ // interpola en columnas 0.1…0.5 (fuera de rango tom
   return fila[i-1] + (fila[i] - fila[i-1]) * f;
 }
 function defaults(){
-  return { aplica:true, texto:'', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
+  return { aplica:true, texto:'', metodo:'tabla', depto:'', munCode:'', lat:'', lon:'', mapa:'aa', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
     area:'', dimX:'', dimY:'', excent:0.05, Vtx:'', Vty:'', irregular:false,
     items:{},                                                   // ① { clave: { on, area } } de las cargas del Anexo A
     estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'SAP2000 — Material List by Section', sapImg:'' },   // ②

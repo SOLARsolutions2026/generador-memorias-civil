@@ -12,6 +12,7 @@ function calcB(){ const B = datosB(), A = datosA(); return AnexoB.calcular(B, A,
 
 function paneAnexoB(){
   const B = datosB(), ro_ = esIng() ? '' : 'disabled';
+  if(B.aplica && B.metodo !== 'manual' && !window.NSR_SISMO){ cargarSismo().then(() => { prellenarMunicipio(B); if(S.m && document.getElementById('pane')) paneAnexoB(); }); }
   let h = `<div class="card"><div class="ct">Alcance del análisis</div>
     <div class="f"><label>¿El proyecto lleva análisis sísmico?</label>
       <div class="seg" role="group" aria-label="Lleva análisis sísmico"><button type="button" data-sis="1" class="${B.aplica?'on':''}" ${ro_}>Sí</button><button type="button" data-sis="0" class="${!B.aplica?'on':''}" ${ro_}>No</button></div></div>
@@ -19,8 +20,24 @@ function paneAnexoB(){
       <div class="f"><label for="txtSis">Nota de alcance (sale en la memoria)</label><textarea id="txtSis" rows="4" ${ro_}>${esc(B.texto || TXT_SIN_SISMO)}</textarea><div class="hint">Vacío = texto predeterminado.</div></div>` : ''}</div>`;
   if(B.aplica){
     const R = calcB();
-    h += `<div class="card"><div class="ct">B-1.1 Parámetros sísmicos</div><div class="fg g4">
-        ${fIn(B,'Aa','Aa',{h:'Apéndice A-4 según municipio'})}${fIn(B,'Av','Av')}
+    const SM = window.NSR_SISMO, mun = SM && B.munCode ? SM.mun.find(x => x.c === B.munCode) : null;
+    const deptos = SM ? [...new Set(SM.mun.map(x => x.d).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es')) : [];
+    const manual = B.metodo === 'manual';
+    h += `<div class="card"><div class="ct">B-1.1 Parámetros sísmicos</div>
+      <div class="f" style="margin-bottom:10px"><label>¿Cómo se obtienen Aa y Av?</label>
+        <div class="seg" role="group" aria-label="Método para Aa y Av"><button type="button" data-met="tabla" class="${B.metodo==='tabla'?'on':''}" ${ro_}>Por municipio (Apéndice A-4)</button><button type="button" data-met="coord" class="${B.metodo==='coord'?'on':''}" ${ro_}>Por coordenadas</button><button type="button" data-met="manual" class="${manual?'on':''}" ${ro_}>Escribir a mano</button></div></div>
+      ${!SM && !manual ? '<p class="muted">Cargando la tabla del Apéndice A-4…</p>' : ''}
+      ${SM && !manual ? `<div class="sismo"><div>
+        ${B.metodo === 'tabla' ? `<div class="fg g2">
+            <div class="f"><label>Departamento</label><select data-a="depto" data-re="1" ${ro_}><option value="">— Escoge —</option>${deptos.map(d => `<option ${d===B.depto?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
+            <div class="f"><label>Municipio</label><select data-a="munCode" data-re="1" ${ro_}><option value="">— Escoge —</option>${SM.mun.filter(x => x.d === B.depto).sort((a,b) => a.n.localeCompare(b.n,'es')).map(x => `<option value="${x.c}" ${x.c===B.munCode?'selected':''}>${esc(x.n)}</option>`).join('')}</select></div></div>`
+          : `<div class="fg g2">${fIn(B,'lat','Latitud (°)',{ph:'8.311705',h:'Grados decimales, norte positivo'})}${fIn(B,'lon','Longitud (°)',{ph:'-73.597054',h:'Oeste negativo'})}</div>
+            <div class="nav-btns" style="margin-top:6px"><button class="btn sm pri" type="button" id="buscarCoord">📍 Buscar municipio</button>${S.m.ficha.coord ? '<button class="btn sm" type="button" id="coordFicha">Usar las de la ficha</button>' : ''}</div>`}
+        <div id="munInfo" style="margin-top:10px">${mun ? munInfoHTML(mun, B) : `<div class="hint">${B.metodo === 'coord' ? 'Escribe las coordenadas y toca Buscar.' : 'Escoge el departamento y el municipio.'}</div>`}</div></div>
+        <div><div class="seg seg-sm" role="group" aria-label="Mapa de"><button type="button" data-mapa="aa" class="${B.mapa!=='av'?'on':''}">Mapa Aa</button><button type="button" data-mapa="av" class="${B.mapa==='av'?'on':''}">Mapa Av</button></div>
+          <div id="mapaSis">${svgMapaSismo(B)}</div></div></div>` : ''}
+      <div class="fg g4" style="margin-top:10px">
+        ${manual ? fIn(B,'Aa','Aa',{h:'Apéndice A-4 según municipio'}) + fIn(B,'Av','Av') : `<div class="f"><label>Aa</label><input value="${esc(B.Aa)}" readonly/></div><div class="f"><label>Av</label><input value="${esc(B.Av)}" readonly/></div>`}
         ${fSel(B,'suelo','Perfil de suelo',Object.entries(AnexoB.SUELOS),{cls:'span2',h:'Del estudio de suelos (A.2.4)'})}
         ${fIn(B,'FaManual','Fa',{ph:fx(R.FaT,2)+' (tabla)',h:'Vacío = Tabla A.2.4-3'})}${fIn(B,'FvManual','Fv',{ph:fx(R.FvT,2)+' (tabla)',h:'Vacío = Tabla A.2.4-4'})}
         ${fSel(B,'grupo','Grupo de uso',Object.entries(AnexoB.GRUPOS),{cls:'span2',h:'Coeficiente de importancia I (Tabla A.2.5-1)'})}</div></div>
@@ -75,11 +92,18 @@ function paneAnexoB(){
   pane(h);
   if(!esIng()) { if(B.aplica) pintarResB(); return; }
   $$('[data-sis]').forEach(b => b.onclick = () => { B.aplica = b.dataset.sis === '1'; guardarMemoria(); renderWS('B'); });
+  $$('[data-met]').forEach(b => b.onclick = () => { B.metodo = b.dataset.met; if(B.metodo === 'coord' && !B.lat && S.m.ficha.coord) usarCoordFicha(B); guardarMemoria(); paneAnexoB(); });
+  $$('[data-mapa]').forEach(b => b.onclick = () => { B.mapa = b.dataset.mapa; guardarMemoria(); paneAnexoB(); });
+  if($('#coordFicha')) $('#coordFicha').onclick = () => { usarCoordFicha(B); buscarPorCoord(B); };
+  if($('#buscarCoord')) $('#buscarCoord').onclick = () => buscarPorCoord(B);
   const t = $('#txtSis'); if(t) t.oninput = () => { B.texto = t.value.trim() === TXT_SIN_SISMO ? '' : t.value; guardarMemoria(); };
   $$('#pane [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {
     const path = inp.dataset.a;
     if(path.startsWith('items.')){ const [, k] = path.split('.'); B.items[k] = B.items[k] || {}; }
-    setP(B, path, inp.type === 'checkbox' ? inp.checked : inp.value); guardarMemoria();
+    setP(B, path, inp.type === 'checkbox' ? inp.checked : inp.value);
+    if(path === 'depto') B.munCode = '';
+    if(path === 'munCode') aplicarMunicipio(B);
+    guardarMemoria();
     inp.dataset.re ? paneAnexoB() : pintarResB();
   }));
   $$('[data-modo]').forEach(b => b.onclick = () => { B.estructura.modo = b.dataset.modo; guardarMemoria(); paneAnexoB(); });
@@ -166,7 +190,13 @@ function anexoBPrintHTML(B, R){
       <tr><td><b>Proyecto No.:</b></td><td>${esc(m.consecutivo)}</td><td><b>Fecha:</b></td><td>${esc(fecha)}</td></tr></table></div>
     <h3>${L}-1 Espectro de diseño</h3>
     <h4>${L}-1.1 Parámetros sísmicos</h4>
-    ${kv([['Ubicación',esc([f.mun,f.depto].filter(Boolean).join(', '))],['Aa · Av (Apéndice A-4)',`${fx(R.p.Aa,2)} · ${fx(R.p.Av,2)}`],['Perfil de suelo',esc(AnexoB.SUELOS[B.suelo]||B.suelo)],
+    ${(() => { const mm = window.NSR_SISMO && B.munCode ? NSR_SISMO.mun.find(x => x.c === B.munCode) : null;
+      return kv([['Ubicación',esc([f.mun,f.depto].filter(Boolean).join(', '))],
+        ...(mm ? [['Municipio en el Apéndice A-4', `${esc(mm.n)} (${esc(mm.d||'')}) — código ${mm.c}, zona de amenaza ${esc(mm.z||'')}`]] : []),
+        ...(B.metodo === 'coord' ? [['Coordenadas del proyecto', `${esc(B.lat)}, ${esc(B.lon)}`]] : []),
+        ['Aa · Av (Apéndice A-4)',`${fx(R.p.Aa,2)} · ${fx(R.p.Av,2)}`]]); })()}
+    ${window.NSR_SISMO && B.munCode ? `<div class="ax-mapas"><figure>${svgMapaSismo({ ...B, mapa:'aa' }, true)}<figcaption>Aa por municipio</figcaption></figure><figure>${svgMapaSismo({ ...B, mapa:'av' }, true)}<figcaption>Av por municipio</figcaption></figure></div>` : ''}
+    ${kv([['Perfil de suelo',esc(AnexoB.SUELOS[B.suelo]||B.suelo)],
       ['Fa (Tabla A.2.4-3) · Fv (Tabla A.2.4-4)',`${fx(R.p.Fa,2)} · ${fx(R.p.Fv,2)}`],['Grupo de uso',esc(AnexoB.GRUPOS[B.grupo]||B.grupo)],['Coeficiente de importancia I (Tabla A.2.5-1)',fx(R.p.I,2)]])}
     <h4>${L}-1.2 Parámetros de la estructura</h4>
     ${kv([['Sistema estructural',esc(R.sis.nombre)],['Ct · α (Tabla A.4.2-1)',`${R.sis.Ct} · ${R.sis.a}`],['Altura h [m]',fx(R.h,2)],
@@ -194,4 +224,82 @@ function anexoBPrintHTML(B, R){
         r.okT == null ? '—' : r.okT ? 'T ≤ Cu·Ta, cumple' : 'Se limita a Cu·Ta', fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', r.Vt ? (r.okV ? '1.00' : fx(r.factor,3)) : '—']))}
       <p>Según A.5.4.5, el cortante dinámico en la base no puede ser menor que el ${fx(R.pct*100,0)} % del cortante de la FHE (${B.irregular ? 'estructura irregular' : 'estructura regular'}). ${R.modal.every(r => !r.Vt || r.okV) ? 'Se cumple en las direcciones evaluadas.' : 'Donde no se cumple, los resultados del análisis modal se multiplican por el factor de ajuste indicado.'}</p>` : ''}
   </section></div>`;
+}
+
+// ═══ Aa y Av por municipio (Apéndice A-4) o por coordenadas (límites municipales DANE) ═══
+let _sismoP = null;
+function cargarSismo(){
+  if(window.NSR_SISMO) return Promise.resolve();
+  return _sismoP = _sismoP || new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'data/sismo.js'; s.onload = res; s.onerror = () => { _sismoP = null; toast('No se pudo cargar la tabla del Apéndice A-4.'); rej(); }; document.head.appendChild(s); });
+}
+const normN = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function prellenarMunicipio(B){
+  if(B.munCode || !window.NSR_SISMO) return;
+  const f = S.m.ficha, m = NSR_SISMO.mun.find(x => normN(x.n) === normN(f.mun) && (!f.depto || normN(x.d) === normN(f.depto)));
+  if(m && B.metodo === 'tabla'){ B.depto = m.d; B.munCode = m.c; aplicarMunicipio(B); guardarMemoria(); }
+  else if(!B.depto && f.depto){ const d = NSR_SISMO.mun.find(x => normN(x.d) === normN(f.depto)); if(d) B.depto = d.d; }
+}
+function aplicarMunicipio(B){
+  const m = NSR_SISMO?.mun.find(x => x.c === B.munCode);
+  if(!m) return;
+  if(m.aa == null){ toast(`${m.n} no aparece en el Apéndice A-4: escribe Aa y Av a mano.`, 5000); return; }
+  B.Aa = m.aa; B.Av = m.av; B.depto = m.d || B.depto;
+}
+function usarCoordFicha(B){
+  const p = String(S.m.ficha.coord || '').match(/-?\d+(?:[.,]\d+)?/g);
+  if(p && p.length >= 2){ B.lat = p[0].replace(',', '.'); B.lon = p[1].replace(',', '.'); }
+}
+// Punto dentro de polígono (rayo) sobre los límites municipales simplificados
+function dentro(lon, lat, r){
+  let ins = false;
+  for(let i = 0, j = r.length - 2; i < r.length; j = i, i += 2){
+    const xi = r[i], yi = r[i+1], xj = r[j], yj = r[j+1];
+    if(((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) ins = !ins;
+  }
+  return ins;
+}
+function buscarPorCoord(B){
+  const lat = AnexoB.num(B.lat, NaN), lon = AnexoB.num(B.lon, NaN);
+  if(!isFinite(lat) || !isFinite(lon)) return toast('Escribe la latitud y la longitud en grados decimales.');
+  if(lat < -5 || lat > 14 || lon < -82 || lon > -66) return toast('Esas coordenadas no están en Colombia. Revisa el signo de la longitud (oeste = negativo).', 5000);
+  let mejor = null, area = Infinity;
+  for(const m of NSR_SISMO.mun) for(const r of m.r){
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for(let i = 0; i < r.length; i += 2){ x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i+1]); y1 = Math.max(y1, r[i+1]); }
+    if(lon < x0 || lon > x1 || lat < y0 || lat > y1) continue;
+    if(dentro(lon, lat, r)){ const a = (x1 - x0) * (y1 - y0); if(a < area){ area = a; mejor = m; } }
+  }
+  if(!mejor){ // fuera de todos los polígonos (borde o costa): el más cercano por su centro
+    let d = Infinity; for(const m of NSR_SISMO.mun) if(m.lat != null){ const dd = (m.lat - lat) ** 2 + (m.lon - lon) ** 2; if(dd < d){ d = dd; mejor = m; } }
+    toast(`El punto quedó en un borde; se tomó el municipio más cercano (${mejor.n}). Verifícalo.`, 5000);
+  }
+  B.munCode = mejor.c; aplicarMunicipio(B); guardarMemoria(); paneAnexoB();
+}
+function munInfoHTML(m, B){
+  return `<div class="note ${m.aa == null ? 'amber' : 'blue'}" style="margin:0"><b>${esc(m.n)}${m.d ? ' (' + esc(m.d) + ')' : ''}</b> · código DANE ${m.c}<br/>
+    ${m.aa == null ? 'No aparece en el Apéndice A-4: escribe Aa y Av a mano.' : `Aa = <b>${fx(m.aa,2)}</b> · Av = <b>${fx(m.av,2)}</b> · Zona de amenaza sísmica <b>${esc(m.z)}</b>`}
+    ${B.metodo === 'coord' ? `<br/><span class="hint">Punto: ${esc(B.lat)}, ${esc(B.lon)} — municipio encontrado con los límites del DANE.</span>` : ''}</div>`;
+}
+// Mapa de Colombia coloreado por Aa o Av de cada municipio (equivalente a las figuras A.2.3-2 y A.2.3-3)
+const COL_SIS = { 0.05:'#fff7d1', 0.10:'#fee391', 0.15:'#fec44f', 0.20:'#fe9929', 0.25:'#ec7014', 0.30:'#cc4c02', 0.35:'#a63603', 0.40:'#7f2704', 0.45:'#5c1d03', 0.50:'#3d1302' };
+function svgMapaSismo(B, imp){
+  const SM = window.NSR_SISMO; if(!SM) return '';
+  const k = 27, X = lon => ((lon + 79.1) * k).toFixed(1), Y = lat => ((12.6 - lat) * k).toFixed(1);
+  const campo = B.mapa === 'av' ? 'av' : 'aa', sel = B.munCode;
+  let paths = '', selPath = '';
+  for(const m of SM.mun){
+    if(!m.r.length || m.lon < -79.6) continue;   // sin San Andrés (fuera del recuadro)
+    const d = m.r.map(r => { let s = ''; for(let i = 0; i < r.length; i += 2) s += (i ? 'L' : 'M') + X(r[i]) + ',' + Y(r[i+1]); return s + 'Z'; }).join('');
+    const v = m[campo], col = v == null ? '#e5e7eb' : (COL_SIS[Math.round(v * 20) / 20] || '#ccc');
+    paths += `<path d="${d}" fill="${col}"/>`;
+    if(m.c === sel) selPath = `<path d="${d}" fill="none" stroke="#1a56db" stroke-width="2.5"/>`;
+  }
+  const lat = AnexoB.num(B.lat, NaN), lon = AnexoB.num(B.lon, NaN);
+  const pto = B.metodo === 'coord' && isFinite(lat) && isFinite(lon) ? `<circle cx="${X(lon)}" cy="${Y(lat)}" r="5" fill="#dc2626" stroke="#fff" stroke-width="1.5"/>` : '';
+  const vals = Object.keys(COL_SIS).map(Number);
+  const ley = vals.map((v, i) => `<rect x="${8 + i*30}" y="470" width="30" height="10" fill="${COL_SIS[v]}" stroke="#999" stroke-width=".3"/><text x="${23 + i*30}" y="491" text-anchor="middle" font-size="8.5" fill="#444">${v.toFixed(2)}</text>`).join('');
+  return `<svg viewBox="0 0 335 500" class="mapa-sis" role="img" aria-label="Mapa de ${campo === 'aa' ? 'Aa' : 'Av'} por municipio">
+    <g stroke="#fff" stroke-width=".25">${paths}</g>${selPath}${pto}
+    <text x="8" y="462" font-size="10" font-weight="700" fill="#333" font-family="sans-serif">${campo === 'aa' ? 'Aa' : 'Av'} por municipio (Apéndice A-4)</text>
+    <g font-family="sans-serif">${ley}</g></svg>`;
 }

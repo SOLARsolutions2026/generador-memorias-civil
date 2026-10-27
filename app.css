@@ -312,3 +312,11 @@ table.wtab td input[type=checkbox]{width:16px;min-width:0}
 table.wtab tr.off td{color:#94a3b8}
 table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .wtot{display:flex;justify-content:space-between;gap:10px;background:var(--blue);color:#fff;border-radius:8px;padding:10px 14px;font-weight:900;font-size:14px;margin-top:12px;flex-wrap:wrap}
+
+.sismo{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.mapa-sis{width:100%;height:auto;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-top:6px}
+.seg-sm button{padding:5px 10px;font-size:11.5px}
+@media (max-width:900px){.sismo{grid-template-columns:minmax(0,1fr)}.sismo .mapa-sis{max-width:340px;display:block;margin:6px auto 0}}
+.ax-mapas{display:grid;grid-template-columns:1fr 1fr;gap:10px;break-inside:avoid;margin:6px 0}
+.ax-mapas figure{text-align:center}.ax-mapas svg{max-height:3.3in;width:auto;max-width:100%;border:none;background:none}
+.ax-mapas figcaption{font-size:8.5pt;font-style:italic}
