@@ -297,3 +297,5 @@ table.sapres td:not(:first-child){text-align:right;font-weight:800;font-variant-
 .ax-imgs figure{break-inside:avoid;text-align:center}
 .ax-imgs img{max-width:100%;max-height:3in;border:1px solid #888}
 .ax-imgs figcaption{font-size:8.5pt;font-style:italic;margin-top:2px}
+
+.cbox .ilu{width:100%;height:auto;max-height:70px;background:#fff;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:4px}

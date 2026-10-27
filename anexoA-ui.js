@@ -447,6 +447,28 @@ function svgGeo(A, imp){
   </g></svg>`;
 }
 
+
+// Ilustraciones pequeñas para la ventana de condiciones (viento de izquierda a derecha)
+const ILU = (() => {
+  const g = '#94a3b8', az = '#1a56db', ve = '#16a34a', ag = '#38bdf8';
+  const suelo = (y=52) => `<line x1="0" y1="${y}" x2="200" y2="${y}" stroke="${g}" stroke-width="1.5"/>`;
+  const casa = (x, s=1) => `<g transform="translate(${x},52) scale(${s})"><rect x="-7" y="-12" width="14" height="12" fill="#e2e8f0" stroke="#64748b"/><path d="M-9,-12 L0,-20 L9,-12 z" fill="#cbd5e1" stroke="#64748b"/></g>`;
+  const arbol = (x, s=1) => `<g transform="translate(${x},52) scale(${s})"><rect x="-1.5" y="-8" width="3" height="8" fill="#92400e"/><circle cx="0" cy="-13" r="7" fill="${ve}" opacity=".8"/></g>`;
+  const est = x => `<g transform="translate(${x},52)"><rect x="-1" y="-22" width="2" height="22" fill="${az}"/><rect x="17" y="-18" width="2" height="18" fill="${az}"/><line x1="-3" y1="-23" x2="21" y2="-19" stroke="${az}" stroke-width="3"/></g>`;
+  const viento = `<g stroke="${az}" stroke-width="1.6" fill="none"><path d="M6,10 h18"/><path d="M6,17 h12"/><path d="M20,6 l5,4 -5,4"/></g>`;
+  const cota = (x1, x2, txt, y=62) => `<g stroke="${g}"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/><line x1="${x1}" y1="${y-3}" x2="${x1}" y2="${y+3}"/><line x1="${x2}" y1="${y-3}" x2="${x2}" y2="${y+3}"/></g><text x="${(x1+x2)/2}" y="${y+10}" text-anchor="middle" font-size="8.5" fill="#475569">${txt}</text>`;
+  const agua = (x1, x2) => `<path d="M${x1},52 ${Array.from({length:Math.floor((x2-x1)/12)},(_,i)=>`q3,-3 6,0 q3,3 6,0`).join(' ')}" fill="none" stroke="${ag}" stroke-width="2"/><rect x="${x1}" y="52" width="${x2-x1}" height="4" fill="${ag}" opacity=".25"/>`;
+  const svg = (c, h=58) => `<svg viewBox="0 0 200 ${h}" class="ilu" aria-hidden="true">${c}</svg>`;
+  return {
+    rB: svg(suelo() + [20,40,62,84,104,128,150,172].map((x,i) => i%3===2 ? arbol(x) : casa(x)).join('') + viento),
+    rC: svg(suelo() + arbol(40,.8) + casa(110,.8) + arbol(165,.7) + `<path d="M0,52 q50,-3 100,0 t100,0" fill="none" stroke="${ve}" stroke-opacity=".5"/>` + viento),
+    rD: svg(suelo() + agua(10, 190) + viento),
+    eB: svg(suelo() + [10,28,46,64,82,100,118].map(x => casa(x,.75)).join('') + est(150) + cota(4, 140, '≥ 800 m o 20h (460 m si h ≤ 9 m)') + viento, 75),
+    eC: svg(suelo() + arbol(30,.7) + casa(80,.7) + est(150) + cota(4, 140, 'no cumple B ni D') + viento, 75),
+    eD: svg(suelo() + agua(4, 100) + casa(118,.7) + est(150) + cota(4, 100, '> 1500 m o 20h') + cota(100, 148, '< 200 m', 70) + viento, 82),
+  };
+})();
+
 // Ventana con las condiciones de rugosidad y exposición (NSR-10 B.6.5.6.2 y B.6.5.6.3)
 function modalCondiciones(A){
   const R = AnexoA.calcular(A).viento, hm = R.ok ? R.hm : null;
@@ -457,15 +479,15 @@ function modalCondiciones(A){
     <h4 class="sub">1. Rugosidad del terreno (B.6.5.6.2)</h4>
     <p class="lead">Se mira el terreno viento arriba, en un sector de 45° a cada lado de la dirección del viento.</p>
     <div class="cgrid">
-      <div class="cbox"><b>Rugosidad B</b><span>Zonas urbanas y suburbanas, áreas boscosas u otros terrenos con muchas obstrucciones del tamaño de una vivienda unifamiliar o mayores, y poco espacio entre ellas.</span></div>
-      <div class="cbox"><b>Rugosidad C</b><span>Terreno abierto con pocas obstrucciones de menos de 9 m de altura: campos planos abiertos, praderas, y superficies de agua en zonas con huracanes.</span></div>
-      <div class="cbox"><b>Rugosidad D</b><span>Áreas planas sin obstrucciones y superficies de agua fuera de zonas de huracanes: pantanos, salinas y superficies de hielo.</span></div>
+      <div class="cbox">${ILU.rB}<b>Rugosidad B</b><span>Zonas urbanas y suburbanas, áreas boscosas u otros terrenos con muchas obstrucciones del tamaño de una vivienda unifamiliar o mayores, y poco espacio entre ellas.</span></div>
+      <div class="cbox">${ILU.rC}<b>Rugosidad C</b><span>Terreno abierto con pocas obstrucciones de menos de 9 m de altura: campos planos abiertos, praderas, y superficies de agua en zonas con huracanes.</span></div>
+      <div class="cbox">${ILU.rD}<b>Rugosidad D</b><span>Áreas planas sin obstrucciones y superficies de agua fuera de zonas de huracanes: pantanos, salinas y superficies de hielo.</span></div>
     </div>
     <h4 class="sub">2. Categoría de exposición (B.6.5.6.3)</h4>
     <div class="cgrid">
-      <div class="cbox"><b>Exposición B</b><span>Cuando la rugosidad B se mantiene viento arriba en una distancia de al menos <b>800 m</b> o <b>20 veces la altura</b> de la estructura, la que sea mayor. Si la altura media es de 9 m o menos, basta con <b>460 m</b>.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limB,0)} m</em>` : ''}</div>
-      <div class="cbox"><b>Exposición C</b><span>Se usa en todos los casos donde no aplican la B ni la D.</span></div>
-      <div class="cbox"><b>Exposición D</b><span>Cuando la rugosidad D se mantiene viento arriba en más de <b>1500 m</b> o <b>20 veces la altura</b>, la que sea mayor. También aplica si la estructura está a menos de <b>200 m</b> o <b>20 veces la altura</b> (la mayor) de un terreno D, en terreno B o C.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limD,0)} m / ${fx(lim.limDvecina,0)} m</em>` : ''}</div>
+      <div class="cbox">${ILU.eB}<b>Exposición B</b><span>Cuando la rugosidad B se mantiene viento arriba en una distancia de al menos <b>800 m</b> o <b>20 veces la altura</b> de la estructura, la que sea mayor. Si la altura media es de 9 m o menos, basta con <b>460 m</b>.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limB,0)} m</em>` : ''}</div>
+      <div class="cbox">${ILU.eC}<b>Exposición C</b><span>Se usa en todos los casos donde no aplican la B ni la D.</span></div>
+      <div class="cbox">${ILU.eD}<b>Exposición D</b><span>Cuando la rugosidad D se mantiene viento arriba en más de <b>1500 m</b> o <b>20 veces la altura</b>, la que sea mayor. También aplica si la estructura está a menos de <b>200 m</b> o <b>20 veces la altura</b> (la mayor) de un terreno D, en terreno B o C.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limD,0)} m / ${fx(lim.limDvecina,0)} m</em>` : ''}</div>
     </div>
     <div class="note blue" style="margin-top:10px"><b>Zonas de transición:</b> si la estructura está entre dos categorías, se usa la que dé mayores fuerzas de viento. Se permite una categoría intermedia solo si se justifica con un procedimiento analítico reconocido.</div>
     <div class="hint">Cómo decide la app: compara la distancia que escribes con estos límites y propone la exposición. Siempre puedes escoger otra en "Exposición usada".</div>
