@@ -57,6 +57,10 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Revisión cruzada solo en pantalla (`AnexoC.revisar`): tipos de patrón, SelfWtMult = 1 una vez, cargas D/L/W del Anexo A (tolerancia 3 %), Fx/Fy/Tx/Ty en nudos frente a la FHE y Mt del Anexo B.
   Pendiente: probar con un .$2k real de Amo (el formato se probó con un archivo armado desde su Excel).
 
+- Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` en `#listoBar` debajo del panel): la app revisa datos faltantes y habilita «✓ Marcar como terminado»;
+  guarda `X.listo` = huella de los datos (B incluye los del A) y `X.listoFecha`. Si los datos cambian, la huella ya no coincide y el paso vuelve a «en proceso» solo. B sin sismo = ✓ directo.
+  Pendiente: agregar D y E a `ANEXOS_LISTO` cuando existan.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

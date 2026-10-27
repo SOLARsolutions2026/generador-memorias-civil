@@ -346,3 +346,9 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .ax-tb.multi td.g{border-left:2px solid #1f3a60;font-weight:600}
 .ax-tb thead{display:table-header-group}
 .ax-tb tr{break-inside:avoid}
+/* Barra «Marcar como terminado» de los anexos */
+.card.listo{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px dashed #cbd5e1}
+.card.listo.ok{background:#ecfdf5;border:1px solid #a7f3d0}
+.listo-t{display:flex;gap:10px;align-items:center;flex:1 1 300px}
+.listo-i{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#059669;color:#fff;font-weight:800}
+.listo-i.no{background:#d97706}.listo-i.wip{background:var(--blue)}

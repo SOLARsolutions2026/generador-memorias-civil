@@ -261,7 +261,7 @@ async function abrirMemoria(id, paso){
 }
 function renderWS(cur){
   const m = S.m, pasos = esIng() ? STEPS : STEPS.filter(s => s.id === 'portada');
-  const st = s => s.off ? '' : s.id === 'ficha' ? (fichaCompleta() ? 'ok' : 'wip') : s.id === 'revisiones' ? (S.revs.length ? 'ok' : 'wip') : s.id === 'A' ? (m.anexos?.A ? 'wip' : '') : s.id === 'B' ? (m.anexos?.B?.aplica === false ? 'ok' : m.anexos?.B ? 'wip' : '') : s.id === 'C' ? (m.anexos?.C?.modelo ? (m.anexos.C.img ? 'ok' : 'wip') : '') : '';
+  const st = estadoPaso;
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
     side += `<button type="button" class="step ${s.id===cur?'on':''}" data-step="${s.id}" ${s.off?'disabled':''}><span class="dot ${st(s)}">${st(s)==='ok'?'✓':s.n}</span><span class="lbl">${s.t}<small>${s.s}</small></span></button>`; });
@@ -275,14 +275,14 @@ function renderWS(cur){
   <div class="ws"><nav class="steps" id="stepsNav" aria-label="Pasos"><div class="drawer-hd"><b>Pasos de la memoria</b><button type="button" id="closeSteps" aria-label="Cerrar">✕</button></div>${side}</nav>
   <section><div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">Paso ${s.n} · ${pill(...(ESTADOS[m.estado]||ESTADOS.wip))}</div><h2>${s.t}</h2></div>
     <div class="nav-btns">${activos.length>1?`<button class="btn" type="button" id="prev" ${i<=0?'disabled':''}>← Anterior</button><button class="btn pri" type="button" id="next" ${i>=activos.length-1?'disabled':''}>Siguiente →</button>`:''}</div></div>
-    <div id="pane"></div></section></div>`;
+    <div id="pane"></div><div id="listoBar"></div></section></div>`;
   $('#back').onclick = () => ir('#/');
   const nav = $('#stepsNav'), scr = $('#scrim');
   const abrir = () => { nav.classList.add('open'); scr.hidden = false; }, cerrar = () => { nav.classList.remove('open'); scr.hidden = true; };
   $('#openSteps').onclick = abrir; $('#closeSteps').onclick = cerrar; scr.onclick = cerrar;
   $$('[data-step]').forEach(b => b.onclick = () => ir(`#/m/${m.id}/${b.dataset.step}`));
   if($('#prev')){ $('#prev').onclick = () => ir(`#/m/${m.id}/${activos[i-1].id}`); $('#next').onclick = () => ir(`#/m/${m.id}/${activos[i+1].id}`); }
-  PANES[cur]();
+  S.paso = cur; PANES[cur](); pintarListo();
 }
 const pane = h => $('#pane').innerHTML = h;
 function fichaCompleta(){ const f = S.m.ficha; return ['prop','doc','proyecto','dir','mun','depto'].every(k => (f[k]||'').trim()); }
@@ -297,6 +297,7 @@ const guardarMemoria = debounce(async () => {
   const { error } = await sb.from('mem_memorias').update({ ficha:m.ficha, anexos:m.anexos || {}, titulo:(m.ficha.proyecto||'').trim() || 'Sin nombre', perfil_id:m.perfil_id, estado:m.estado }).eq('id', m.id);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
   else m.titulo = (m.ficha.proyecto||'').trim() || 'Sin nombre';
+  pintarListo();
 }, 700);
 async function guardarPendientes(){ for(const d of [guardarMemoria, guardarPerfil, guardarCfg]) if(d.pend) await d.pend(); }
 window.addEventListener('beforeunload', e => { if(guardarMemoria.pend || guardarPerfil.pend || guardarCfg.pend){ guardarPendientes(); e.preventDefault(); } });
@@ -364,6 +365,68 @@ async function subirPortada(file, luego){
     if(m.imagen_path !== path){ const { error } = await sb.from('mem_memorias').update({ imagen_path:path }).eq('id', m.id); if(error) throw error; m.imagen_path = path; }
     toast(`Imagen guardada (${(blob.size/1024).toFixed(0)} KB).`); luego && luego();
   }catch(e){ err(e, 'No se pudo subir la imagen'); }
+}
+
+// ═══ Anexo terminado: revisión de datos + botón «Marcar como terminado» ═══
+// Al marcar se guarda una huella de los datos; si después cambian, el anexo vuelve a «en proceso» solo.
+function huella(...objs){
+  const limpio = v => Array.isArray(v) ? v.map(limpio) : v && typeof v === 'object'
+    ? Object.keys(v).sort().filter(k => !['listo','listoFecha'].includes(k) && !k.startsWith('_') && v[k] !== '' && v[k] != null).reduce((o, k) => (o[k] = limpio(v[k]), o), {}) : v;
+  const t = JSON.stringify(objs.map(limpio)); let h = 5381;
+  for(let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + '-' + t.length;
+}
+const ANEXOS_LISTO = {
+  A: { n:'Anexo A', huella: an => huella(an.A), faltan(an){
+    if(!an.A) return ['datos del anexo'];
+    const A = an.A, R = AnexoA.calcular(A), f = [];
+    if(!A.tipo?.paneles && !A.tipo?.lamina) f.push('escoger paneles o cubierta');
+    if(!R.viento.ok) f.push('geometría para el viento: ' + R.viento.faltan.join(', '));
+    return f; } },
+  B: { n:'Anexo B', huella: an => huella(an.B, an.A), faltan(an){
+    if(!an.B) return ['datos del anexo'];
+    if(an.B.aplica === false) return [];
+    const R = calcB(); return R.ok ? [] : R.faltan; } },
+  C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
+    const C = an.C, f = [];
+    if(!C?.modelo) f.push('archivo del modelo (.$2k)');
+    if(!C?.img) f.push('imagen del modelo');
+    return f; } },
+};
+function estadoAnexo(id){
+  const an = S.m?.anexos || {}, X = an[id], D = ANEXOS_LISTO[id];
+  if(!X) return '';
+  if(id === 'B' && X.aplica === false) return 'ok';
+  return X.listo && X.listo === D.huella(an) ? 'ok' : 'wip';
+}
+function estadoPaso(s){
+  if(s.off) return '';
+  if(s.id === 'ficha') return fichaCompleta() ? 'ok' : 'wip';
+  if(s.id === 'revisiones') return S.revs.length ? 'ok' : 'wip';
+  return ANEXOS_LISTO[s.id] ? estadoAnexo(s.id) : '';
+}
+function pintarListo(){
+  const bar = $('#listoBar'); if(!bar || !S.m) return;
+  // puntos de la barra lateral
+  $$('[data-step]').forEach(b => { const s = STEPS.find(x => x.id === b.dataset.step), d = b.querySelector('.dot'); if(!s || !d) return;
+    const e = estadoPaso(s); d.className = 'dot ' + e; d.textContent = e === 'ok' ? '✓' : s.n; });
+  const id = S.paso, D = ANEXOS_LISTO[id];
+  if(!D || !esIng() || (id === 'B' && S.m.anexos?.B?.aplica === false)){ bar.innerHTML = ''; return; }
+  const an = S.m.anexos || {}, X = an[id] || {}, f = D.faltan(an), est = estadoAnexo(id);
+  const fecha = X.listoFecha ? new Date(X.listoFecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }) : '';
+  bar.innerHTML = `<div class="card listo ${est === 'ok' ? 'ok' : ''}">` + (
+    est === 'ok' ? `<div class="listo-t"><span class="listo-i">✓</span><div><b>${D.n} terminado</b><div class="hint">Marcado el ${esc(fecha)}. Si cambias un dato, vuelve a «en proceso».</div></div></div>
+      <button class="btn sm" type="button" id="btnListo" data-v="0">Volver a abrir</button>`
+    : f.length ? `<div class="listo-t"><span class="listo-i no">!</span><div><b>Para marcar el ${D.n} como terminado falta:</b><div class="hint">${f.map(esc).join(' · ')}</div></div></div>
+      <button class="btn sm" type="button" disabled>✓ Marcar como terminado</button>`
+    : `<div class="listo-t"><span class="listo-i wip">✓</span><div><b>${X.listo ? 'Cambiaste datos después de marcarlo.' : 'Ya están todos los datos.'}</b><div class="hint">Revisa los resultados y márcalo como terminado.</div></div></div>
+      <button class="btn grn" type="button" id="btnListo" data-v="1">✓ Marcar ${D.n} como terminado</button>`) + '</div>';
+  const b = $('#btnListo'); if(b) b.onclick = () => {
+    const an2 = S.m.anexos, Y = an2[id];
+    if(b.dataset.v === '1'){ Y.listo = D.huella(an2); Y.listoFecha = new Date().toISOString(); toast(`${D.n} marcado como terminado.`); }
+    else { delete Y.listo; delete Y.listoFecha; }
+    guardarMemoria(); pintarListo();
+  };
 }
 
 // ═══ PANELES DE CADA PASO ═══
