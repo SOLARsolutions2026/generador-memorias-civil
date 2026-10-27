@@ -120,11 +120,12 @@ table.t td input{width:100%;border:1px solid var(--border);border-radius:6px;pad
 .docrow{display:grid;grid-template-columns:86px minmax(0,1fr);gap:6px}
 .saved{font-size:11px;color:var(--muted);font-weight:600}
 .saved.ok{color:var(--green)}.saved.err{color:var(--red)}
-.drop-img{border:2px dashed #93b4f5;border-radius:10px;background:var(--blue-bg);min-height:190px;display:grid;place-items:center;text-align:center;color:#1e3a8a;padding:12px;cursor:pointer;transition:background .15s}
+.drop-img{border:2px dashed #93b4f5;border-radius:10px;background:var(--blue-bg);min-height:95px;max-width:50%;display:grid;place-items:center;text-align:center;color:#1e3a8a;padding:8px;cursor:pointer;transition:background .15s}
 .drop-img:hover,.drop-img.over{background:#dbeafe;border-color:var(--blue)}
 .drop-img.has{background:#fafbfc;border:1px solid var(--border)}
-.drop-img .ph-in{font-size:12.5px;line-height:1.5}
-.drop-img img{max-width:100%;max-height:260px;display:block;margin:0 auto}
+.drop-img .ph-in{font-size:11.5px;line-height:1.4}
+.drop-img .ph-in div{font-size:20px!important}
+.drop-img img{max-width:100%;max-height:130px;display:block;margin:0 auto}
 .imgbox{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .imgbox .th{width:200px;height:120px;border:1px dashed var(--border);border-radius:8px;display:grid;place-items:center;overflow:hidden;background:#fafbfc;color:var(--muted);font-size:11px}
 .imgbox .th img{max-width:100%;max-height:100%}
@@ -199,6 +200,7 @@ table.t td input{width:100%;border:1px solid var(--border);border-radius:6px;pad
 @media (max-width:560px){
   .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)}
   .span2{grid-column:auto}
+  .drop-img{max-width:100%}
   .mlist .mi{grid-template-columns:minmax(0,1fr)}
   .mi .acts{justify-content:flex-start}
   .topbar .sub{display:none}
