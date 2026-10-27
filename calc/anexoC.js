@@ -130,9 +130,10 @@ function analizar(texto){
     const o = cb[n] = cb[n] || { n, tipo:r.ComboType || '', casos:{} };
     if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF)); }
   const combos = Object.values(cb);
+  const dsp = desplazamientos(texto);
 
   return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
-    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos,
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n },
     tablas:Object.keys(T) };
 }
 
@@ -148,6 +149,28 @@ function completas(texto){
     punt: tb('FRAME LOADS - POINT').map(r => [r.Frame, r.LoadPat, r.CoordSys, r.Type || 'Force', r.Dir, num(r.RelDist), num(r.Force ?? r.Moment)]),
     jl: tb('JOINT LOADS - FORCE').map(r => [r.Joint, r.LoadPat, num(r.F1), num(r.F2), num(r.F3), num(r.M1), num(r.M2), num(r.M3)]),
   };
+}
+
+// ─── Desplazamientos de nudos (resultados del análisis) ───
+// Del archivo exportado con la tabla «JOINT DISPLACEMENTS», o de la tabla copiada desde SAP (columnas separadas por tabulador).
+function desplazamientos(texto){
+  const out = {}, put = (j, c, u1, u2, u3) => {
+    if(j == null || !c) return; const k = `${String(j).trim()}|${String(c).trim()}`, o = out[k];
+    const v = { U1:num(u1), U2:num(u2), U3:num(u3) };
+    if(!o) out[k] = v; else for(const q of ['U1','U2','U3']) if(Math.abs(v[q]) > Math.abs(o[q])) o[q] = v[q];   // Max/Min: el mayor en valor absoluto
+  };
+  const T = leer(texto), filas = T['JOINT DISPLACEMENTS'] || [];
+  for(const r of filas) put(r.Joint, r.OutputCase, r.U1, r.U2, r.U3);
+  if(!filas.length){   // tabla pegada
+    const ls = String(texto).replace(/\r/g, '').split('\n').map(l => l.split('\t').map(x => x.trim()));
+    const hi = ls.findIndex(l => l.includes('Joint') && l.includes('U1')); if(hi >= 0){
+      const H = ls[hi], ix = n => H.indexOf(n);
+      for(const l of ls.slice(hi + 1)) if(l[ix('Joint')] && !/^text$/i.test(l[ix('Joint')]) && l[ix('U1')] !== '' && isFinite(num(l[ix('U1')])) && !/^m$/i.test(l[ix('U1')]))
+        put(l[ix('Joint')], l[ix('OutputCase')], l[ix('U1')], l[ix('U2')], l[ix('U3')]);
+    }
+  }
+  const casos = [...new Set(Object.keys(out).map(k => k.split('|')[1]))];
+  return { mapa:out, casos, n:Object.keys(out).length };
 }
 
 // ─── 4. Peso propio del modelo (sin los rieles, que ya están en el Anexo A) ───
@@ -225,6 +248,6 @@ function revisar(M, RA, RB, CB){
   return out;
 }
 
-const api = { leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+const api = { desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

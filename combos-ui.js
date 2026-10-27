@@ -20,8 +20,9 @@ function paneCombos(){
   if(K.patAuto && M?.ok){ const p = Combos.patronesDeModelo(M, AnexoC.categoria); if(p){ for(const k in p) if(p[k]) K.pat[k] = p[k]; K.patAuto = false; guardarMemoria(); } }
   const R = Combos.coefR(K);
   const seg = (attr, val, si) => `<div class="seg sm" role="group"><button type="button" ${attr}="1" class="${val ? 'on' : ''}" ${ro_}>${si || 'Sí'}</button><button type="button" ${attr}="0" class="${!val ? 'on' : ''}" ${ro_}>No</button></div>`;
-  const filaIrr = (i, lado) => { const v = !!K[lado][i.k];
-    return [`<b>${i.k}</b>`, esc(i.n), fx(i.phi,1), seg(`data-irr="${lado}.${i.k}" data-v`, v),
+  const torAuto = !!K.tor?.res?.ok;
+  const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = torAuto && (i.k === '1aP' || i.k === '1bP');
+    return [`<b>${i.k}</b>`, esc(i.n), fx(i.phi,1), auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí' : 'No'} · calculado</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v),
       `<input class="nota-irr" data-nirr="${i.k}" value="${esc(K.notasIrr[i.k] || '')}" placeholder="${v ? 'Por qué aplica' : 'Justificación (opcional)'}" ${ro_}/>`]; };
   let h = '';
   // 1. Irregularidades
@@ -30,9 +31,16 @@ function paneCombos(){
   else {
     h += `<div class="fg g4">${fSel(K,'sisR','Sistema estructural (Tabla A.3-3)',Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}` : '')]),{cls:'span4',re:1})}
         ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) : ''}</div>
+      ${torsionHTML(K, M, ro_)}
       <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${tabla(['Tipo','Irregularidad','φp','¿Presenta?','Nota (sale en la memoria)'], Combos.IRR_P.map(i => filaIrr(i, 'irrP')), 'irr-tb')}
       <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${tabla(['Tipo','Irregularidad','φa','¿Presenta?','Nota (sale en la memoria)'], Combos.IRR_A.map(i => filaIrr(i, 'irrA')), 'irr-tb')}
-      <div class="f" style="margin-top:10px"><label>¿La estructura tiene redundancia? (A.3.3.8)</label>${seg('data-red', K.redundante !== false)}<div class="hint">Sí → φr = 1.00 · No → φr = 0.75</div></div>
+      <h4 class="sub">Redundancia (A.3.3.8) → φr</h4>
+      <div class="red-box"><div class="f"><label>¿La estructura tiene redundancia?</label>${seg('data-red', K.redundante !== false)}<div class="hint">Sí → φr = 1.00 · No → φr = 0.75</div>
+          <label for="redCalc" style="margin-top:8px">Cálculo / justificación (sale en la memoria)</label><textarea id="redCalc" rows="4" placeholder="Escribe el cálculo de la redundancia…" ${ro_}>${esc(K.redCalc || '')}</textarea></div>
+        <div>${K.redImg ? `<div class="drop-img has" id="redImgV" style="max-width:none"><span class="muted">Cargando…</span></div>
+            ${esIng() ? '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" type="button" id="redImgC">🔄 Cambiar</button><button class="btn sm danger" type="button" id="redImgQ">Quitar</button></div>' : ''}`
+          : esIng() ? '<button class="drop-img" type="button" id="redImgC" style="max-width:none;min-height:120px;width:100%"><div class="ph-in"><div style="font-size:20px">📷</div><b>Foto del cálculo</b><br/>toca o arrastra aquí</div></button>' : ''}
+          ${K.redImg ? `<input id="redNota" value="${esc(K.redNota || '')}" placeholder="Pie de la foto" style="margin-top:6px;width:100%" ${ro_}/>` : ''}</div></div>
       <div class="wtot"><span>R = φa · φp · φr · R0 = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0,1)}</span><span>R = ${fx(R.R,2)}</span></div>
       <div class="hint" style="margin-top:6px">Estructura <b>${R.irregular ? 'irregular' : 'regular'}</b>: en la comparación modal del Anexo B se exige el ${R.irregular ? '90' : '80'} % de Vs (se actualiza solo). Las fuerzas sísmicas de diseño se dividen por R (E = Fs/R).</div></div>`;
   }
@@ -76,10 +84,21 @@ function paneCombos(){
     <div class="hint" style="margin-top:6px">La tabla trae una fila por patrón: ComboName, ComboType, CaseName, ScaleSF. Al subir el modelo en el Anexo C, la app revisa que estas combinaciones estén con los mismos factores.</div></div>`;
   h += `<div class="note blue">Estas tablas se explicarán en la <b>memoria general</b> (pendiente de construir); aquí se trabajan y se revisan.</div>`;
   pane(h);
+  if(K.redImg) urlDe(K.redImg).then(u => { const b = $('#redImgV'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Cálculo de la redundancia" style="max-width:100%;max-height:300px"/>` : '<span class="muted">No se encontró la foto.</span>'; });
   if(!esIng()) return;
   const re = () => { sincronizarIrregular(); guardarMemoria(); paneCombos(); };
   $$('[data-irr]').forEach(b => b.onclick = () => { const [lado, k] = b.dataset.irr.split('.'); K[lado][k] = b.dataset.v === '1'; re(); });
   $$('[data-red]').forEach(b => b.onclick = () => { K.redundante = b.dataset.red === '1'; re(); });
+  if($('#redCalc')) $('#redCalc').oninput = e => { K.redCalc = e.target.value; guardarMemoria(); };
+  if($('#redNota')) $('#redNota').oninput = e => { K.redNota = e.target.value; guardarMemoria(); };
+  const subeRed = async f => { if(!f?.type.startsWith('image/')) return toast('Ese archivo no es una imagen.');
+    try{ toast('Subiendo foto…', 15000); const blob = await comprimir(f, { max:1800, type:'image/jpeg', q:0.85 }), path = `${S.m.id}/redundancia.jpg`;
+      await subir(path, blob, 'image/jpeg'); K.redImg = path; guardarMemoria(); toast('Foto guardada.'); paneCombos(); }catch(e){ err(e, 'No se pudo subir la foto'); } };
+  const zr = $('#redImgC'); if(zr){ zr.onclick = async () => { const f = await elegirArchivo('image/*'); if(f) subeRed(f); };
+    zr.ondragover = e => { e.preventDefault(); zr.classList.add('over'); }; zr.ondragleave = () => zr.classList.remove('over');
+    zr.ondrop = e => { e.preventDefault(); zr.classList.remove('over'); subeRed(e.dataTransfer.files[0]); }; }
+  if($('#redImgQ')) $('#redImgQ').onclick = async () => { await sb.storage.from(BUCKET).remove([K.redImg]); K.redImg = ''; guardarMemoria(); paneCombos(); };
+  activarTorsion(K, M);
   $$('[data-nirr]').forEach(i => i.oninput = () => { K.notasIrr[i.dataset.nirr] = i.value; guardarMemoria(); });
   $$('[data-con]').forEach(c => c.onchange = () => { const s = new Set(K.off); c.checked ? s.delete(c.dataset.con) : s.add(c.dataset.con); K.off = [...s]; guardarMemoria(); paneCombos(); });
   $$('#pane [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {
@@ -94,4 +113,52 @@ function paneCombos(){
   const txt = () => Combos.tablaSAP(calcK().activas);
   $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt()); toast('Tabla copiada. Pégala en Excel o en SAP2000.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
   $('#bajaK').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt()], { type:'text/plain' })); a.download = `${S.m.consecutivo}_combinaciones.txt`; a.click(); };
+}
+
+// ═══ Irregularidad torsional con los desplazamientos de SAP2000 ═══
+function torsionHTML(K, M, ro_){
+  const T = K.tor, casos = M?.desp?.casos || [], hay = casos.length > 0;
+  const selC = (k, def) => hay ? `<select data-tor="${k}" ${ro_}>${['', ...casos].map(c => `<option value="${esc(c)}" ${T[k] === c ? 'selected' : ''}>${c ? esc(c) : '— escoge —'}</option>`).join('')}</select>`
+    : `<input data-tor="${k}" value="${esc(T[k] || '')}" placeholder="${def}" ${ro_}/>`;
+  const res = T.res, filaDir = (dir) => { const r = res?.[dir]; if(!r) return '';
+    return `<div class="tor-dir"><b>Sismo sentido ${dir}</b> <span class="hint">(caso ${esc(r.caso)})</span>
+      ${tabla(['Nudo','U1 [m]','U2 [m]','Δ = √(U1²+U2²)'], r.n.map(x => [esc(x.j), fx(x.U1,6), fx(x.U2,6), fx(x.D,4)]))}
+      ${tabla(['Δmáx','1.2·(Δ1+Δ2)/2','1.4·(Δ1+Δ2)/2','Resultado'], [[fx(r.t.max,4), fx(r.t.l12,4), fx(r.t.l14,4),
+        r.t.tipo ? pill('no', r.t.tipo === '1bP' ? '1bP torsional extrema' : '1aP torsional') : pill('ok', 'Sin irregularidad torsional')]])}</div>`; };
+  return `<div class="tor-box"><h4 class="sub" style="margin-top:0">Irregularidad torsional 1aP / 1bP — cálculo con los desplazamientos de SAP2000</h4>
+    <div class="fg g4">
+      <div class="f"><label>Nudos extremos (sentido X)</label><input data-tor="nudos" value="${esc(T.nudos || '')}" placeholder="Ej.: 23, 18" ${ro_}/></div>
+      <div class="f"><label>Caso para X</label>${selC('casoX', 'DERX')}</div>
+      <div class="f"><label>Nudos extremos (sentido Y)</label><input data-tor="nudosY" value="${esc(T.nudosY || '')}" placeholder="vacío = los mismos" ${ro_}/></div>
+      <div class="f"><label>Caso para Y</label>${selC('casoY', 'DERY')}</div></div>
+    ${!M?.ok ? '<div class="note amber">Primero sube el modelo en el Anexo C.</div>'
+      : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En SAP2000, después de correr el análisis: <b>File → Export → SAP2000 .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge DERX y DERY). Luego usa «Reemplazar» en el Anexo C.
+          <details style="margin-top:6px"><summary>O pega aquí la tabla «Joint Displacements» copiada desde SAP</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
+    ${esIng() && M?.ok ? '<button class="btn sm pri" type="button" id="torCalc" style="margin-top:8px">⚙ Revisar irregularidad torsional</button>' : ''}
+    ${res?.ok ? `<div class="tor-res">${filaDir('X')}${filaDir('Y')}</div><div class="hint">Calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))}. Si cambias el modelo, vuelve a revisar.</div>` : ''}
+    ${res?.error ? `<div class="note amber" style="margin-top:8px">${esc(res.error)}</div>` : ''}</div>`;
+}
+function activarTorsion(K, M){
+  $$('[data-tor]').forEach(i => i.addEventListener(i.tagName === 'SELECT' ? 'change' : 'input', () => { K.tor[i.dataset.tor] = i.value; guardarMemoria(); }));
+  const b = $('#torCalc'); if(!b) return;
+  b.onclick = async () => {
+    const T = K.tor, nx = String(T.nudos || '').split(/[,;\s]+/).filter(Boolean), ny = String(T.nudosY || '').split(/[,;\s]+/).filter(Boolean);
+    const nyy = ny.length ? ny : nx;
+    if(nx.length !== 2 || nyy.length !== 2) return toast('Escribe dos nudos por sentido (los dos extremos), separados por coma.', 4000);
+    if(!T.casoX || !T.casoY) return toast('Escoge el caso de cada sentido.', 3500);
+    try{
+      toast('Leyendo desplazamientos…', 15000);
+      const pega = $('#torPega')?.value.trim();
+      const D = AnexoC.desplazamientos(pega || await textoModelo(datosC()));
+      if(!D.n){ T.res = { error:'No se encontraron desplazamientos en el archivo ni en la tabla pegada.' }; guardarMemoria(); return paneCombos(); }
+      const dir = (nudos, caso) => { const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) }));
+        const falt = n.filter(x => x.U1 === undefined).map(x => x.j); if(falt.length) throw new Error(`No hay desplazamientos del nudo ${falt.join(', ')} en el caso ${caso}.`);
+        n.forEach(x => x.D = Math.hypot(x.U1, x.U2)); return { caso, n, t:Combos.torsion(n[0], n[1]) }; };
+      const X = dir(nx, T.casoX), Y = dir(nyy, T.casoY);
+      T.res = { ok:true, X, Y, fecha:new Date().toISOString() };
+      const tipos = [X.t.tipo, Y.t.tipo];
+      K.irrP['1bP'] = tipos.includes('1bP'); K.irrP['1aP'] = !K.irrP['1bP'] && tipos.includes('1aP');
+      sincronizarIrregular(); guardarMemoria(); toast('Irregularidad torsional revisada.'); paneCombos();
+    }catch(e){ K.tor.res = { error:e.message }; guardarMemoria(); paneCombos(); }
+  };
 }

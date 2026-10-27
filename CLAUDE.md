@@ -73,6 +73,9 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   impacto de vehículos en combinaciones aparte 1.2D + 1.0IMP + 1.0L (se usa Lr al 1.0); sismo E = Fs/R con ±Ex ±Tx ±0.3Ey (`orto`), derivas sin R, servicio B.2.3 (con sismo opcional),
   `off[]` combinaciones desactivadas, `otras[]` {nom, txt} escritas como «1.2D + 1.0IMPx». Copiar/descargar tabla ComboName/ComboType/CaseName/ScaleSF.
   El Anexo C lee «COMBINATION DEFINITIONS» del .$2k (`modelo.combos`) y revisa que estén con los mismos factores.
+  Torsión 1aP/1bP calculada: `tor{nudos,nudosY,casoX,casoY,res}`; desplazamientos de «JOINT DISPLACEMENTS» del mismo .$2k (exportar con Analysis Results → Joint Output → Displacements)
+  o de la tabla pegada (`AnexoC.desplazamientos`); Δ = √(U1²+U2²), 1aP si Δmáx > 1.2·prom, 1bP si > 1.4·prom (`Combos.torsion`) → fija irrP 1aP/1bP. `modelo.desp.casos` lista los casos.
+  Redundancia: `redundante`, `redCalc` (texto), `redImg` (`<id>/redundancia.jpg`), `redNota`.
   Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
 
 ## Almacenamiento

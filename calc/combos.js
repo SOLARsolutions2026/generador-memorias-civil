@@ -35,6 +35,7 @@ const SIMB = { D:'Muerta', Lr:'Viva de cubierta', W:'Viento', Ex:'Sismo X', Ey:'
 function defaults(){
   return { irrP:{}, irrA:{}, notasIrr:{}, redundante:true, sisR:'dmo', R0:'',
     pat:{ D:'DEAD, DEAD SI', Lr:'LIVE', W:'WIND', Ex:'Fx', Ey:'Fy', Tx:'Tx', Ty:'Ty', IMPx:'IMPx', IMPy:'IMPy' }, patAuto:true,
+    tor:{ nudos:'', nudosY:'', casoX:'', casoY:'', res:null }, redCalc:'', redImg:'', redNota:'',
     orto:true, servicio:true, servicioSismo:false, derivas:true, impacto:true, off:[], otras:[] };
 }
 
@@ -47,6 +48,15 @@ function patronesDeModelo(M, categoria){
   return { D:de(p => c(p) === 'D'), Lr:de(p => c(p) === 'L'), W:de(p => c(p) === 'W'),
     Ex:xy('E', /^(F|S|E)/i, 'x'), Ey:xy('E', /^(F|S|E)/i, 'y'), Tx:xy('E', /^T/i, 'x'), Ty:xy('E', /^T/i, 'y'),
     IMPx:xy('N', /^IMP/i, 'x'), IMPy:xy('N', /^IMP/i, 'y') };
+}
+
+// Irregularidad torsional (Tabla A.3-6, 1aP / 1bP) con los desplazamientos de dos nudos extremos
+// Δ = √(U1² + U2²); 1aP si Δmáx > 1.2·prom (φp 0.9); 1bP si Δmáx > 1.4·prom (φp 0.8)
+function torsion(n1, n2){
+  if(!n1 || !n2) return null;
+  const d = n => Math.hypot(num(n.U1), num(n.U2)), D1 = d(n1), D2 = d(n2), prom = (D1 + D2) / 2, max = Math.max(D1, D2);
+  const l12 = 1.2 * prom, l14 = 1.4 * prom;
+  return { D1, D2, prom, max, l12, l14, tipo: max > l14 ? '1bP' : max > l12 ? '1aP' : null };
 }
 
 // R = φa · φp · φr · R0
@@ -151,6 +161,6 @@ function compararSAP(lista, combosSAP){
   return lista.map(c => ({ id:c.id, txt:c.txt, en:sapF.get(firma(c.sap)) || null }));
 }
 
-const api = { IRR_P, IRR_A, R0S, SIMB, defaults, patronesDeModelo, coefR, generar, calcular, leerExpr, expr, tablaSAP, compararSAP };
+const api = { torsion, IRR_P, IRR_A, R0S, SIMB, defaults, patronesDeModelo, coefR, generar, calcular, leerExpr, expr, tablaSAP, compararSAP };
 if(typeof module !== 'undefined') module.exports = api; else root.Combos = api;
 })(typeof window !== 'undefined' ? window : globalThis);
