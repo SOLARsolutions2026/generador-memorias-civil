@@ -8,11 +8,17 @@
 const G = 9.81; // gravedad [m/s²] para pasar kg a N
 
 // ─── Catálogos fijos (de las plantillas) ───
-const LAMINAS = {
-  master1000: { nombre:'Lámina metálica galvanizada tipo Master 1000', calibres:{ 28:{ancho:1.08,peso:3.115}, 26:{ancho:1.08,peso:4.05}, 24:{ancho:1.08,peso:5.49} } },
-  canaleta:   { nombre:'Canaleta metálica galvanizada',                calibres:{ 24:{ancho:0.90,peso:5.49},  22:{ancho:0.90,peso:7.12}, 20:{ancho:0.90,peso:8.55} } },
+const LAMINAS = { // materiales de cubierta: los metálicos van por calibre (kg/m de lámina y ancho útil), los demás en kg/m²
+  master1000: { nombre:'Lámina metálica galvanizada tipo Master 1000', fuente:'Catálogo del fabricante', calibres:{ 28:{ancho:1.08,peso:3.115}, 26:{ancho:1.08,peso:4.05}, 24:{ancho:1.08,peso:5.49} } },
+  canaleta:   { nombre:'Canaleta metálica galvanizada', fuente:'Catálogo del fabricante', calibres:{ 24:{ancho:0.90,peso:5.49},  22:{ancho:0.90,peso:7.12}, 20:{ancho:0.90,peso:8.55} } },
+  zinc:       { nombre:'Teja de zinc ondulada', w:5,  fuente:'Valor típico de fabricante (no figura en la Tabla B.3.4.1-4)' },
+  eternit:    { nombre:'Teja de fibrocemento (Eternit)', w:20, fuente:'NSR-10 Tabla B.3.4.1-4 — cubiertas corrugadas de asbesto-cemento' },
+  arcilla:    { nombre:'Teja de arcilla (barro), con mortero', w:80, fuente:'NSR-10 Tabla B.3.4.1-4 — teja de arcilla incluyendo el mortero' },
+  otra:       { nombre:'Otro material de cubierta', w:0, fuente:'Valor escrito por el diseñador' },
 };
-const CIELOS = { 'Drywall':15, 'Fibrocemento':20, 'PVC':5, 'Cielo raso registrable':10 }; // kg/m²
+const CIELOS = { // kg/m², editables
+  'PVC':5, 'Drywall':15, 'Fibrocemento':20, 'Machimbre':15, 'Icopor':5, 'Cielo raso registrable':10 };
+const EXTRAS_DEF = { ductoE:{ n:'Ductería eléctrica', w:5 }, ductoM:{ n:'Ductería mecánica', w:20 }, lum:{ n:'Iluminaria suspendida', w:5 } }; // ductos mecánicos: NSR-10 Tabla B.3.4.1-1
 const GRUPOS = { // Tabla B.6.5-1 — factor de importancia I [no huracán, huracán]
   'I':   { nombre:'I — Estructuras de ocupación normal',            I:[0.87,0.77] },
   'II':  { nombre:'II — Estructuras de ocupación especial',         I:[1.00,1.00] },
@@ -76,12 +82,21 @@ function defaults(){
     panel:{ nombre:'TRINASOLAR 700-720W', L:2.382, W:1.31, peso:38.3 },
     riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906 },
     dBorde:0.40, tribRiel:'', qMant:15,
-    lamina:{ perfil:'master1000', calibre:24, sep:1.61,
-      cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 } },
+    lamina:{ perfil:'master1000', calibre:24, wManual:'', sep:1.61 },
+    extras:{ cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 }, otras:[] },
     Lr:50,
     viento:{ grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'',
       expManual:'', kzt:[false,false,false,false,false], kztManual:1, flujo:'libre', sistema:0, Gmanual:'', luz:1.60, fuente:'sprfv' },
   };
+}
+
+// ─── Cargas adicionales por área (cielo raso, ductos, luminarias, otras) ───
+function extras(A){
+  const e = A.extras || {}, out = [];
+  if(e.cielo?.aplica) out.push({ n:`Cielo raso — ${e.cielo.tipo}`, w:num(e.cielo.w) });
+  for(const k of ['ductoE','ductoM','lum']) if(e[k]?.aplica) out.push({ n:EXTRAS_DEF[k].n, w:num(e[k].w) });
+  for(const o of (e.otras || [])) if((o.n || '').trim() || num(o.w)) out.push({ n:(o.n || 'Otra carga').trim(), w:num(o.w) });
+  return out;
 }
 
 // ─── Carga muerta y viva: paneles solares sobre rieles ───
@@ -93,26 +108,28 @@ function paneles(A){
   const sepRieles = L - 2*dB;
   const kgmPanel = wPanel * trib;                            // kg/m sobre el riel
   const Dpanel = kgmPanel * G / 1000, Driel = num(A.riel.peso) * G / 1000;
-  const D = Dpanel + Driel;
+  // si no hay cubierta de lámina/teja, las cargas adicionales cuelgan de la estructura de paneles
+  const ext = A.tipo.lamina ? [] : extras(A), wExt = ext.reduce((a, x) => a + x.w, 0), Dext = wExt * trib * G / 1000;
+  const D = Dpanel + Driel + Dext;
   const qM = num(A.qMant, 15), Lm = qM * trib * G / 1000;
-  return { wPanel, trib, tribAuto, sepRieles, areaTrib: trib*W, kgmPanel, Dpanel, Driel, D, Dr:r3(D), qM, L:Lm, Lr3:r3(Lm) };
+  return { wPanel, trib, tribAuto, sepRieles, areaTrib: trib*W, kgmPanel, Dpanel, Driel, ext, wExt, Dext, D, Dr:r3(D), qM, L:Lm, Lr3:r3(Lm) };
 }
 
 // ─── Carga muerta y viva: cubierta en lámina sobre correas ───
 function lamina(A){
-  const l = A.lamina, perf = LAMINAS[l.perfil] || LAMINAS.master1000, cal = perf.calibres[l.calibre];
-  const s = num(l.sep);
-  const wLam = cal ? cal.peso / cal.ancho : 0;               // kg/m de lámina ÷ ancho útil = kg/m²
-  const items = [{ n:`${perf.nombre} cal. ${l.calibre}`, w:wLam }];
-  if(l.cielo.aplica) items.push({ n:`Cielo raso — ${l.cielo.tipo}`, w:num(l.cielo.w) });
-  if(l.ductoE.aplica) items.push({ n:'Ductería eléctrica', w:num(l.ductoE.w) });
-  if(l.ductoM.aplica) items.push({ n:'Ductería mecánica', w:num(l.ductoM.w) });
-  if(l.lum.aplica) items.push({ n:'Iluminaria suspendida', w:num(l.lum.w) });
+  const l = A.lamina, mat = LAMINAS[l.perfil] || LAMINAS.master1000, s = num(l.sep);
+  let wAuto = 0, cal = null;
+  if(mat.calibres){ cal = mat.calibres[l.calibre]; wAuto = cal ? cal.peso / cal.ancho : 0; } // kg/m de lámina ÷ ancho útil = kg/m²
+  else wAuto = mat.w;
+  const manual = num(l.wManual, 0) > 0, wLam = manual ? num(l.wManual) : wAuto;
+  const nomMat = mat.calibres ? `${mat.nombre} cal. ${l.calibre}` : mat.nombre;
+  const items = [{ n:nomMat, w:wLam }, ...extras(A)];
   const wTot = items.reduce((a, x) => a + x.w, 0);
   const kgm = wTot * s;                                       // ancho aferente de la correa = separación (s/2 a cada lado)
   const D = kgm * G / 1000;
   const Lr = num(A.Lr, 50), Lm = Lr * s * G / 1000;
-  return { perfil:perf.nombre, calibre:l.calibre, ancho:cal?.ancho, pesoLin:cal?.peso, calOk:!!cal, wLam, items, wTot, s, kgm, D, Dr:r3(D), Lr, L:Lm, Lr3:r3(Lm) };
+  return { perfil:mat.nombre, nomMat, metal:!!mat.calibres, calibre:l.calibre, ancho:cal?.ancho, pesoLin:cal?.peso, calOk:!mat.calibres || !!cal,
+    wAuto, manual, fuente: manual ? 'Valor escrito por el diseñador' : mat.fuente, wLam, items, wTot, s, kgm, D, Dr:r3(D), Lr, L:Lm, Lr3:r3(Lm) };
 }
 
 // ─── Viento: método analítico B.6.5, cubierta libre a un agua (B.6.5.13) ───
@@ -190,6 +207,6 @@ function calcular(A){
   return out;
 }
 
-const api = { G, LAMINAS, CIELOS, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
+const api = { G, LAMINAS, CIELOS, EXTRAS_DEF, extras, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoA = api;
 })(typeof window !== 'undefined' ? window : globalThis);

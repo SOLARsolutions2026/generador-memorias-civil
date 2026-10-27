@@ -30,6 +30,9 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   exposición según B.6.5.6.3 (propuesta automática + opción manual); CN leídos de las figuras B.6.5-18A (SPRFV, θ<7.5° usa 0°)
   y B.6.5-19A (CyR, interpolación por θ y clase de área); zona 3 = franja exterior de ancho a; Kz con z mín. 4.0 m (9.0 m CyR exp. B);
   Kd = 0.85 (edificios/cubiertas); presión mínima 0.40 kN/m².
+- Pestaña Cubierta: material (`lamina.perfil`: master1000/canaleta por calibre; zinc 5, eternit 20, arcilla 80 kg/m²; otra), `lamina.wManual` reemplaza el peso de tabla;
+  `extras` = cielo raso (PVC 5, Drywall 15, Fibrocemento 20, Machimbre 15, Icopor 5, Registrable 10), ductería eléctrica 5, mecánica 20, iluminaria 5 y `otras[]` {n,w}.
+  Los extras van sobre las correas; si no hay cubierta, sobre los rieles de paneles.
 - Impresión de anexos: `imprimirConMargen()` agrega `@page` con márgenes solo al imprimir (la portada usa margen 0).
 
 ## Almacenamiento
