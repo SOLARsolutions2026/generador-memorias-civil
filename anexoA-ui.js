@@ -90,7 +90,7 @@ muerta(A, R){
         <div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibPanel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px"><div class="f span2"><label>Riel de la biblioteca</label><select id="selRiel" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         ${fIn(A,'riel.nombre','Referencia del riel',{cls:'span2',num:false})}${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/ml]')}
-        ${A.riel.material || A.riel.Ix ? `<div class="hint span4">Ficha técnica: ${[A.riel.material && 'material ' + esc(A.riel.material), A.riel.Ix && 'Ix = ' + esc(A.riel.Ix) + ' mm⁴', A.riel.Iy && 'Iy = ' + esc(A.riel.Iy) + ' mm⁴', A.riel.vmax && 'viento hasta ' + esc(A.riel.vmax) + ' m/s'].filter(Boolean).join(' · ')}</div>` : ''}
+        ${A.riel.material ? `<div class="hint span4">Ficha técnica: ${[A.riel.material && 'material ' + esc(A.riel.material), A.riel.vmax && 'viento hasta ' + esc(A.riel.vmax) + ' m/s'].filter(Boolean).join(' · ')}</div>` : ''}
         <div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibRiel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px">${fIn(A,'dBorde','Riel al borde del panel [m]')}${fIn(A,'tribRiel','Ancho aferente por riel [m]',{ph:fx(R.paneles.tribAuto,3)+' (auto = L/2)',h:'Vacío = la mitad del largo del panel'})}</div></div>`;
   }
@@ -211,7 +211,7 @@ cubierta(A){
 },
 muerta(A){
   const bib = S.cfg.biblioteca = S.cfg.biblioteca || {};
-  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value]; if(x){ if(destino === 'panel') Object.assign(A.panel, { H:'', cargaF:'', cargaP:'' }); if(destino === 'riel') Object.assign(A.riel, { material:'', Ix:'', Iy:'', vmax:'' }); Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); } }; };
+  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value]; if(x){ if(destino === 'panel') Object.assign(A.panel, { H:'', cargaF:'', cargaP:'' }); if(destino === 'riel') Object.assign(A.riel, { material:'', vmax:'' }); delete A.riel.Ix; delete A.riel.Iy; Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); } }; };
   usar('#selPanel', 'paneles', 'panel'); usar('#selRiel', 'rieles', 'riel');
   const guardarBib = async (lista, obj) => {
     if(!obj.nombre?.trim()) return toast('Escribe primero la referencia.');
@@ -253,7 +253,7 @@ function anexoAPrintHTML(A, R){
     h += `<section>${cab('ANÁLISIS DE CARGA MUERTA','NSR-10. B.3.3. Cargas muertas requeridas','Cargas muertas y vivas en estructura')}
       <h3>${s} Cálculo de cargas MUERTAS de paneles solares</h3>
       <h4>${s}-1 Medidas del panel solar — ${esc(A.panel.nombre)}</h4>${kv([['Longitud [m]',fx(AnexoA.num(A.panel.L),3)],['Ancho [m]',fx(AnexoA.num(A.panel.W),3)],...(AnexoA.num(A.panel.H)?[['Espesor [m]',fx(AnexoA.num(A.panel.H),3)]]:[]),['Peso [kg/un]',fx(AnexoA.num(A.panel.peso),1)],['Peso [kg/m²]',fx(p.wPanel,3)],...(AnexoA.num(A.panel.cargaF)?[['Carga mecánica frontal / posterior [Pa]',`${AnexoA.num(A.panel.cargaF)} / ${AnexoA.num(A.panel.cargaP)}`]]:[])])}
-      <h4>${s}-2 Perfil de soporte — ${esc(A.riel.nombre)}</h4>${kv([['Alto [m]',fx(AnexoA.num(A.riel.alto),4)],['Ancho [m]',fx(AnexoA.num(A.riel.ancho),4)],['Peso [kg/ml]',fx(AnexoA.num(A.riel.peso),3)],...(A.riel.material?[['Material',esc(A.riel.material)]]:[]),...(A.riel.Ix?[['Inercia Ix / Iy [mm⁴]',`${esc(A.riel.Ix)} / ${esc(A.riel.Iy)}`]]:[])])}
+      <h4>${s}-2 Perfil de soporte — ${esc(A.riel.nombre)}</h4>${kv([['Alto [m]',fx(AnexoA.num(A.riel.alto),4)],['Ancho [m]',fx(AnexoA.num(A.riel.ancho),4)],['Peso [kg/ml]',fx(AnexoA.num(A.riel.peso),3)],...(A.riel.material?[['Material',esc(A.riel.material)]]:[])])}
       <h4>${s}-3 Cargas lineales sobre el perfil</h4>${svgPanel(A, p)}
       ${kv([['Ubicación del perfil respecto al borde del panel',fx(AnexoA.num(A.dBorde),2)+' m'],['Separación entre perfiles',fx(p.sepRieles,2)+' m'],['Ancho aferente para cada perfil',fx(p.trib,3)+' m'],['Área aferente para cada perfil (por panel)',fx(p.areaTrib,3)+' m²']])}
       <p>Carga del panel sobre el perfil: w = ${fx(p.wPanel,3)} kg/m² × ${fx(p.trib,3)} m = ${fx(p.kgmPanel,2)} kg/m → ${fx(p.Dpanel,4)} kN/m (g = 9.81 m/s²).</p>
