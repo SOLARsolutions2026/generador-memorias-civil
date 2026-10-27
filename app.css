@@ -304,3 +304,5 @@ table.sapres td:not(:first-child){text-align:right;font-weight:800;font-variant-
 .ax-fig{margin:6px auto;text-align:center;break-inside:avoid}
 .ax-fig svg{max-width:100%;height:auto}
 .ax-fig figcaption{font-size:8.5pt;font-style:italic;margin-top:2px}
+
+.esp-svg{width:100%;max-width:680px;display:block;margin-left:auto;margin-right:auto;height:auto;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:10px}

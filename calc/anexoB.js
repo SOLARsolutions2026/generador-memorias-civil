@@ -1,0 +1,92 @@
+/* ═══ Anexo B — Fuerza horizontal equivalente (NSR-10, Título A) ═══
+   Cálculo puro. Origen: plantilla Excel de Amo, con correcciones acordadas el 26-oct-2026:
+   Sa del cortante según el periodo (no fijo en la meseta), tramos del espectro por To/Tc/TL,
+   Fa y Fv interpolados de las tablas A.2.4-3/4, g = 9.81, k según A.4.3.2. */
+(function(root){
+'use strict';
+const G = 9.81;
+const num = (v, d=0) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : d; };
+
+// Tablas A.2.4-3 (Fa) y A.2.4-4 (Fv): columnas para Aa/Av = 0.1, 0.2, 0.3, 0.4, 0.5
+const FA = { A:[0.8,0.8,0.8,0.8,0.8], B:[1.0,1.0,1.0,1.0,1.0], C:[1.2,1.2,1.1,1.0,1.0], D:[1.6,1.4,1.2,1.1,1.0], E:[2.5,1.7,1.2,0.9,0.9] };
+const FV = { A:[0.8,0.8,0.8,0.8,0.8], B:[1.0,1.0,1.0,1.0,1.0], C:[1.7,1.6,1.5,1.4,1.3], D:[2.4,2.0,1.8,1.6,1.5], E:[3.5,3.2,2.8,2.4,2.4] };
+const IMP = { I:1.00, II:1.10, III:1.25, IV:1.50 };                 // Tabla A.2.5-1
+const GRUPOS = { I:'I — Estructuras de ocupación normal', II:'II — Estructuras de ocupación especial', III:'III — Edificaciones de atención a la comunidad', IV:'IV — Edificaciones indispensables' };
+const SUELOS = { A:'A — Roca competente', B:'B — Roca de rigidez media', C:'C — Suelos muy densos o roca blanda', D:'D — Suelos rígidos', E:'E — Suelos blandos' };
+const SISTEMAS = [ // Tabla A.4.2-1
+  { nombre:'Pórticos de acero estructural resistentes a momento', Ct:0.072, a:0.80 },
+  { nombre:'Pórticos de concreto reforzado resistentes a momento', Ct:0.047, a:0.90 },
+  { nombre:'Pórticos de acero arriostrados excéntricamente', Ct:0.073, a:0.75 },
+  { nombre:'Otros sistemas estructurales', Ct:0.049, a:0.75 },
+];
+
+function interp(fila, x){ // interpola en columnas 0.1…0.5 (fuera de rango toma el extremo)
+  const xs = [0.1,0.2,0.3,0.4,0.5];
+  if(x <= xs[0]) return fila[0]; if(x >= xs[4]) return fila[4];
+  const i = xs.findIndex(v => v >= x), f = (x - xs[i-1]) / (xs[i] - xs[i-1]);
+  return fila[i-1] + (fila[i] - fila[i-1]) * f;
+}
+function defaults(){
+  return { aplica:true, texto:'', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
+    area:'', dimX:'', dimY:'', excent:0.05 };
+}
+// Sa en fracción de g (A.2.6): meseta, tramo 1/T y tramo 1/T²
+function Sa(T, p){
+  if(T <= p.Tc) return 2.5 * p.Aa * p.Fa * p.I;
+  if(T <= p.TL) return 1.2 * p.Av * p.Fv * p.I / T;
+  return 1.2 * p.Av * p.Fv * p.TL * p.I / (T * T);
+}
+const kExp = T => T <= 0.5 ? 1 : T <= 2.5 ? 0.75 + 0.5 * T : 2;   // A.4.3.2
+
+// Cargas por área que vienen del Anexo A (kg/m² de planta)
+function cargasDeA(A, RA){
+  const out = [];
+  if(RA?.paneles){ const p = RA.paneles, Lp = num(A.panel.L);
+    out.push({ n:`Panel solar ${A.panel.nombre || ''}`.trim(), w:p.wPanel });
+    if(Lp > 0) out.push({ n:`Riel ${A.riel.nombre || ''} (2 por panel)`.trim(), w:num(A.riel.peso) * 2 / Lp });
+    for(const x of p.ext) out.push(x);
+  }
+  if(RA?.lamina) for(const x of RA.lamina.items) out.push(x);
+  return out;
+}
+
+function calcular(B, A, RA){
+  const v = A?.viento || {};
+  const Aa = num(B.Aa), Av = num(B.Av);
+  const faltan = [];
+  if(!(Aa > 0)) faltan.push('Aa'); if(!(Av > 0)) faltan.push('Av');
+  const FaT = interp(FA[B.suelo] || FA.D, Aa), FvT = interp(FV[B.suelo] || FV.D, Av);
+  const Fa = num(B.FaManual) > 0 ? num(B.FaManual) : FaT, Fv = num(B.FvManual) > 0 ? num(B.FvManual) : FvT;
+  const I = IMP[B.grupo] || 1;
+  const p = { Aa, Av, Fa, Fv, I };
+  p.To = Aa && Fa ? 0.1 * Av * Fv / (Aa * Fa) : 0;
+  p.Tc = Aa && Fa ? 0.48 * Av * Fv / (Aa * Fa) : 0;
+  p.TL = 2.4 * Fv;
+  const sis = SISTEMAS[B.sistema] || SISTEMAS[0];
+  const hA = num(v.Hr), h = num(B.h) > 0 ? num(B.h) : hA;
+  if(!(h > 0)) faltan.push('altura h');
+  const Ta = sis.Ct * Math.pow(h, sis.a);
+  const Cu = Math.max(1.75 - 1.2 * Av * Fv, 1.2), CuTa = Cu * Ta;
+  const dirT = Tdin => { const t = num(Tdin); return t > 0 ? { T:Math.min(t, CuTa), din:t, limitado:t > CuTa } : { T:Ta, din:null, limitado:false }; };
+  const tx = dirT(B.Tx), ty = dirT(B.Ty);
+  tx.Sa = Sa(tx.T, p); ty.Sa = Sa(ty.T, p); tx.k = kExp(tx.T); ty.k = kExp(ty.T);
+  // Peso sísmico: cargas del Anexo A × área + peso propio (pendiente de definir cómo se ingresa)
+  const areaAuto = num(v.L) * num(v.W), area = num(B.area) > 0 ? num(B.area) : areaAuto;
+  const cargas = cargasDeA(A, RA), wArea = cargas.reduce((s, x) => s + x.w, 0);   // kg/m²
+  const Wcargas = wArea * area * G / 1000;                                        // kN
+  const Wprop = 0;                                                                 // kN (se define en el siguiente paso)
+  const W = Wcargas + Wprop;
+  tx.Vs = tx.Sa * W; ty.Vs = ty.Sa * W;                                            // Vs = Sa·g·M = Sa·W (A.4.3-1)
+  // Torsión accidental (A.3.6.7.1): excentricidad 5 % de la dimensión perpendicular a la fuerza
+  const dimX = num(B.dimX) > 0 ? num(B.dimX) : num(v.L), dimY = num(B.dimY) > 0 ? num(B.dimY) : num(v.W), e = num(B.excent, 0.05);
+  const MtX = tx.Vs * e * dimY, MtY = ty.Vs * e * dimX;   // fuerza en X → brazo en Y; fuerza en Y → brazo en X
+  // Puntos del espectro para la gráfica
+  const Tmax = Math.max(6, p.TL * 1.15), pts = [];
+  if(Aa > 0 && Av > 0) for(let t = 0; t <= Tmax + 1e-9; t += Tmax / 240) pts.push([t, Sa(t, p)]);
+  return { ok: !faltan.length, faltan, p, FaT, FvT, sis, h, hA, Ta, Cu, CuTa, tx, ty, areaAuto, area, cargas, wArea, Wcargas, Wprop, W,
+    dimX, dimY, e, MtX, MtY, pts, Tmax };
+}
+
+const api = { G, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };
+if(typeof module !== 'undefined') module.exports = api; else root.AnexoB = api;
+})(typeof window !== 'undefined' ? window : globalThis);

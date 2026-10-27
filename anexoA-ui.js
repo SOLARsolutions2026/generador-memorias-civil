@@ -560,20 +560,3 @@ function svgZonas(A, W){
   </svg><figcaption>Zonas de presión para componentes y revestimiento en planta (esquema según Figura B.6.5-19A; ancho de franjas no a escala).${e ? ` CN para ${esc(e.nombre.toLowerCase())}.` : ''}</figcaption></figure>`;
 }
 
-// ═══ Anexo B — FHE: primero se define si el alcance incluye análisis sísmico ═══
-const TXT_SIN_SISMO = 'El alcance del presente análisis no incluye la evaluación sísmica de la estructura. Por lo tanto, no se calcula la fuerza horizontal equivalente (FHE) y el diseño se realiza con las combinaciones de carga muerta, viva y de viento.';
-function paneAnexoB(){
-  const m = S.m; m.anexos = m.anexos || {};
-  const B = m.anexos.B = m.anexos.B || { aplica:true, texto:'' };
-  const ro_ = esIng() ? '' : 'disabled';
-  pane(`<div class="card"><div class="ct">Alcance del análisis</div>
-    <div class="f"><label>¿El proyecto lleva análisis sísmico?</label>
-      <div class="seg" role="group" aria-label="Lleva análisis sísmico"><button type="button" data-sis="1" class="${B.aplica?'on':''}" ${ro_}>Sí</button><button type="button" data-sis="0" class="${!B.aplica?'on':''}" ${ro_}>No</button></div></div>
-    ${B.aplica ? `<div class="note amber" style="margin-top:12px"><b>Cálculo de la FHE pendiente.</b> Este módulo se conecta cuando adjuntes la plantilla de Excel de la fuerza horizontal equivalente (espectro, periodo, cortante basal y torsión accidental).</div>`
-      : `<div class="note green" style="margin-top:12px"><b>Sin análisis sísmico.</b> El Anexo B no se incluye en la memoria y el paso queda completo. En su lugar va esta nota, que puedes ajustar:</div>
-        <div class="f"><label for="txtSis">Nota de alcance (sale en la memoria)</label><textarea id="txtSis" rows="4" ${ro_}>${esc(B.texto || TXT_SIN_SISMO)}</textarea>
-        <div class="hint">Vacío = texto predeterminado.</div></div>`}</div>`);
-  if(!esIng()) return;
-  $$('[data-sis]').forEach(b => b.onclick = () => { B.aplica = b.dataset.sis === '1'; guardarMemoria(); renderWS('B'); });
-  const t = $('#txtSis'); if(t) t.oninput = () => { B.texto = t.value.trim() === TXT_SIN_SISMO ? '' : t.value; guardarMemoria(); };
-}
