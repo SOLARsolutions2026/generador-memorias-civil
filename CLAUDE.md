@@ -5,7 +5,7 @@ Usuario principal: Gabriel Tellez ("Amo"), ingeniero civil. Explicar en español
 
 ## Tecnología (no cambiar sin consultar)
 - HTML + CSS + JS puro, **sin compilación**. Publicada en GitHub Pages: https://solarsolutions2026.github.io/generador-memorias-civil/
-- Instalable en el celular (PWA): `manifest.webmanifest` + `sw.js`. Al cambiar archivos, subir la versión de `CACHE` en `sw.js`.
+- Instalable en el celular (PWA): `manifest.webmanifest` + `sw.js`. Al cambiar archivos, subir la versión de `CACHE` en `sw.js`. El SW pide con `cache:'no-cache'` (GitHub Pages cachea 10 min) y la app se recarga sola en `controllerchange`.
 - Datos: Supabase proyecto **pelectric-apps** (`ykomritaklitlwnuxooy`), plan gratuito. No tocar el proyecto `proyecto-manhattan`.
 - `vendor/supabase.js` = supabase-js 2.45.4 (UMD). Fuentes EB Garamond locales en `fonts/`.
 
