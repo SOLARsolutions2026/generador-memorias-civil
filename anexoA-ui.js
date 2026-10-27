@@ -398,7 +398,9 @@ function svgCorreas(sep){
 }
 
 // Imprime #print-area con márgenes de hoja (la portada usa margen 0)
-function imprimirConMargen(titulo){
+async function imprimirConMargen(titulo){
+  // carga antes todas las variantes de la letra de la memoria (si no, el texto en cursiva puede salir en blanco)
+  try{ await Promise.all(['400','italic 400','600','italic 600','700','italic 700'].map(v => document.fonts.load(`${v} 12px EBG`))); }catch(e){}
   const st = document.createElement('style'); st.textContent = '@page{size:letter;margin:.6in .75in .7in}';
   document.head.appendChild(st);
   const t = document.title; document.title = titulo;

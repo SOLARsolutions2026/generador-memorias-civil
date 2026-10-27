@@ -306,3 +306,9 @@ table.sapres td:not(:first-child){text-align:right;font-weight:800;font-variant-
 .ax-fig figcaption{font-size:8.5pt;font-style:italic;margin-top:2px}
 
 .esp-svg{width:100%;max-width:680px;display:block;margin-left:auto;margin-right:auto;height:auto;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
+
+table.wtab td input,table.wtab td select{width:100%;min-width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit}
+table.wtab td input[type=checkbox]{width:16px;min-width:0}
+table.wtab tr.off td{color:#94a3b8}
+table.wtab tr.sub td{font-weight:800;background:#f8fafc}
+.wtot{display:flex;justify-content:space-between;gap:10px;background:var(--blue);color:#fff;border-radius:8px;padding:10px 14px;font-weight:900;font-size:14px;margin-top:12px;flex-wrap:wrap}

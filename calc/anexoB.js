@@ -20,6 +20,19 @@ const SISTEMAS = [ // Tabla A.4.2-1
   { nombre:'Otros sistemas estructurales', Ct:0.049, a:0.75 },
 ];
 
+// Biblioteca de perfiles: peso por metro [kg/m]. IPE/HEA/HEB según tablas Euronorm;
+// tubos A500 calculados con 7850 kg/m³ y esquinas rectas: A = 2t(b+h−2t) (aproximado)
+const tubo = (b, h, t) => Math.round(2 * t * (b + h - 2 * t) * 7.85e-3 * 100) / 100;
+const PERFILES = (() => {
+  const P = {};
+  for(const [n,w] of [[80,6.0],[100,8.1],[120,10.4],[140,12.9],[160,15.8],[180,18.8],[200,22.4],[220,26.2],[240,30.7],[270,36.1],[300,42.2],[330,49.1],[360,57.1],[400,66.3]]) P['IPE '+n] = w;
+  for(const [n,w] of [[100,16.7],[120,19.9],[140,24.7],[160,30.4],[180,35.5],[200,42.3],[220,50.5],[240,60.3],[260,68.2],[280,76.4],[300,88.3]]) P['HEA '+n] = w;
+  for(const [n,w] of [[100,20.4],[120,26.7],[140,33.7],[160,42.6],[180,51.2],[200,61.3],[220,71.5],[240,83.2]]) P['HEB '+n] = w;
+  for(const [b,h,t] of [[50,50,2],[60,60,2],[75,75,2],[90,90,2],[100,100,2],[100,100,3],[120,120,3],[150,150,3],[100,50,2],[120,60,2],[150,50,2],[150,75,2],[200,100,3]])
+    P[`Tubo ${b}×${h}×${t}`] = (b === 120 && h === 60 && t === 2) ? 5.59 : tubo(b, h, t);   // 120×60×2: valor de la plantilla de Amo
+  return P;
+})();
+
 function interp(fila, x){ // interpola en columnas 0.1…0.5 (fuera de rango toma el extremo)
   const xs = [0.1,0.2,0.3,0.4,0.5];
   if(x <= xs[0]) return fila[0]; if(x >= xs[4]) return fila[4];
@@ -28,7 +41,10 @@ function interp(fila, x){ // interpola en columnas 0.1…0.5 (fuera de rango tom
 }
 function defaults(){
   return { aplica:true, texto:'', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
-    area:'', dimX:'', dimY:'', excent:0.05 };
+    area:'', dimX:'', dimY:'', excent:0.05,
+    items:{},                                                   // ① { clave: { on, area } } de las cargas del Anexo A
+    estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'SAP2000 — Material List by Section', sapImg:'' },   // ②
+    otras:[] };                                                 // ③ [{ n, cant, unidad, pu, ubic }]
 }
 // Sa en fracción de g (A.2.6): meseta, tramo 1/T y tramo 1/T²
 function Sa(T, p){
@@ -38,6 +54,7 @@ function Sa(T, p){
 }
 const kExp = T => T <= 0.5 ? 1 : T <= 2.5 ? 0.75 + 0.5 * T : 2;   // A.4.3.2
 
+const clave = n => String(n).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 // Cargas por área que vienen del Anexo A (kg/m² de planta)
 function cargasDeA(A, RA){
   const out = [];
@@ -72,10 +89,23 @@ function calcular(B, A, RA){
   tx.Sa = Sa(tx.T, p); ty.Sa = Sa(ty.T, p); tx.k = kExp(tx.T); ty.k = kExp(ty.T);
   // Peso sísmico: cargas del Anexo A × área + peso propio (pendiente de definir cómo se ingresa)
   const areaAuto = num(v.L) * num(v.W), area = num(B.area) > 0 ? num(B.area) : areaAuto;
-  const cargas = cargasDeA(A, RA), wArea = cargas.reduce((s, x) => s + x.w, 0);   // kg/m²
-  const Wcargas = wArea * area * G / 1000;                                        // kN
-  const Wprop = 0;                                                                 // kN (se define en el siguiente paso)
-  const W = Wcargas + Wprop;
+  // ① Cargas por área del Anexo A: cada una se puede quitar o aplicar en otra área
+  const items = B.items || {};
+  const cargas = cargasDeA(A, RA).map(x => { const key = clave(x.n), it = items[key] || {};
+    const on = it.on !== false, ar = num(it.area) > 0 ? num(it.area) : area;
+    return { ...x, key, on, area:ar, kN: on ? x.w * ar * G / 1000 : 0 }; });
+  const wArea = cargas.filter(x => x.on).reduce((s, x) => s + x.w, 0);
+  const Wcargas = cargas.reduce((s, x) => s + x.kN, 0);
+  // ② Peso propio de la estructura
+  const est = B.estructura || {};
+  const perfiles = (est.perfiles || []).map(p => { const kgmT = PERFILES[p.perfil];
+    const kgm = num(p.kgm) > 0 ? num(p.kgm) : (kgmT || 0), L = num(p.L);
+    return { ...p, kgmT, kgmU:kgm, Lm:L, kg:kgm * L, kN:kgm * L * G / 1000 }; });
+  const Wprop = est.modo === 'sap' ? num(est.sapKN) : perfiles.reduce((s, p) => s + p.kN, 0);
+  // ③ Otras cargas (anuncios, tanques, equipos…)
+  const otras = (B.otras || []).map(o => ({ ...o, kN: num(o.cant) * num(o.pu) * G / 1000 }));
+  const Wotras = otras.reduce((s, o) => s + o.kN, 0);
+  const W = Wcargas + Wprop + Wotras;
   tx.Vs = tx.Sa * W; ty.Vs = ty.Sa * W;                                            // Vs = Sa·g·M = Sa·W (A.4.3-1)
   // Torsión accidental (A.3.6.7.1): excentricidad 5 % de la dimensión perpendicular a la fuerza
   const dimX = num(B.dimX) > 0 ? num(B.dimX) : num(v.L), dimY = num(B.dimY) > 0 ? num(B.dimY) : num(v.W), e = num(B.excent, 0.05);
@@ -83,10 +113,10 @@ function calcular(B, A, RA){
   // Puntos del espectro para la gráfica
   const Tmax = Math.max(6, p.TL * 1.15), pts = [];
   if(Aa > 0 && Av > 0) for(let t = 0; t <= Tmax + 1e-9; t += Tmax / 240) pts.push([t, Sa(t, p)]);
-  return { ok: !faltan.length, faltan, p, FaT, FvT, sis, h, hA, Ta, Cu, CuTa, tx, ty, areaAuto, area, cargas, wArea, Wcargas, Wprop, W,
+  return { ok: !faltan.length, faltan, p, FaT, FvT, sis, h, hA, Ta, Cu, CuTa, tx, ty, areaAuto, area, cargas, wArea, Wcargas, perfiles, Wprop, otras, Wotras, W,
     dimX, dimY, e, MtX, MtY, pts, Tmax };
 }
 
-const api = { G, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };
+const api = { G, PERFILES, clave, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoB = api;
 })(typeof window !== 'undefined' ? window : globalThis);

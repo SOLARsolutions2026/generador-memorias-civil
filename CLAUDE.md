@@ -40,7 +40,11 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - Exposición: botón 📘 abre `modalCondiciones()` (texto B.6.5.6.2/.3 con límites del proyecto); `viento.imgsExpo[]` = {path,nota} imágenes de comprobación de distancias (`<memoria_id>/exposicion-*.jpg`, máx. 4), se imprimen en el Anexo A.
 - Impresión de anexos: `imprimirConMargen()` agrega `@page` con márgenes solo al imprimir (la portada usa margen 0).
 
-- `anexos.B` = { aplica:bool, texto } — si no lleva sismo, el paso queda completo y se usa la nota de alcance (`TXT_SIN_SISMO` si `texto` vacío). Cálculo FHE pendiente de la plantilla.
+- `anexos.B` (ver `AnexoB.defaults()` en `calc/anexoB.js`, pantalla `anexoB-ui.js`): aplica Sí/No (si No, nota de alcance `TXT_SIN_SISMO`);
+  Aa/Av a mano (falta tabla Apéndice A-4), Fa/Fv interpolados (Tablas A.2.4-3/4, editables), I (A.2.5-1), Ct/α, h = Hr del Anexo A, Tx/Ty de SAP con límite Cu·Ta,
+  Sa(T) por tramos To/Tc/TL (corrección: el Excel fijaba la meseta), un solo nivel (Cvx = 1), torsión 5 % de la dimensión perpendicular.
+  W = ① `items{clave:{on,area}}` cargas por área del Anexo A + ② `estructura` {modo lista|sap, perfiles[{perfil,kgm,L,nom}], sapKN, sapImg} + ③ `otras[]` {n,cant,unidad,pu,ubic}.
+  Biblioteca `AnexoB.PERFILES` (IPE/HEA/HEB Euronorm; tubos calculados, 120×60×2 = 5.59 de la plantilla). Las cargas sobre la estructura (anuncios…) van en ③, NO en el Anexo A (decisión de Amo).
 
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
