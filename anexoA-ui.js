@@ -94,7 +94,7 @@ muerta(A, R){
       <div class="fg g4" style="margin-top:10px"><div class="f span2"><label>Riel de la biblioteca</label><select id="selRiel" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         ${fIn(A,'riel.nombre','Referencia del riel',{cls:'span2',num:false})}${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/ml]')}
         ${A.riel.material ? `<div class="hint span4">Ficha técnica: ${[A.riel.material && 'material ' + esc(A.riel.material), A.riel.vmax && 'viento hasta ' + esc(A.riel.vmax) + ' m/s'].filter(Boolean).join(' · ')}</div>` : ''}
-        ${fIn(A,'viento.luz','Separación entre perfiles de apoyo del riel [m]',{h:'Distancia entre las vigas o correas metálicas donde se apoya el riel'})}${fIn(A,'riel.luzMax','Separación máxima del fabricante [m]',{ph:'—'})}
+        ${A.tipo.lamina ? `<div class="f"><label>Separación entre perfiles de apoyo del riel [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Es la separación de correas de la pestaña Cubierta</div></div>` : fIn(A,'viento.luz','Separación entre perfiles de apoyo del riel [m]',{h:'Distancia entre las vigas o perfiles metálicos donde se apoya el riel'})}${fIn(A,'riel.luzMax','Separación máxima del fabricante [m]',{ph:'—'})}
         ${fichaHTML(A.riel,'riel')}<div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibRiel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px">${fIn(A,'dBorde','Riel al borde del panel [m]')}${fIn(A,'tribRiel','Ancho aferente por riel [m]',{ph:fx(R.paneles.tribAuto,3)+' (auto = L/2)',h:'Vacío = la mitad del largo del panel'})}</div></div>`;
   }
@@ -130,7 +130,8 @@ viento(A, R){
       ${fSel(A,'viento.flujo','Flujo bajo la cubierta',[['libre','Libre (bloqueo ≤ 50 %)'],['obst','Obstruido (bloqueo > 50 %)']],{h:'Objetos debajo que frenan el viento'})}
       ${fSel(A,'viento.sistema','Sistema estructural (para Ta)',AnexoA.SISTEMAS.map((s,i) => [i,s.nombre]),{cls:'span2'})}
       ${fIn(A,'viento.Gmanual','Factor ráfaga G (si no es rígida)',{ph:'0.85'})}
-      ${fIn(A,'viento.luz','Luz del riel / correa entre apoyos [m]',{h:'Para el área efectiva de viento'})}
+      ${A.tipo.paneles ? (A.tipo.lamina ? `<div class="f"><label>Luz del riel entre apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Separación de correas (Cubierta)</div></div>` : fIn(A,'viento.luz','Luz del riel entre apoyos [m]',{h:'Para el área efectiva de viento'})) : ''}
+      ${A.tipo.lamina ? fIn(A,'viento.luzCorrea','Luz de la correa entre vigas [m]',{ph:'4.0',h:'Para el área efectiva de viento'}) : ''}
       ${fSel(A,'viento.fuente','Presión que va a SAP2000',[['sprfv','Sistema principal (SPRFV)'],['cyr','Componentes y revestimiento']],{cls:'span2'})}</div></div>
     <div class="card"><div class="ct">Resultados</div><div id="resA">${RES_A.viento(A,R)}</div></div>`;
 },

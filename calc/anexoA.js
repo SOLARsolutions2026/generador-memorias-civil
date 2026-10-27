@@ -86,7 +86,7 @@ function defaults(){
     extras:{ cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 }, otras:[] },
     Lr:50,
     viento:{ grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'',
-      expManual:'', kzt:[false,false,false,false,false], kztManual:1, flujo:'libre', sistema:0, Gmanual:'', luz:1.60, fuente:'sprfv' },
+      expManual:'', kzt:[false,false,false,false,false], kztManual:1, flujo:'libre', sistema:0, Gmanual:'', luz:1.60, luzCorrea:'', fuente:'sprfv' },
   };
 }
 
@@ -98,6 +98,10 @@ function extras(A){
   for(const o of (e.otras || [])) if((o.n || '').trim() || num(o.w)) out.push({ n:(o.n || 'Otra carga').trim(), w:num(o.w) });
   return out;
 }
+
+// Separación de los apoyos del riel: con cubierta, el riel se apoya en las correas (su separación manda);
+// sin cubierta, la escribe el diseñador (viento.luz)
+const luzRiel = A => A.tipo.lamina ? num(A.lamina.sep, 0) : num(A.viento?.luz, 0);
 
 // ─── Carga muerta y viva: paneles solares sobre rieles ───
 function paneles(A){
@@ -112,7 +116,7 @@ function paneles(A){
   const ext = A.tipo.lamina ? [] : extras(A), wExt = ext.reduce((a, x) => a + x.w, 0), Dext = wExt * trib * G / 1000;
   const D = Dpanel + Driel + Dext;
   const qM = num(A.qMant, 15), Lm = qM * trib * G / 1000;
-  const luz = num(A.viento?.luz, 0), luzMax = num(A.riel.luzMax, 0);
+  const luz = luzRiel(A), luzMax = num(A.riel.luzMax, 0);
   return { luz, luzMax, luzExcede: luzMax > 0 && luz > luzMax, wPanel, trib, tribAuto, sepRieles, areaTrib: trib*W, kgmPanel, Dpanel, Driel, ext, wExt, Dext, D, Dr:r3(D), qM, L:Lm, Lr3:r3(Lm) };
 }
 
@@ -212,12 +216,12 @@ function viento(A, elementos){
 function calcular(A){
   const out = { paneles:null, lamina:null, viento:null };
   const elems = [];
-  if(A.tipo.paneles){ out.paneles = paneles(A); elems.push({ id:'riel', nombre:'Riel de paneles', trib:out.paneles.trib, luz:A.viento.luz }); }
-  if(A.tipo.lamina){ out.lamina = lamina(A); elems.push({ id:'correa', nombre:'Correa de cubierta', trib:out.lamina.s, luz:A.viento.luzCorrea || A.viento.luz }); }
+  if(A.tipo.paneles){ out.paneles = paneles(A); elems.push({ id:'riel', nombre:'Riel de paneles', trib:out.paneles.trib, luz:luzRiel(A) }); }
+  if(A.tipo.lamina){ out.lamina = lamina(A); elems.push({ id:'correa', nombre:'Correa de cubierta', trib:out.lamina.s, luz:A.viento.luzCorrea || 4 }); }
   out.viento = viento(A, elems);
   return out;
 }
 
-const api = { G, LAMINAS, CIELOS, EXTRAS_DEF, extras, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
+const api = { luzRiel, G, LAMINAS, CIELOS, EXTRAS_DEF, extras, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoA = api;
 })(typeof window !== 'undefined' ? window : globalThis);
