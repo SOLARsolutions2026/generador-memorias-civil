@@ -1,0 +1,204 @@
+/* ═══ Anexo C — Modelo SAP2000: lectura del archivo de texto .$2k (cálculo puro, sin pantalla) ═══
+   El archivo .$2k (Archivo → Exportar → SAP2000 .s2k Text File) trae todas las tablas del modelo:
+     TABLE:  "JOINT COORDINATES"
+        Joint=1   CoordSys=GLOBAL   ...   GlobalX=8   GlobalY=0   GlobalZ=7.53
+   Las líneas que terminan en " _" continúan en la siguiente. */
+(function(root){
+'use strict';
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
+const r3 = v => Math.round(v * 1000) / 1000;
+
+// ─── 1. Lectura del texto: { "NOMBRE DE TABLA": [ {campo:valor} ] } ───
+function leer(texto){
+  const lineas = String(texto).replace(/\r/g, '').split('\n');
+  const tablas = {}; let actual = null, buf = '';
+  const fila = s => {
+    const o = {}; let i = 0;
+    while(i < s.length){
+      while(s[i] === ' ' || s[i] === '\t') i++;
+      const eq = s.indexOf('=', i); if(eq < 0) break;
+      const k = s.slice(i, eq).trim(); i = eq + 1; let v = '';
+      if(s[i] === '"'){                      // valor entre comillas (puede tener espacios y hasta comillas internas)
+        let j = i + 1;
+        while(j < s.length && !(s[j] === '"' && (j + 1 >= s.length || s[j+1] === ' ' || s[j+1] === '\t'))) j++;
+        v = s.slice(i + 1, j); i = j + 1;
+      } else { let j = i; while(j < s.length && s[j] !== ' ' && s[j] !== '\t') j++; v = s.slice(i, j); i = j; }
+      if(k) o[k] = v;
+    }
+    return o;
+  };
+  for(const l0 of lineas){
+    let l = l0;
+    if(/\s_\s*$/.test(l)){ buf += l.replace(/\s_\s*$/, ' '); continue; }
+    l = buf + l; buf = '';
+    const t = l.trim();
+    if(!t) continue;
+    const m = t.match(/^TABLE:\s+"?([^"]+)"?/i);
+    if(m){ actual = m[1].trim().toUpperCase(); tablas[actual] = tablas[actual] || []; continue; }
+    if(/^END TABLE DATA/i.test(t)){ actual = null; continue; }
+    if(actual && t.includes('=')) tablas[actual].push(fila(t));
+  }
+  return tablas;
+}
+
+// Lista compacta de identificadores: 1,2,3,7,8 → "1–3, 7–8"
+function rangos(ids){
+  const nums = ids.filter(x => /^\d+$/.test(x)).map(Number).sort((a,b) => a - b), otros = ids.filter(x => !/^\d+$/.test(x));
+  const out = []; let a = null, b = null;
+  for(const n of [...new Set(nums)]){ if(a === null){ a = b = n; } else if(n === b + 1) b = n; else { out.push(a === b ? `${a}` : `${a}–${b}`); a = b = n; } }
+  if(a !== null) out.push(a === b ? `${a}` : `${a}–${b}`);
+  return [...out, ...otros].join(', ');
+}
+
+// Categoría de un patrón de carga: D muerta, L viva, W viento, E sismo
+function categoria(n, tipo){
+  const s = String(n).toUpperCase();
+  if(/WIND|VIENTO/.test(s) || /^W\d*$/.test(s)) return 'W';
+  if(/LIVE|VIVA/.test(s) || /^L[RV]?\d*$/.test(s)) return 'L';
+  if(/^(QUAKE|SEISMIC)$/i.test(tipo) || /SISMO|QUAKE|^[FTSE][XY]\b/.test(s)) return 'E';
+  if(/^(LIVE|ROOF LIVE)$/i.test(tipo)) return 'L';
+  if(/^WIND$/i.test(tipo)) return 'W';
+  return 'D';
+}
+const TIPO_ESPERADO = { L:/^(live|roof live|reducible live)$/i, W:/^wind$/i, E:/^quake$/i, D:/^(dead|super dead)$/i };
+const NOM_CAT = { D:'muerta', L:'viva', W:'viento', E:'sismo' };
+
+// ─── 2. Resumen del modelo (lo que se guarda en la memoria) ───
+function analizar(texto){
+  const T = leer(texto), tb = n => T[n] || [];
+  const pc = tb('PROGRAM CONTROL')[0] || {};
+  const unidades = pc.CurrUnits || '', okUnid = /^\s*kn\s*,\s*m\b/i.test(unidades);
+  if(!Object.keys(T).length || !tb('JOINT COORDINATES').length) return { ok:false, error:'El archivo no parece ser un modelo de SAP2000 en texto (.$2k): no tiene la tabla de coordenadas de nudos.' };
+
+  // Materiales: se unen las tablas 01, 02 y 03
+  const mb = Object.fromEntries(tb('MATERIAL PROPERTIES 02 - BASIC MECHANICAL PROPERTIES').map(r => [r.Material, r]));
+  const ms = Object.fromEntries(tb('MATERIAL PROPERTIES 03A - STEEL DATA').map(r => [r.Material, r]));
+  const mc = Object.fromEntries(tb('MATERIAL PROPERTIES 03B - CONCRETE DATA').map(r => [r.Material, r]));
+  const mr = Object.fromEntries(tb('MATERIAL PROPERTIES 03E - REBAR DATA').map(r => [r.Material, r]));
+  const nombresMat = [...new Set([...tb('MATERIAL PROPERTIES 01 - GENERAL').map(r => r.Material), ...Object.keys(mb)])];
+  const tipoMat = Object.fromEntries(tb('MATERIAL PROPERTIES 01 - GENERAL').map(r => [r.Material, r.Type]));
+  const materiales = nombresMat.map(n => { const b = mb[n] || {}, s = ms[n] || mr[n] || {}, c = mc[n] || {};
+    return { n, tipo: tipoMat[n] || '', gamma: num(b.UnitWeight), E: num(b.E1) / 1000, nu: b.U12 != null && b.U12 !== '' ? num(b.U12) : null,
+      Fy: s.Fy ? num(s.Fy) / 1000 : null, Fu: s.Fu ? num(s.Fu) / 1000 : null, fc: c.Fc ? num(c.Fc) / 1000 : null }; });  // kN/m² → MPa
+
+  const patrones = tb('LOAD PATTERN DEFINITIONS').map(r => ({ n:r.LoadPat, tipo:r.DesignType || '', swm:num(r.SelfWtMult), auto:r.AutoLoad || '', cat:categoria(r.LoadPat, r.DesignType) }));
+  const catDe = Object.fromEntries(patrones.map(p => [p.n, p.cat]));
+
+  // Nudos y apoyos
+  const J = {}; for(const r of tb('JOINT COORDINATES')) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const xs = Object.values(J);
+  const ext = k => [Math.min(...xs.map(p => p[k])), Math.max(...xs.map(p => p[k]))];
+  const tipoApoyo = r => { const u = ['U1','U2','U3'].every(k => r[k] === 'Yes'), g = ['R1','R2','R3'].every(k => r[k] === 'Yes'), g0 = ['R1','R2','R3'].every(k => r[k] !== 'Yes');
+    return u && g ? 'Empotrado' : u && g0 ? 'Articulado' : ['U1','U2','U3','R1','R2','R3'].filter(k => r[k] === 'Yes').join(', ') || 'Libre'; };
+  const apoyos = tb('JOINT RESTRAINT ASSIGNMENTS').map(r => ({ j:r.Joint, x:J[r.Joint]?.[0], y:J[r.Joint]?.[1], z:J[r.Joint]?.[2], tipo:tipoApoyo(r) }))
+    .filter(a => a.tipo !== 'Libre');
+
+  // Elementos: longitud, sección y peso
+  const con = {}; for(const r of tb('CONNECTIVITY - FRAME')){
+    const a = J[r.JointI], b = J[r.JointJ];
+    con[r.Frame] = r.Length ? num(r.Length) : a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0; }
+  const props = Object.fromEntries(tb('FRAME SECTION PROPERTIES 01 - GENERAL').map(r => [r.SectionName, r]));
+  const gam = Object.fromEntries(materiales.map(m => [m.n, m.gamma]));
+  const sec = {};
+  for(const r of tb('FRAME SECTION ASSIGNMENTS')){
+    const s = r.AnalSect || r.DesignSect || '?', p = props[s] || {}, mat = r.MatProp && r.MatProp !== 'Default' ? r.MatProp : p.Material || '';
+    const o = sec[s] = sec[s] || { s, tipo:r.SectionType || p.Shape || '', mat, n:0, L:0, area:num(p.Area), gamma:gam[mat] || 0, ids:[] };
+    o.n++; o.L += con[r.Frame] || 0; o.ids.push(r.Frame);
+  }
+  const secciones = Object.values(sec).map(o => ({ s:o.s, tipo:o.tipo, mat:o.mat, n:o.n, L:r3(o.L), area:o.area, gamma:o.gamma,
+    kN: r3(o.area * o.L * o.gamma), riel: /rail|riel|rial/i.test(o.s), sinLong: !Object.keys(con).length }))
+    .sort((a,b) => b.kN - a.kN || a.s.localeCompare(b.s));
+
+  // Cargas agrupadas por patrón, sistema, dirección y valor
+  const agrupar = (filas, clave, val) => { const g = {};
+    for(const r of filas){ const k = clave(r); const o = g[k] = g[k] || { ...val(r), ids:[] }; o.ids.push(r.Frame ?? r.Joint); }
+    return Object.values(g).map(o => ({ ...o, n:o.ids.length, ids:rangos(o.ids.map(String)) })); };
+  const dist = agrupar(tb('FRAME LOADS - DISTRIBUTED'), r => [r.LoadPat, r.CoordSys, r.Type, r.Dir, r.FOverLA, r.FOverLB].join('|'),
+    r => ({ pat:r.LoadPat, cat:catDe[r.LoadPat] || categoria(r.LoadPat, ''), sis:r.CoordSys, tipo:r.Type || 'Force', dir:r.Dir, a:num(r.FOverLA), b:num(r.FOverLB) }))
+    .sort((x,y) => x.pat.localeCompare(y.pat) || Math.abs(y.a) - Math.abs(x.a));
+  const punt = agrupar(tb('FRAME LOADS - POINT'), r => [r.LoadPat, r.CoordSys, r.Type, r.Dir, r.Force ?? r.Moment, r.RelDist].join('|'),
+    r => ({ pat:r.LoadPat, cat:catDe[r.LoadPat] || categoria(r.LoadPat, ''), sis:r.CoordSys, tipo:r.Type || 'Force', dir:r.Dir, P:num(r.Force ?? r.Moment), rel:num(r.RelDist) }));
+  const jl = {}; for(const r of tb('JOINT LOADS - FORCE')){
+    const o = jl[r.LoadPat] = jl[r.LoadPat] || { pat:r.LoadPat, cat:catDe[r.LoadPat] || categoria(r.LoadPat, ''), F1:0, F2:0, F3:0, M1:0, M2:0, M3:0, ids:[] };
+    for(const k of ['F1','F2','F3','M1','M2','M3']) o[k] += num(r[k]); o.ids.push(r.Joint); }
+  const nudosF = Object.values(jl).map(o => ({ ...o, F1:r3(o.F1), F2:r3(o.F2), F3:r3(o.F3), M1:r3(o.M1), M2:r3(o.M2), M3:r3(o.M3), n:o.ids.length, ids:rangos(o.ids.map(String)) }));
+
+  return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF,
+    tablas:Object.keys(T) };
+}
+
+// ─── 3. Tablas completas (solo para imprimir si se pide) ───
+function completas(texto){
+  const T = leer(texto), tb = n => T[n] || [];
+  const J = {}; for(const r of tb('JOINT COORDINATES')) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const con = {}; for(const r of tb('CONNECTIVITY - FRAME')){ const a = J[r.JointI], b = J[r.JointJ]; con[r.Frame] = [r.JointI, r.JointJ, r.Length ? num(r.Length) : a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : null]; }
+  return {
+    nudos: Object.entries(J).map(([j, p]) => [j, ...p]),
+    secciones: tb('FRAME SECTION ASSIGNMENTS').map(r => [r.Frame, ...(con[r.Frame] || ['', '', null]), r.SectionType || '', r.AnalSect || '']),
+    dist: tb('FRAME LOADS - DISTRIBUTED').map(r => [r.Frame, r.LoadPat, r.CoordSys, r.Type || 'Force', r.Dir, num(r.FOverLA), num(r.FOverLB)]),
+    punt: tb('FRAME LOADS - POINT').map(r => [r.Frame, r.LoadPat, r.CoordSys, r.Type || 'Force', r.Dir, num(r.RelDist), num(r.Force ?? r.Moment)]),
+    jl: tb('JOINT LOADS - FORCE').map(r => [r.Joint, r.LoadPat, num(r.F1), num(r.F2), num(r.F3), num(r.M1), num(r.M2), num(r.M3)]),
+  };
+}
+
+// ─── 4. Peso propio del modelo (sin los rieles, que ya están en el Anexo A) ───
+function pesoPropio(M, sinPeso){
+  if(!M?.ok) return 0;
+  const ex = new Set(sinPeso || M.secciones.filter(s => s.riel).map(s => s.s));
+  return r3(M.secciones.filter(s => !ex.has(s.s)).reduce((a, s) => a + s.kN, 0));
+}
+
+// ─── 5. Revisión cruzada con los Anexos A y B (solo en pantalla) ───
+// Devuelve filas { grupo, que, esperado, sap, estado:'ok'|'no'|'info', txt }
+function revisar(M, RA, RB){
+  const out = []; if(!M?.ok) return out;
+  const cerca = (a, b) => Math.abs(Math.abs(a) - Math.abs(b)) <= Math.max(0.006, 0.03 * Math.abs(b));
+  const f2 = v => (Math.round(v * 1000) / 1000).toString();
+  if(!M.okUnid) out.push({ grupo:'Unidades', estado:'no', txt:`El archivo está en «${M.unidades || 'sin dato'}». Para comparar, exporta el modelo con las unidades KN, m, C.` });
+
+  // Patrones: tipo coherente con el nombre y peso propio una sola vez
+  for(const p of M.patrones){ const esp = TIPO_ESPERADO[p.cat];
+    if(esp && p.tipo && !esp.test(p.tipo)) out.push({ grupo:'Patrones', estado:'info', txt:`El patrón ${p.n} (carga ${NOM_CAT[p.cat]}) está definido como tipo «${p.tipo}». Si usas las combinaciones automáticas de SAP2000, debería ser ${({L:'Live',W:'Wind',E:'Quake',D:'Dead'})[p.cat]}.` }); }
+  const sw = M.patrones.reduce((a, p) => a + p.swm, 0);
+  out.push(sw === 1 ? { grupo:'Patrones', estado:'ok', txt:`El peso propio se incluye una sola vez (${M.patrones.filter(p => p.swm).map(p => p.n).join(', ')}, multiplicador 1).` }
+    : { grupo:'Patrones', estado:'no', txt: sw === 0 ? 'Ningún patrón incluye el peso propio (SelfWtMult = 0 en todos).' : `El peso propio se suma ${sw} veces (revisa SelfWtMult en los patrones).` });
+  if(!M.okUnid) return out;
+
+  // Cargas distribuidas frente al Anexo A
+  const refs = [];
+  if(RA?.paneles){ const w = RA.viento?.ok ? RA.viento.porElem.find(e => e.id === 'riel') : null;
+    refs.push({ el:'Riel de paneles', cat:'D', v:RA.paneles.Dr }, { el:'Riel de paneles', cat:'L', v:RA.paneles.Lr3 });
+    if(w) refs.push({ el:'Riel de paneles', cat:'W', v:w.Wp, n:'presión' }, { el:'Riel de paneles', cat:'W', v:w.Ws, n:'succión' }); }
+  if(RA?.lamina){ const w = RA.viento?.ok ? RA.viento.porElem.find(e => e.id === 'correa') : null;
+    refs.push({ el:'Correa de cubierta', cat:'D', v:RA.lamina.Dr }, { el:'Correa de cubierta', cat:'L', v:RA.lamina.Lr3 });
+    if(w) refs.push({ el:'Correa de cubierta', cat:'W', v:w.Wp, n:'presión' }, { el:'Correa de cubierta', cat:'W', v:w.Ws, n:'succión' }); }
+  const usados = new Set();
+  for(const r of refs.filter(r => r.v > 0)){
+    const g = M.dist.filter(d => d.cat === r.cat && d.tipo === 'Force' && cerca(d.a, r.v) && cerca(d.b, r.v));
+    g.forEach(x => usados.add(x));
+    const que = `${r.el} — ${NOM_CAT[r.cat]}${r.n ? ' (' + r.n + ')' : ''}`;
+    if(g.length) out.push({ grupo:'Cargas del Anexo A', estado:'ok', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m → en SAP2000 ${g.map(x => `${x.pat} ${f2(x.a)} kN/m en ${x.n} elemento${x.n>1?'s':''}`).join('; ')}.` });
+    else { const hay = [...new Set(M.dist.filter(d => d.cat === r.cat).map(d => f2(d.a)))];
+      out.push({ grupo:'Cargas del Anexo A', estado:'no', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m no aparece en SAP2000.${hay.length ? ' Valores de carga ' + NOM_CAT[r.cat] + ' en el modelo: ' + hay.join(', ') + ' kN/m.' : ''}` }); }
+  }
+  for(const d of M.dist.filter(d => !usados.has(d) && d.cat !== 'E' && (d.a || d.b)))
+    out.push({ grupo:'Cargas sin referencia', estado:'info', txt:`${d.pat} ${f2(d.a)}${d.b !== d.a ? '→' + f2(d.b) : ''} kN/m (${d.dir === 'Gravity' ? 'gravedad' : (d.sis === 'Local' ? 'local ' : '') + d.dir}) en ${d.n} elemento${d.n>1?'s':''} (${d.ids}). No corresponde a un valor del Anexo A; verifica de dónde sale (p. ej. otras cargas del Anexo B).` });
+
+  // Fuerzas sísmicas frente a la FHE del Anexo B
+  if(RB?.ok){
+    const qs = M.nudosF.filter(o => o.cat === 'E');
+    if(!qs.length) out.push({ grupo:'Sismo (Anexo B)', estado:'info', txt:'No se encontraron cargas en nudos en los patrones sísmicos; compara manualmente la FHE aplicada en SAP2000.' });
+    for(const o of qs){
+      const F = Math.abs(o.F1) >= Math.abs(o.F2) ? ['X', o.F1, RB.tx.Vs] : ['Y', o.F2, RB.ty.Vs];
+      if(Math.abs(F[1]) > 1e-6) out.push({ grupo:'Sismo (Anexo B)', estado: cerca(F[1], F[2]) ? 'ok' : 'no', txt:`${o.pat}: suma de fuerzas en ${F[0]} = ${f2(F[1])} kN; FHE del Anexo B = ${f2(F[2])} kN.` });
+      else if(Math.abs(o.M3) > 1e-6){ const okT = cerca(o.M3, RB.MtX) || cerca(o.M3, RB.MtY);
+        out.push({ grupo:'Sismo (Anexo B)', estado: okT ? 'ok' : 'no', txt:`${o.pat}: momento torsor aplicado = ${f2(o.M3)} kN·m; Anexo B: Mt en X = ${f2(RB.MtX)}, Mt en Y = ${f2(RB.MtY)} kN·m.` }); }
+    }
+  }
+  return out;
+}
+
+const api = { leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
+})(typeof window !== 'undefined' ? window : globalThis);

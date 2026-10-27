@@ -49,6 +49,14 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   W = ① `items{clave:{on,area}}` cargas por área del Anexo A + ② `estructura` {modo lista|sap, perfiles[{perfil,kgm,L,nom}], sapKN, sapImg} + ③ `otras[]` {n,cant,unidad,pu,ubic}.
   Biblioteca `AnexoB.PERFILES` (IPE/HEA/HEB Euronorm; tubos calculados, 120×60×2 = 5.59 de la plantilla). Las cargas sobre la estructura (anuncios…) van en ③, NO en el Anexo A (decisión de Amo).
 
+- `anexos.C` (pantalla `anexoC-ui.js`, cálculo `calc/anexoC.js`): Amo sube el archivo de texto de SAP2000 (.$2k, File → Export → SAP2000 .s2k Text File, unidades KN, m, C);
+  se guarda tal cual en Supabase `<memoria_id>/modelo-sap.s2k` y en la memoria solo el resumen `C.modelo` = `AnexoC.analizar()` (materiales, patrones, nudos+apoyos,
+  secciones con longitud y peso = área×L×γ, cargas agrupadas por patrón/dirección/valor con rangos de elementos, sumas de cargas en nudos). `C.archivo` {nombre,path,fecha,kb},
+  `C.img` (`<id>/modelo-sap.jpg`, una sola imagen), `C.notaImg`, `C.descripcion` (vacío = texto automático), `C.completas` (tablas completas en el PDF, descargando el .s2k y en varias columnas),
+  `C.sinPeso` (secciones fuera del peso propio; null = rieles por defecto, ya están en el Anexo A). Botón para enviar el peso propio al Anexo B ② (modo sap).
+  Revisión cruzada solo en pantalla (`AnexoC.revisar`): tipos de patrón, SelfWtMult = 1 una vez, cargas D/L/W del Anexo A (tolerancia 3 %), Fx/Fy/Tx/Ty en nudos frente a la FHE y Mt del Anexo B.
+  Pendiente: probar con un .$2k real de Amo (el formato se probó con un archivo armado desde su Excel).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -57,7 +65,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: login, lista con medidor de espacio, nueva memoria (consecutivo DOC-MEM-DD-MM-AA), ficha con autoguardado,
   imagen 3D, revisiones, portada imprimible (carta), Configuración (perfiles, datos del ingeniero, firma, roles), vista Consulta.
 - Hecho también: Anexo A (cargas muerta, viva y viento B.6.5 para cubierta libre a un agua), con páginas imprimibles.
-- Siguiente: B (FHE), C (SAP2000), D (IPE/HEA/tubulares, zapatas,
+- Hecho: Anexo B (FHE, iteraciones) y Anexo C (modelo SAP2000 desde .$2k).
+- Siguiente: D (IPE/HEA/tubulares, zapatas,
   pedestales), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas
