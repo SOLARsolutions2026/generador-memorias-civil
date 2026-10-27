@@ -86,17 +86,23 @@ muerta(A, R){
   let h = '';
   if(A.tipo.paneles){
     const bib = S.cfg.biblioteca || {}, pans = bib.paneles || [], rie = bib.rieles || [];
-    h += `<div class="card"><div class="ct">A.1 Paneles solares — datos</div>
-      <div class="fg g4"><div class="f span2"><label>Panel de la biblioteca</label><select id="selPanel" ${ro()}><option value="">— Escribir datos —</option>${pans.map((p,i) => `<option value="${i}" ${p.nombre===A.panel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
-        ${fIn(A,'panel.nombre','Referencia del panel',{cls:'span2',num:false})}${fIn(A,'panel.L','Longitud L [m]')}${fIn(A,'panel.W','Ancho A [m]')}${fIn(A,'panel.H','Espesor H [m]')}${fIn(A,'panel.peso','Peso [kg/un]')}
-        ${fIn(A,'panel.cargaF','Carga mecánica frontal [Pa]',{h:'De la ficha técnica'})}${fIn(A,'panel.cargaP','Carga mecánica posterior [Pa]')}
-        ${fichaHTML(A.panel,'panel')}<div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibPanel">＋ Guardar en biblioteca</button>':''}</div></div>
-      <div class="fg g4" style="margin-top:10px"><div class="f span2"><label>Riel de la biblioteca</label><select id="selRiel" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
-        ${fIn(A,'riel.nombre','Referencia del riel',{cls:'span2',num:false})}${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/ml]')}
-        ${A.riel.material ? `<div class="hint span4">Ficha técnica: ${[A.riel.material && 'material ' + esc(A.riel.material), A.riel.vmax && 'viento hasta ' + esc(A.riel.vmax) + ' m/s'].filter(Boolean).join(' · ')}</div>` : ''}
-        ${A.tipo.lamina ? `<div class="f"><label>Separación entre perfiles de apoyo del riel [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Es la separación de correas de la pestaña Cubierta</div></div>` : fIn(A,'viento.luz','Separación entre perfiles de apoyo del riel [m]',{h:'Distancia entre las vigas o perfiles metálicos donde se apoya el riel'})}${fIn(A,'riel.luzMax','Separación máxima del fabricante [m]',{ph:'—'})}
-        ${fichaHTML(A.riel,'riel')}<div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibRiel">＋ Guardar en biblioteca</button>':''}</div></div>
-      <div class="fg g4" style="margin-top:10px">${fIn(A,'dBorde','Riel al borde del panel [m]')}${fIn(A,'tribRiel','Ancho aferente por riel [m]',{ph:fx(R.paneles.tribAuto,3)+' (auto = L/2)',h:'Vacío = la mitad del largo del panel'})}</div></div>`;
+    const enBib = (lista, nom) => lista.some(x => x.nombre === nom);
+    const iconos = (obj, q, idBib) => `<span class="icos">${obj.ficha ? `<button class="ib" type="button" data-verficha="${q}" title="Ver ficha técnica" aria-label="Ver ficha técnica">📄</button>` : ''}${esIng() && !String(obj.ficha||'').startsWith('fichas/') ? `<button class="ib" type="button" data-subficha="${q}" title="${obj.ficha?'Cambiar':'Adjuntar'} PDF de ficha técnica" aria-label="Adjuntar ficha técnica">📎</button>` : ''}${esIng() ? `<button class="ib" type="button" id="${idBib}" title="Guardar en biblioteca" aria-label="Guardar en biblioteca">💾</button>` : ''}</span>`;
+    const apoyo = A.tipo.lamina ? `<div class="f"><label>Apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly title="Separación de correas (pestaña Cubierta)"/></div>` : fIn(A,'viento.luz','Apoyos [m]');
+    h += `<div class="card"><div class="ct">A.1 Paneles solares y rieles</div>
+      <div class="two">
+        <div class="col"><h5>☀️ Panel ${iconos(A.panel,'panel','bibPanel')}</h5>
+          <div class="f" style="margin-bottom:6px"><select id="selPanel" aria-label="Panel de la biblioteca" ${ro()}><option value="">— Escribir datos —</option>${pans.map((p,i) => `<option value="${i}" ${p.nombre===A.panel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+          ${enBib(pans, A.panel.nombre) ? '' : `<div style="margin-bottom:6px">${fIn(A,'panel.nombre','Referencia del panel',{num:false,ph:'Marca y modelo'})}</div>`}
+          <div class="mini">${fIn(A,'panel.L','L [m]')}${fIn(A,'panel.W','A [m]')}${fIn(A,'panel.H','H [m]')}${fIn(A,'panel.peso','Peso [kg]')}${fIn(A,'panel.cargaF','Frontal [Pa]')}${fIn(A,'panel.cargaP','Posterior [Pa]')}</div>
+          <div class="hint" style="margin-top:4px">${A.panel.ficha ? '📄 Ficha técnica adjunta' : '📎 Sin ficha técnica'}</div></div>
+        <div class="col"><h5>▬ Riel ${iconos(A.riel,'riel','bibRiel')}</h5>
+          <div class="f" style="margin-bottom:6px"><select id="selRiel" aria-label="Riel de la biblioteca" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+          ${enBib(rie, A.riel.nombre) ? '' : `<div style="margin-bottom:6px">${fIn(A,'riel.nombre','Referencia del riel',{num:false,ph:'Marca y modelo'})}</div>`}
+          <div class="mini">${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/m]')}${apoyo}${fIn(A,'riel.luzMax','Máx. fab. [m]',{ph:'—'})}<div class="f"><label>&nbsp;</label><div id="chkApoyo" class="estado"></div></div></div>
+          <div class="hint" style="margin-top:4px">${[A.riel.material, A.tipo.lamina ? 'apoyos = separación de correas' : '', A.riel.ficha ? '📄 Ficha técnica adjunta' : '📎 Sin ficha técnica'].filter(Boolean).map(esc).join(' · ')}</div></div>
+      </div>
+      <div class="fg g4" style="margin-top:10px">${fIn(A,'dBorde','Riel al borde del panel [m]')}${fIn(A,'tribRiel','Ancho aferente [m]',{ph:fx(R.paneles.tribAuto,3)+' (L/2)'})}</div></div>`;
   }
   if(A.tipo.lamina && !A.tipo.paneles) h += '<div class="note blue">El material de la cubierta, las correas y las cargas adicionales se escogen en la pestaña <b>Cubierta</b>.</div>';
   return (h || '<div class="note amber">Primero escoge el tipo de cubierta.</div>') + `<div class="card"><div class="ct">Resultado — carga muerta (D)</div><div id="resA">${RES_A.muerta(A,R)}</div></div>`;
@@ -158,6 +164,8 @@ cubierta(A, R){
 },
 muerta(A, R){
   let h = '';
+  const ca = $('#chkApoyo');
+  if(ca && R.paneles){ const p = R.paneles; ca.className = 'estado ' + (!p.luzMax || !p.luz ? '' : p.luzExcede ? 'no' : 'ok'); ca.textContent = !p.luzMax || !p.luz ? '' : p.luzExcede ? '✗ Excede' : '✓ Cumple'; }
   if(R.paneles){ const p = R.paneles;
     if(p.luzExcede) h += `<div class="note amber"><b>Separación de apoyos muy grande:</b> ${fx(p.luz,2)} m supera los ${fx(p.luzMax,2)} m que permite el fabricante para el riel ${esc(A.riel.nombre)}.</div>`;
     h += `<h4 class="sub">Paneles solares → riel</h4>` + res([['Peso del panel por área', fx(p.wPanel)+' kg/m²'],['Ancho aferente por riel', fx(p.trib)+' m'],['Separación entre rieles', fx(p.sepRieles,2)+' m'],
@@ -218,6 +226,7 @@ cubierta(A){
   $$('[data-delx]').forEach(b => b.onclick = () => { A.extras.otras.splice(+b.dataset.delx, 1); guardarMemoria(); pintarTabA(); });
 },
 muerta(A){
+  const out = $('#resA'); if(out) out.innerHTML = RES_A.muerta(A, AnexoA.calcular(A)); // pinta también el ✓ Cumple
   const bib = S.cfg.biblioteca = S.cfg.biblioteca || {};
   const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value];
     if(!x){ A[destino].ficha = ''; A[destino].nombre = ''; guardarMemoria(); pintarTabA(); return; } // escribir datos propios
