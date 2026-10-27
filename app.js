@@ -119,6 +119,7 @@ async function cargarBase(){
 async function route(){
   if(!S.user) return;
   await guardarPendientes();
+  document.body.classList.remove('notas-on');
   const h = location.hash.replace(/^#\/?/, '').split('/');
   window.scrollTo({ top:0 });
   if(h[0] === 'config' && esIng()) return renderConfig();
@@ -442,6 +443,7 @@ function pintarNotas(){
   $('#notasN').textContent = pend || ''; tab.classList.toggle('con', pend > 0);
   $$('[data-step]').forEach(b => { const y = b.querySelector('.ydot'); if(y) y.hidden = !notasPend(b.dataset.step); });
   dr.hidden = !notasAbierto; tab.hidden = notasAbierto;
+  document.body.classList.toggle('notas-on', notasAbierto);   // en pantallas anchas el panel empuja el contenido en vez de taparlo
   const fmt = f => new Date(f).toLocaleString('es-CO', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
   const orden = [...lista.filter(n => !n.hecha), ...lista.filter(n => n.hecha)];
   dr.innerHTML = `<div class="notas-hd"><b>📝 Observaciones · ${esc(paso?.t || '')}</b><button type="button" id="notasX" aria-label="Cerrar">✕</button></div>

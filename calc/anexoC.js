@@ -154,6 +154,11 @@ function pesoPropio(M, sinPeso){
 // Devuelve filas { grupo, que, esperado, sap, estado:'ok'|'no'|'info', txt }
 function revisar(M, RA, RB){
   const out = []; if(!M?.ok) return out;
+  // la categoría se recalcula siempre (así las reglas nuevas aplican también a modelos ya cargados)
+  M = { ...M, patrones:M.patrones.map(p => ({ ...p, cat:categoria(p.n, p.tipo) })) };
+  const catDe = Object.fromEntries(M.patrones.map(p => [p.n, p.cat]));
+  M.dist = M.dist.map(d => ({ ...d, cat:catDe[d.pat] || categoria(d.pat, '') }));
+  M.nudosF = M.nudosF.map(o => ({ ...o, cat:catDe[o.pat] || categoria(o.pat, '') }));
   const cerca = (a, b) => Math.abs(Math.abs(a) - Math.abs(b)) <= Math.max(0.006, 0.03 * Math.abs(b));
   const f2 = v => (Math.round(v * 1000) / 1000).toString();
   if(!M.okUnid) out.push({ grupo:'Unidades', estado:'no', txt:`El archivo está en «${M.unidades || 'sin dato'}». Para comparar, exporta el modelo con las unidades KN, m, C.` });

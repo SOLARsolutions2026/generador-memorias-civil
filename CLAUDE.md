@@ -63,6 +63,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 
 - Observaciones internas (app.js `pintarNotas`): pestaña amarilla plegable al borde derecho (opción B de Amo) que abre un panel; `anexos.notas = {paso:[{id,t,fecha,autor,hecha}]}`
   para cualquier paso; casilla «resuelta» (tachada). Circulito amarillo (`.ydot`) en la lista de pasos si hay pendientes. No salen en la memoria; solo rol ingeniero.
+  Abierto en pantallas > 900 px: `body.notas-on` corre la página (padding-right) para no tapar el contenido; en celular se superpone.
   Anexo C: patrones IMP*/nocionales = categoría N (sin aviso de tipo).
 
 ## Almacenamiento

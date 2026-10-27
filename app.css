@@ -372,3 +372,8 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 #notaTxt{width:100%;box-sizing:border-box}
 @media print{.notas-tab,.notas-dr{display:none!important}}
 #notaTxt{font:inherit;font-size:13px;border:1px solid var(--border);border-radius:8px;padding:8px}
+/* Con el panel de observaciones abierto, la página se corre a la izquierda (no queda tapada) */
+@media (min-width:901px){
+  body.notas-on{padding-right:min(340px,92vw);transition:padding .15s}
+  body.notas-on .notas-dr{top:0}
+}
