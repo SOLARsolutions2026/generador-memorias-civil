@@ -119,8 +119,9 @@ viento(A, R){
       ${fSel(A,'viento.grupo','Grupo de uso',Object.entries(AnexoA.GRUPOS).map(([k,g]) => [k,g.nombre]),{cls:'span2'})}
       ${fSel(A,'viento.V','Velocidad básica V',AnexoA.VELOCIDADES.map(x => [x,`${x} m/s (${Math.round(x*3.6/10)*10} km/h)`]),{h:'Figura B.6.4-1 según municipio'})}
       <div class="f"><label>&nbsp;</label>${fChk(A,'viento.huracan','Región con riesgo de huracán')}</div></div></div>
-    <div class="card"><div class="ct">Geometría de la cubierta (a un agua)</div><div class="fg g4">
-      ${fIn(A,'viento.L','Longitud L [m]')}${fIn(A,'viento.W','Ancho W [m]',{h:'En el sentido de la pendiente'})}${fIn(A,'viento.He','Altura de cornisa He [m]')}${fIn(A,'viento.Hr','Altura de cumbrera Hr [m]')}</div></div>
+    <div class="card"><div class="ct">Geometría de la cubierta (a un agua)</div>
+      <div class="geo"><div id="geoSvg">${svgGeo(A)}</div>
+      <div class="fg g2">${fIn(A,'viento.L','Longitud L [m]',{h:'Lado largo, perpendicular a la pendiente'})}${fIn(A,'viento.W','Ancho W [m]',{h:'En el sentido de la pendiente'})}${fIn(A,'viento.He','Altura de cornisa He [m]',{h:'Borde más bajo, desde el piso'})}${fIn(A,'viento.Hr','Altura de cumbrera Hr [m]',{h:'Borde más alto, desde el piso'})}</div></div></div>
     <div class="card"><div class="ct">Exposición (B.6.5.6)</div><div class="fg g4">
       ${fSel(A,'viento.rug','Rugosidad viento arriba',[['B','B — urbano, suburbano, boscoso'],['C','C — abierto, pocas obstrucciones'],['D','D — plano, superficies de agua']],{cls:'span2',re:1})}
       ${fIn(A,'viento.distRug','Distancia con esa rugosidad [m]')}
@@ -184,6 +185,7 @@ viva(A, R){
 },
 viento(A, R){
   const W = R.viento;
+  const gs = $('#geoSvg'); if(gs) gs.innerHTML = svgGeo(A);
   if(!W.ok) return `<div class="note amber">Faltan datos de geometría: ${W.faltan.join(', ')}.</div>`;
   const expo = $('#expo'); if(expo) expo.innerHTML = expoHTML(W);
   let h = (W.aviso18 ? '<div class="note amber"><b>Altura media mayor a 18 m:</b> este procedimiento no aplica.</div>' : '') +
@@ -331,7 +333,7 @@ function anexoAPrintHTML(A, R){
         ['Rugosidad del terreno',`Rugosidad ${esc(v.rug)}`],['Exposición (B.6.5.6.3)',`Exposición ${W.ex.usada} — ${esc(W.ex.razon)}`],['Factor topográfico Kzt (B.6.5.7)',fx(W.Kzt,2)],['Factor de dirección Kd (Tabla B.6.5-4)',fx(W.Kd,2)],
         ['Coef. de exposición Kz (SPRFV · componentes)',`${fx(W.Kz2,4)} · ${fx(W.Kz1,4)}`],['Presión por velocidad qh = 0.613·Kz·Kzt·Kd·V²·I',`${fx(W.qh2,2)} N/m² (SPRFV) · ${fx(W.qh1,2)} N/m² (componentes)`],
         ['Periodo Ta = Ct·h^α',`${fx(W.Ta,3)} s → f = ${fx(W.f,2)} Hz (${W.rigida?'estructura rígida':'estructura flexible'})`],['Factor de efecto ráfaga G (B.6.5.8)',fx(W.G,2)]])}
-      <h3>${letra}.${n}.1 Datos geométricos</h3>${kv([['Longitud L [m]',fx(AnexoA.num(v.L),2)],['Ancho W [m]',fx(AnexoA.num(v.W),2)],['Altura de cornisa He [m]',fx(AnexoA.num(v.He),2)],['Altura de cumbrera Hr [m]',fx(AnexoA.num(v.Hr),2)],['Ángulo de cubierta θ',fx(W.theta,2)+'°'],['Altura media h [m]',fx(W.hm,2)],['Tipo','Cubierta libre a un agua']])}
+      <h3>${letra}.${n}.1 Datos geométricos</h3>${svgGeo(A, true)}${kv([['Longitud L [m]',fx(AnexoA.num(v.L),2)],['Ancho W [m]',fx(AnexoA.num(v.W),2)],['Altura de cornisa He [m]',fx(AnexoA.num(v.He),2)],['Altura de cumbrera Hr [m]',fx(AnexoA.num(v.Hr),2)],['Ángulo de cubierta θ',fx(W.theta,2)+'°'],['Altura media h [m]',fx(W.hm,2)],['Tipo','Cubierta libre a un agua']])}
       <h3>${letra}.${n}.2 Presiones netas — sistema principal (Figura B.6.5-18A, ${v.flujo==='obst'?'flujo obstruido':'flujo libre'})</h3>
       ${tb(['Caso','γ','CNW','CNL','pW [kN/m²]','pL [kN/m²]'], W.sp.map(x => [x.caso, x.gam+'°', fx(x.CNW,2), fx(x.CNL,2), fx(x.pW,4), fx(x.pL,4)]))}
       <p>p = qh · G · CN. Para θ menor a 7.5° se usan los coeficientes de θ = 0°.</p>
@@ -372,3 +374,43 @@ function imprimirConMargen(titulo){
 
 // URL de una ficha técnica: las de la biblioteca base viven en el sitio (fichas/), las subidas en Supabase
 async function urlFicha(path){ if(!path) return null; return path.startsWith('fichas/') ? path : urlDe(path); }
+
+// Dibujo de la geometría de la cubierta (planta + alzado), con los valores escritos
+function svgGeo(A, imp){
+  const v = A.viento, n = x => AnexoA.num(x, 0);
+  const L = n(v.L), W = n(v.W), He = n(v.He), Hr = n(v.Hr);
+  const t = (x, d=2) => x > 0 ? fx(x, d) + ' m' : '?';
+  const th = Hr > He && W > 0 ? Math.atan((Hr - He) / W) * 180 / Math.PI : null, hm = He > 0 && Hr > 0 ? (He + Hr) / 2 : 0;
+  const az = imp ? '#1f3a60' : '#1a56db', gr = '#64748b', fill = imp ? '#e8eef7' : '#dbeafe';
+  // pendiente dibujada exagerada si es muy pequeña, para que se vea
+  const dy = Math.max(18, Math.min(60, th ? th * 4 : 30));
+  const M = `url(#ar${imp?'p':''})`, top = 110 - dy;
+  return `<svg viewBox="0 0 600 255" class="geo-svg" role="img" aria-label="Geometría de la cubierta: planta y alzado">
+  <defs><marker id="ar${imp?'p':''}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${gr}"/></marker></defs>
+  <g font-family="Segoe UI,system-ui,sans-serif" font-size="12">
+    <text x="16" y="20" font-weight="800" fill="${gr}" font-size="11">PLANTA</text>
+    <rect x="20" y="40" width="180" height="110" fill="${fill}" stroke="${az}" stroke-width="2"/>
+    ${[0,1,2,3].map(i => `<line x1="${50+i*40}" y1="48" x2="${50+i*40}" y2="142" stroke="${az}" stroke-opacity=".25"/>`).join('')}
+    <text x="110" y="92" text-anchor="middle" fill="${gr}" font-size="11">pendiente</text><text x="110" y="108" text-anchor="middle" fill="${gr}" font-size="13">↓</text>
+    <line x1="20" y1="166" x2="200" y2="166" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
+    <text x="110" y="183" text-anchor="middle" font-weight="800" fill="${az}">L = ${t(L)}</text>
+    <line x1="214" y1="40" x2="214" y2="150" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
+    <text x="232" y="95" text-anchor="middle" font-weight="800" fill="${az}" transform="rotate(-90 232 95)">W = ${t(W)}</text>
+    <text x="290" y="20" font-weight="800" fill="${gr}" font-size="11">ALZADO (corte en el sentido de W)</text>
+    <line x1="290" y1="215" x2="590" y2="215" stroke="${gr}" stroke-width="2"/>
+    ${[0,1,2,3,4,5,6,7,8,9,10].map(i => `<line x1="${296+i*27}" y1="215" x2="${288+i*27}" y2="224" stroke="${gr}"/>`).join('')}
+    <line x1="350" y1="215" x2="350" y2="${top}" stroke="${az}" stroke-width="3"/>
+    <line x1="500" y1="215" x2="500" y2="110" stroke="${az}" stroke-width="3"/>
+    <line x1="340" y1="${top - 1}" x2="512" y2="111" stroke="${az}" stroke-width="5" stroke-linecap="round"/>
+    <line x1="325" y1="215" x2="325" y2="${top}" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
+    <text x="319" y="${(215+top)/2}" text-anchor="end" font-weight="800" fill="${az}">Hr</text><text x="319" y="${(215+top)/2+15}" text-anchor="end" fill="${az}" font-size="11">${t(Hr)}</text>
+    <line x1="528" y1="215" x2="528" y2="110" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
+    <text x="535" y="160" font-weight="800" fill="${az}">He</text><text x="535" y="175" fill="${az}" font-size="11">${t(He)}</text>
+    <line x1="425" y1="215" x2="425" y2="${110 - dy/2}" stroke="${gr}" stroke-dasharray="4 3"/>
+    <text x="425" y="200" text-anchor="middle" fill="${gr}" font-size="11">h media = ${hm ? fx(hm,2)+' m' : '?'}</text>
+    <line x1="455" y1="110" x2="512" y2="110" stroke="${gr}" stroke-dasharray="3 3"/>
+    <text x="470" y="128" text-anchor="middle" fill="${gr}" font-size="11">θ = ${th != null ? fx(th,2)+'°' : '?'}</text>
+    <line x1="350" y1="240" x2="500" y2="240" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
+    <text x="425" y="253" text-anchor="middle" font-weight="800" fill="${az}" font-size="11">W</text>
+  </g></svg>`;
+}

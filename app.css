@@ -274,3 +274,8 @@ table.sapres td:not(:first-child){text-align:right;font-weight:800;font-variant-
 .estado{font-weight:800;font-size:12px;padding-top:7px}
 .estado.ok{color:var(--green)}.estado.no{color:var(--red)}
 @media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+
+.geo{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:center}
+.geo-svg{width:100%;height:auto;background:#fff;border:1px solid var(--border);border-radius:8px}
+@media (max-width:900px){.geo{grid-template-columns:minmax(0,1fr)}}
+.ax .geo-svg{max-width:5.2in;display:block;margin:6px auto;border:none}
