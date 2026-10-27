@@ -41,7 +41,7 @@ function interp(fila, x){ // interpola en columnas 0.1…0.5 (fuera de rango tom
 }
 function defaults(){
   return { aplica:true, texto:'', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
-    area:'', dimX:'', dimY:'', excent:0.05,
+    area:'', dimX:'', dimY:'', excent:0.05, Vtx:'', Vty:'', irregular:false,
     items:{},                                                   // ① { clave: { on, area } } de las cargas del Anexo A
     estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'SAP2000 — Material List by Section', sapImg:'' },   // ②
     otras:[] };                                                 // ③ [{ n, cant, unidad, pu, ubic }]
@@ -110,11 +110,17 @@ function calcular(B, A, RA){
   // Torsión accidental (A.3.6.7.1): excentricidad 5 % de la dimensión perpendicular a la fuerza
   const dimX = num(B.dimX) > 0 ? num(B.dimX) : num(v.L), dimY = num(B.dimY) > 0 ? num(B.dimY) : num(v.W), e = num(B.excent, 0.05);
   const MtX = tx.Vs * e * dimY, MtY = ty.Vs * e * dimX;   // fuerza en X → brazo en Y; fuerza en Y → brazo en X
+  // Comparación con el análisis modal de SAP2000 (A.4.2.1 y A.5.4.5)
+  const pct = B.irregular ? 0.90 : 0.80;
+  const modal = [['X', tx, num(B.Vtx)], ['Y', ty, num(B.Vty)]].map(([dir, t, Vt]) => {
+    const r = { dir, Tdin:t.din, Ta, relTa: t.din ? t.din / Ta : null, CuTa, okT: t.din ? t.din <= CuTa : null, Vs:t.Vs, Vt: Vt > 0 ? Vt : null, pct };
+    if(r.Vt){ r.rel = r.Vt / t.Vs; r.Vmin = pct * t.Vs; r.okV = r.Vt >= r.Vmin; r.factor = r.okV ? 1 : r.Vmin / r.Vt; }
+    return r; });
   // Puntos del espectro para la gráfica
   const Tmax = Math.max(6, p.TL * 1.15), pts = [];
   if(Aa > 0 && Av > 0) for(let t = 0; t <= Tmax + 1e-9; t += Tmax / 240) pts.push([t, Sa(t, p)]);
   return { ok: !faltan.length, faltan, p, FaT, FvT, sis, h, hA, Ta, Cu, CuTa, tx, ty, areaAuto, area, cargas, wArea, Wcargas, perfiles, Wprop, otras, Wotras, W,
-    dimX, dimY, e, MtX, MtY, pts, Tmax };
+    dimX, dimY, e, MtX, MtY, modal, pct, pts, Tmax };
 }
 
 const api = { G, PERFILES, clave, FA, FV, IMP, GRUPOS, SUELOS, SISTEMAS, defaults, calcular, Sa, kExp, interp, num };

@@ -27,8 +27,7 @@ function paneAnexoB(){
       <div class="card"><div class="ct">B-1.2 Parámetros de la estructura</div><div class="fg g4">
         ${fSel(B,'sistema','Sistema estructural',AnexoB.SISTEMAS.map((s,i) => [i,`${s.nombre} (Ct ${s.Ct}, α ${s.a})`]),{cls:'span2',h:'Tabla A.4.2-1'})}
         ${fIn(B,'h','Altura h [m]',{ph:R.hA ? fx(R.hA,2)+' (Hr del Anexo A)' : 'Escribe la altura',h:'Vacío = cumbrera Hr del Anexo A'})}
-        <div></div>${fIn(B,'Tx','Periodo Tx de SAP2000 [s]',{ph:'opcional'})}${fIn(B,'Ty','Periodo Ty de SAP2000 [s]',{ph:'opcional'})}
-        <div class="hint span2" style="align-self:center">Si los escribes, se usan con el límite Cu·Ta (A.4.2.1). Si no, se usa Ta.</div></div></div>
+        <div class="hint" style="align-self:center">Los periodos del análisis modal se escriben en B-2.4; si no los escribes, se usa Ta.</div></div></div>
       <div class="card"><div class="ct">B-1.3 Espectro de diseño</div><div id="espB"></div></div>
       <div class="card"><div class="ct">B-2.1 Peso sísmico W</div>
         <div class="fg g4">${fIn(B,'area','Área en planta [m²]',{ph:R.areaAuto ? fx(R.areaAuto,2)+' (L × W)' : '—',h:'Vacío = L × W del Anexo A'})}</div>
@@ -63,6 +62,12 @@ function paneAnexoB(){
       <div class="card"><div class="ct">B-2.2 Fuerza horizontal equivalente y torsión accidental</div>
         <div class="fg g4">${fIn(B,'dimX','Dimensión en X [m]',{ph:R.dimX ? fx(R.dimX,2)+' (L)' : '—'})}${fIn(B,'dimY','Dimensión en Y [m]',{ph:R.dimY ? fx(R.dimY,2)+' (W)' : '—'})}${fIn(B,'excent','Excentricidad accidental',{ph:'0.05',h:'5 % (A.3.6.7.1)'})}</div>
         <div id="resA" style="margin-top:10px"></div></div>
+      <div class="card"><div class="ct">B-2.4 Comparación con el análisis modal de SAP2000</div>
+        <div class="fg g4">${fIn(B,'Tx','Periodo modal Tx [s]',{ph:'de SAP2000'})}${fIn(B,'Ty','Periodo modal Ty [s]',{ph:'de SAP2000'})}
+          ${fIn(B,'Vtx','Cortante basal modal Vtx [kN]',{ph:'de SAP2000'})}${fIn(B,'Vty','Cortante basal modal Vty [kN]',{ph:'de SAP2000'})}
+          <div class="f span2">${fChk(B,'irregular','Estructura irregular (exige 90 % en vez de 80 %)')}</div></div>
+        <div id="modalB" style="margin-top:10px"></div>
+        <div class="hint" style="margin-top:6px">A.4.2.1: el periodo del análisis no puede ser mayor que Cu·Ta. A.5.4.5: el cortante modal en la base no puede ser menor que el 80 % de Vs (90 % si es irregular); si es menor, los resultados modales se multiplican por el factor de ajuste.</div></div>
       <div class="card"><div class="ct">Páginas del Anexo B</div>
         <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo B con el formato de la memoria (carta).</p>
         <button class="btn grn" type="button" id="printB">🖨 Imprimir / Guardar PDF del Anexo B</button></div>`;
@@ -111,6 +116,10 @@ function pintarResB(){
   R.perfiles.forEach((p,i) => { const td = document.querySelector(`[data-pkn="${i}"]`); if(td) td.textContent = fx(p.kN,2); });
   R.otras.forEach((o,i) => { const td = document.querySelector(`[data-okn="${i}"]`); if(td) td.textContent = fx(o.kN,2); });
   const set = (id, t) => { const e = $('#'+id); if(e) e.textContent = t; };
+  if($('#modalB')) $('#modalB').innerHTML = !R.ok ? '' : tabla(['Dirección','T modal [s]','T / Ta','¿T ≤ Cu·Ta?','Vs FHE [kN]','Vt modal [kN]','Vt / Vs','Mínimo','Factor de ajuste'], R.modal.map(r => [r.dir,
+      r.Tdin ? fx(r.Tdin,3) : '—', r.relTa ? fx(r.relTa,2) : '—', r.okT == null ? '—' : pill(r.okT ? 'ok' : 'pend', r.okT ? 'Cumple' : `Se usa ${fx(r.CuTa,3)} s`),
+      fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', `${fx(r.pct*100,0)} %`,
+      r.Vt ? (r.okV ? pill('ok','1.00 — Cumple') : pill('no', fx(r.factor,3))) : '—']));
   set('w1', fx(R.Wcargas,2)); set('w2', fx(R.Wprop,2)); set('w3', fx(R.Wotras,2)); set('wtot', `${fx(R.W,2)} kN (${fx(R.W*1000/AnexoB.G,0)} kg)`);
   if($('#resA')) $('#resA').innerHTML = !R.ok ? `<div class="note amber">Faltan: ${R.faltan.join(', ')}.</div>` :
     tabla(['Dirección','T usado [s]','Sa [g]','k','Vs [kN]','Momento torsor [kN·m]'], [
@@ -180,5 +189,9 @@ function anexoBPrintHTML(B, R){
     <h4>${L}-2.3 Torsión accidental (A.3.6.7.1)</h4>
     ${tb(['Fuerza','Vs [kN]','Dimensión perpendicular [m]','Excentricidad','Momento torsor [kN·m]'], [['En X',fx(R.tx.Vs,2),fx(R.dimY,2),fx(R.e,2),fx(R.MtX,2)],['En Y',fx(R.ty.Vs,2),fx(R.dimX,2),fx(R.e,2),fx(R.MtY,2)]])}
     ${box(`FHE x = ${fx(R.tx.Vs,2)} kN · FHE y = ${fx(R.ty.Vs,2)} kN`)}
+    ${R.modal.some(r => r.Tdin || r.Vt) ? `<h4>${L}-2.4 Comparación con el análisis modal (SAP2000)</h4>
+      ${tb(['Dirección','T modal [s]','Ta [s]','Cu·Ta [s]','Chequeo periodo','Vs FHE [kN]','Vt modal [kN]','Vt/Vs','Factor de ajuste'], R.modal.map(r => [r.dir, r.Tdin ? fx(r.Tdin,3) : '—', fx(r.Ta,3), fx(r.CuTa,3),
+        r.okT == null ? '—' : r.okT ? 'T ≤ Cu·Ta, cumple' : 'Se limita a Cu·Ta', fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', r.Vt ? (r.okV ? '1.00' : fx(r.factor,3)) : '—']))}
+      <p>Según A.5.4.5, el cortante dinámico en la base no puede ser menor que el ${fx(R.pct*100,0)} % del cortante de la FHE (${B.irregular ? 'estructura irregular' : 'estructura regular'}). ${R.modal.every(r => !r.Vt || r.okV) ? 'Se cumple en las direcciones evaluadas.' : 'Donde no se cumple, los resultados del análisis modal se multiplican por el factor de ajuste indicado.'}</p>` : ''}
   </section></div>`;
 }
