@@ -583,5 +583,10 @@ async function renderConfig(){
 $('#btnCfg').onclick = () => ir('#/config');
 $('#btnSalir').onclick = async () => { await guardarPendientes(); await sb.auth.signOut(); S.user = null; S.m = null; $('#toast').hidden = true; location.hash = ''; renderLogin(); };
 sb.auth.onAuthStateChange(ev => { if(ev === 'PASSWORD_RECOVERY') setTimeout(renderNuevaClave, 0); });
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js', { updateViaCache:'none' }).then(r => r.update()).catch(() => {});
+  // cuando se instala una versión nueva de la app, recarga una vez para usarla
+  let recargado = false, habia = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if(habia && !recargado){ recargado = true; guardarPendientes().finally(() => location.reload()); } });
+}
 if(/type=recovery/.test(location.hash)) { /* lo maneja onAuthStateChange */ } else boot();
