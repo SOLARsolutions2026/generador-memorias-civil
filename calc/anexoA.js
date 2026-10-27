@@ -86,7 +86,7 @@ function defaults(){
     extras:{ cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 }, otras:[] },
     Lr:50,
     viento:{ grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'',
-      expManual:'', kzt:[false,false,false,false,false], kztManual:1, flujo:'libre', sistema:0, Gmanual:'', luz:1.60, luzCorrea:'', fuente:'sprfv' },
+      expManual:'', kzt:[false,false,false,false,false], kztManual:1, flujo:'libre', sistema:0, Gmanual:'', luz:1.60, luzCorrea:'', fuente:'sprfv', imgsExpo:[] },
   };
 }
 

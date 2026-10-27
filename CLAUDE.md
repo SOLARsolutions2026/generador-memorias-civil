@@ -37,6 +37,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - Pestaña Cubierta: paneles Sí/No (`tipo.paneles`); material (`lamina.perfil`: ninguna → `tipo.lamina=false`; master1000/canaleta por calibre; zinc 5, eternit 20, arcilla 80 kg/m²; otra), `lamina.wManual` reemplaza el peso de tabla;
   `extras` = cielo raso (PVC 5, Drywall 15, Fibrocemento 20, Machimbre 15, Icopor 5, Registrable 10), ductería eléctrica 5, mecánica 20, iluminaria 5 y `otras[]` {n,w}.
   Los extras van sobre las correas; si no hay cubierta, sobre los rieles de paneles.
+- Exposición: botón 📘 abre `modalCondiciones()` (texto B.6.5.6.2/.3 con límites del proyecto); `viento.imgsExpo[]` = {path,nota} imágenes de comprobación de distancias (`<memoria_id>/exposicion-*.jpg`, máx. 4), se imprimen en el Anexo A.
 - Impresión de anexos: `imprimirConMargen()` agrega `@page` con márgenes solo al imprimir (la portada usa margen 0).
 
 ## Almacenamiento

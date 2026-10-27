@@ -122,13 +122,19 @@ viento(A, R){
     <div class="card"><div class="ct">Geometría de la cubierta (a un agua)</div>
       <div class="geo"><div id="geoSvg">${svgGeo(A)}</div>
       <div class="fg g2">${fIn(A,'viento.L','Longitud L [m]',{h:'Lado largo, perpendicular a la pendiente'})}${fIn(A,'viento.W','Ancho W [m]',{h:'En el sentido de la pendiente'})}${fIn(A,'viento.He','Altura de cornisa He [m]',{h:'Borde más bajo, desde el piso'})}${fIn(A,'viento.Hr','Altura de cumbrera Hr [m]',{h:'Borde más alto, desde el piso'})}</div></div></div>
-    <div class="card"><div class="ct">Exposición (B.6.5.6)</div><div class="fg g4">
+    <div class="card"><div class="ct">Exposición (B.6.5.6)<button class="btn sm" type="button" id="verCond">📘 Ver condiciones de cada exposición</button></div><div class="fg g4">
       ${fSel(A,'viento.rug','Rugosidad viento arriba',[['B','B — urbano, suburbano, boscoso'],['C','C — abierto, pocas obstrucciones'],['D','D — plano, superficies de agua']],{cls:'span2',re:1})}
       ${fIn(A,'viento.distRug','Distancia con esa rugosidad [m]')}
       ${fSel(A,'viento.expManual','Exposición usada',[['','Automática (la propuesta)'],['B','B'],['C','C'],['D','D']],{re:1})}
       <div class="f span2">${fChk(A,'viento.cercaD','Hay un terreno con rugosidad D cerca, viento arriba')}</div>
       ${v.cercaD ? fIn(A,'viento.distD','Distancia a ese terreno D [m]') : ''}</div>
-      <div id="expo" style="margin-top:10px"></div></div>
+      <div id="expo" style="margin-top:10px"></div>
+      <h4 class="sub">Imágenes de comprobación de distancias</h4>
+      <div class="hint" style="margin-bottom:8px">Captura del mapa (Google Maps o Earth) con la distancia medida hasta el cambio de terreno. Se imprimen en el Anexo A.</div>
+      <div class="expo-imgs">${(v.imgsExpo||[]).map((im,i) => `<div class="expo-img"><div class="th" data-imgexpo="${i}">Cargando…</div>
+        ${fIn(A,`viento.imgsExpo.${i}.nota`,'Descripción',{num:false,ph:'Ej: distancia en rugosidad B = 135 m'})}
+        ${esIng()?`<button class="btn sm danger" type="button" data-delexpo="${i}">Quitar</button>`:''}</div>`).join('')}
+        ${esIng() && (v.imgsExpo||[]).length < 4 ? '<button class="drop-img" type="button" id="addExpo" style="max-width:none;min-height:120px"><div class="ph-in"><div style="font-size:20px">🗺️</div><b>Agregar imagen</b><br/>toca o arrastra aquí</div></button>' : ''}</div></div>
     <div class="card"><div class="ct">Factor topográfico Kzt (B.6.5.7)</div>
       <div class="hint" style="margin-bottom:6px">Marca solo las condiciones que se cumplen. Si se cumplen las cinco, hay que calcular Kzt.</div>
       <div style="display:grid;gap:6px">${['(a) Colina o escarpe aislado y sin obstrucciones a barlovento','(b) Sobresale por encima del terreno viento arriba en un factor de 2 o más','(c) La estructura está en la mitad superior de la colina o cerca de la cresta','(d) H/Lh ≥ 0.2','(e) H ≥ 4.5 m (exposición C y D) o 18 m (exposición B)'].map((t,i) => fChk(A,`viento.kzt.${i}`,t)).join('')}</div>
@@ -261,7 +267,29 @@ muerta(A){
   if($('#bibPanel')) $('#bibPanel').onclick = () => guardarBib('paneles', A.panel);
   if($('#bibRiel')) $('#bibRiel').onclick = () => guardarBib('rieles', A.riel);
 },
-viento(A){ const W = AnexoA.calcular(A).viento; if(W.ok && $('#expo')) $('#expo').innerHTML = expoHTML(W); },
+viento(A){
+  const W = AnexoA.calcular(A).viento; if(W.ok && $('#expo')) $('#expo').innerHTML = expoHTML(W);
+  $('#verCond').onclick = () => modalCondiciones(A);
+  const v = A.viento; v.imgsExpo = v.imgsExpo || [];
+  v.imgsExpo.forEach((im, i) => urlDe(im.path).then(u => { const t = document.querySelector(`[data-imgexpo="${i}"]`); if(t) t.innerHTML = u ? `<img src="${esc(u)}" alt="Comprobación de distancia ${i+1}"/>` : 'No se encontró'; }));
+  const agregar = async file => {
+    if(!file || !file.type.startsWith('image/')) return toast('El archivo debe ser una imagen.');
+    try{ toast('Subiendo imagen…', 15000);
+      const blob = await comprimir(file, { max:1800, type:'image/jpeg', q:0.82 });
+      const path = `${S.m.id}/exposicion-${Date.now()}.jpg`; await subir(path, blob, 'image/jpeg');
+      v.imgsExpo.push({ path, nota:'' }); guardarMemoria(); toast(`Imagen guardada (${(blob.size/1024).toFixed(0)} KB).`); pintarTabA();
+    }catch(e){ err(e, 'No se pudo subir la imagen'); }
+  };
+  const add = $('#addExpo');
+  if(add){ add.onclick = async () => agregar(await elegirArchivo('image/*'));
+    add.ondragover = e => { e.preventDefault(); add.classList.add('over'); }; add.ondragleave = () => add.classList.remove('over');
+    add.ondrop = e => { e.preventDefault(); add.classList.remove('over'); agregar(e.dataTransfer.files[0]); }; }
+  $$('[data-delexpo]').forEach(b => b.onclick = async () => {
+    if(!confirm('¿Quitar esta imagen?')) return;
+    const [im] = v.imgsExpo.splice(+b.dataset.delexpo, 1); guardarMemoria();
+    if(im?.path) sb.storage.from(BUCKET).remove([im.path]); pintarTabA();
+  });
+},
 resumen(A){
   const R = AnexoA.calcular(A);
   $$('[data-verficha2]').forEach(b => b.onclick = async () => { const u = await urlFicha(A[b.dataset.verficha2].ficha); u ? window.open(u, '_blank') : toast('No se encontró el PDF.'); });
@@ -270,7 +298,10 @@ resumen(A){
     navigator.clipboard.writeText(t).then(() => toast('Tabla copiada: pégala en Excel o en tus notas de SAP2000.'));
   };
   $('#printA').onclick = async () => {
+    for(const im of (A.viento.imgsExpo||[])) im._url = await urlDe(im.path);
     const pa = $('#print-area'); pa.innerHTML = anexoAPrintHTML(A, R);
+    for(const im of (A.viento.imgsExpo||[])) delete im._url;
+    await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
     await document.fonts.ready;
     imprimirConMargen(`${S.m.consecutivo}_ANEXO_A`);
   };
@@ -333,6 +364,7 @@ function anexoAPrintHTML(A, R){
         ['Rugosidad del terreno',`Rugosidad ${esc(v.rug)}`],['Exposición (B.6.5.6.3)',`Exposición ${W.ex.usada} — ${esc(W.ex.razon)}`],['Factor topográfico Kzt (B.6.5.7)',fx(W.Kzt,2)],['Factor de dirección Kd (Tabla B.6.5-4)',fx(W.Kd,2)],
         ['Coef. de exposición Kz (SPRFV · componentes)',`${fx(W.Kz2,4)} · ${fx(W.Kz1,4)}`],['Presión por velocidad qh = 0.613·Kz·Kzt·Kd·V²·I',`${fx(W.qh2,2)} N/m² (SPRFV) · ${fx(W.qh1,2)} N/m² (componentes)`],
         ['Periodo Ta = Ct·h^α',`${fx(W.Ta,3)} s → f = ${fx(W.f,2)} Hz (${W.rigida?'estructura rígida':'estructura flexible'})`],['Factor de efecto ráfaga G (B.6.5.8)',fx(W.G,2)]])}
+      ${(v.imgsExpo||[]).length ? `<h4>Comprobación de distancias para la exposición</h4><div class="ax-imgs">${(v.imgsExpo||[]).map((im,i) => `<figure>${im._url ? `<img src="${esc(im._url)}" alt=""/>` : ''}<figcaption>Imagen ${i+1}. ${esc(im.nota||'Comprobación de distancia')}</figcaption></figure>`).join('')}</div>` : ''}
       <h3>${letra}.${n}.1 Datos geométricos</h3>${svgGeo(A, true)}${kv([['Longitud L [m]',fx(AnexoA.num(v.L),2)],['Ancho W [m]',fx(AnexoA.num(v.W),2)],['Altura de cornisa He [m]',fx(AnexoA.num(v.He),2)],['Altura de cumbrera Hr [m]',fx(AnexoA.num(v.Hr),2)],['Ángulo de cubierta θ',fx(W.theta,2)+'°'],['Altura media h [m]',fx(W.hm,2)],['Tipo','Cubierta libre a un agua']])}
       <h3>${letra}.${n}.2 Presiones netas — sistema principal (Figura B.6.5-18A, ${v.flujo==='obst'?'flujo obstruido':'flujo libre'})</h3>
       ${tb(['Caso','γ','CNW','CNL','pW [kN/m²]','pL [kN/m²]'], W.sp.map(x => [x.caso, x.gam+'°', fx(x.CNW,2), fx(x.CNL,2), fx(x.pW,4), fx(x.pL,4)]))}
@@ -413,4 +445,35 @@ function svgGeo(A, imp){
     <line x1="350" y1="240" x2="500" y2="240" stroke="${gr}" marker-start="${M}" marker-end="${M}"/>
     <text x="425" y="253" text-anchor="middle" font-weight="800" fill="${az}" font-size="11">W</text>
   </g></svg>`;
+}
+
+// Ventana con las condiciones de rugosidad y exposición (NSR-10 B.6.5.6.2 y B.6.5.6.3)
+function modalCondiciones(A){
+  const R = AnexoA.calcular(A).viento, hm = R.ok ? R.hm : null;
+  const lim = hm ? AnexoA.exposicion(A.viento, hm) : null;
+  const md = document.createElement('div'); md.className = 'modal';
+  md.innerHTML = `<div class="box2 cond" role="dialog" aria-modal="true" aria-labelledby="condT">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 id="condT">Condiciones de exposición — NSR-10</h3><button class="btn sm" type="button" data-cerrar aria-label="Cerrar">✕</button></div>
+    <h4 class="sub">1. Rugosidad del terreno (B.6.5.6.2)</h4>
+    <p class="lead">Se mira el terreno viento arriba, en un sector de 45° a cada lado de la dirección del viento.</p>
+    <div class="cgrid">
+      <div class="cbox"><b>Rugosidad B</b><span>Zonas urbanas y suburbanas, áreas boscosas u otros terrenos con muchas obstrucciones del tamaño de una vivienda unifamiliar o mayores, y poco espacio entre ellas.</span></div>
+      <div class="cbox"><b>Rugosidad C</b><span>Terreno abierto con pocas obstrucciones de menos de 9 m de altura: campos planos abiertos, praderas, y superficies de agua en zonas con huracanes.</span></div>
+      <div class="cbox"><b>Rugosidad D</b><span>Áreas planas sin obstrucciones y superficies de agua fuera de zonas de huracanes: pantanos, salinas y superficies de hielo.</span></div>
+    </div>
+    <h4 class="sub">2. Categoría de exposición (B.6.5.6.3)</h4>
+    <div class="cgrid">
+      <div class="cbox"><b>Exposición B</b><span>Cuando la rugosidad B se mantiene viento arriba en una distancia de al menos <b>800 m</b> o <b>20 veces la altura</b> de la estructura, la que sea mayor. Si la altura media es de 9 m o menos, basta con <b>460 m</b>.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limB,0)} m</em>` : ''}</div>
+      <div class="cbox"><b>Exposición C</b><span>Se usa en todos los casos donde no aplican la B ni la D.</span></div>
+      <div class="cbox"><b>Exposición D</b><span>Cuando la rugosidad D se mantiene viento arriba en más de <b>1500 m</b> o <b>20 veces la altura</b>, la que sea mayor. También aplica si la estructura está a menos de <b>200 m</b> o <b>20 veces la altura</b> (la mayor) de un terreno D, en terreno B o C.</span>${lim ? `<em>Para este proyecto: ${fx(lim.limD,0)} m / ${fx(lim.limDvecina,0)} m</em>` : ''}</div>
+    </div>
+    <div class="note blue" style="margin-top:10px"><b>Zonas de transición:</b> si la estructura está entre dos categorías, se usa la que dé mayores fuerzas de viento. Se permite una categoría intermedia solo si se justifica con un procedimiento analítico reconocido.</div>
+    <div class="hint">Cómo decide la app: compara la distancia que escribes con estos límites y propone la exposición. Siempre puedes escoger otra en "Exposición usada".</div>
+  </div>`;
+  document.body.appendChild(md);
+  const cerrar = () => { md.remove(); document.removeEventListener('keydown', esc_); };
+  const esc_ = e => { if(e.key === 'Escape') cerrar(); };
+  md.onclick = e => { if(e.target === md || e.target.closest('[data-cerrar]')) cerrar(); };
+  document.addEventListener('keydown', esc_);
+  md.querySelector('[data-cerrar]').focus();
 }
