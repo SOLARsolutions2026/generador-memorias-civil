@@ -368,8 +368,10 @@ function anexoAPrintHTML(A, R){
       <h3>${letra}.${n}.1 Datos geométricos</h3>${svgGeo(A, true)}${kv([['Longitud L [m]',fx(AnexoA.num(v.L),2)],['Ancho W [m]',fx(AnexoA.num(v.W),2)],['Altura de cornisa He [m]',fx(AnexoA.num(v.He),2)],['Altura de cumbrera Hr [m]',fx(AnexoA.num(v.Hr),2)],['Ángulo de cubierta θ',fx(W.theta,2)+'°'],['Altura media h [m]',fx(W.hm,2)],['Tipo','Cubierta libre a un agua']])}
       <h3>${letra}.${n}.2 Presiones netas — sistema principal (Figura B.6.5-18A, ${v.flujo==='obst'?'flujo obstruido':'flujo libre'})</h3>
       ${tb(['Caso','γ','CNW','CNL','pW [kN/m²]','pL [kN/m²]'], W.sp.map(x => [x.caso, x.gam+'°', fx(x.CNW,2), fx(x.CNL,2), fx(x.pW,4), fx(x.pL,4)]))}
-      <p>p = qh · G · CN. Para θ menor a 7.5° se usan los coeficientes de θ = 0°.</p>
+      ${svgSPRFV(W)}
+      <p>p = qh · G · CN. Para θ menor a 7.5° se usan los coeficientes de θ = 0°. Valores positivos: presión hacia la cubierta; negativos: succión.</p>
       <h3>${letra}.${n}.3 Presiones — componentes y revestimiento (Figura B.6.5-19A)</h3>
+      ${svgZonas(A, W)}
       ${kv([['a = 10 % de la menor dimensión o 0.4h (mín. 4 % o 1.0 m)',fx(W.a,3)+' m'],['Área zona 3 (franja exterior de ancho a)',fx(W.zonas.z3,2)+' m²'],['Área zona 2',fx(W.zonas.z2,2)+' m²'],['Área zona 1 (interior)',fx(W.zonas.z1,2)+' m²']])}
       ${W.porElem.map(e => `<div style="break-inside:avoid"><p><b>${esc(e.nombre)}</b> — área efectiva ${fx(e.Ae,2)} m²</p>` + tb(['Zona','CN +','CN −','p+ [kN/m²]','p− [kN/m²]'], e.cyr.map(z => [z.zona, fx(z.CNp,2), fx(z.CNs,2), fx(z.pp,4), fx(z.ps,4)])) + '</div>').join('')}
       ${W.panelChk ? `<h3>${letra}.${n}.4 Verificación del panel solar</h3>${tb(['Cara','Viento de diseño [kN/m²]','Carga del fabricante [kN/m²]','Estado'],[['Frontal (presión)',fx(W.panelChk.dP,3),fx(W.panelChk.capF,2),W.panelChk.okF?'Cumple':'No cumple'],['Posterior (succión)',fx(W.panelChk.dS,3),fx(W.panelChk.capP,2),W.panelChk.okP?'Cumple':'No cumple']])}` : ''}
@@ -498,4 +500,62 @@ function modalCondiciones(A){
   md.onclick = e => { if(e.target === md || e.target.closest('[data-cerrar]')) cerrar(); };
   document.addEventListener('keydown', esc_);
   md.querySelector('[data-cerrar]').focus();
+}
+
+// ═══ Figuras de presiones netas (solo para el PDF) ═══
+// Sistema principal: 4 esquemas (casos A y B, γ = 0° y 180°) con flechas proporcionales a CN
+function svgSPRFV(W){
+  const fig = (s, i) => {
+    const ox = (i % 2) * 260, oy = Math.floor(i / 2) * 150;
+    const x1 = ox + 45, y1 = oy + 52, x2 = ox + 215, y2 = oy + 82;           // cubierta: alta a la izquierda
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), nx = dy / len, ny = -dx / len; // normal hacia arriba
+    const mitad = (t0, t1, cn) => { let a = '';
+      for(let k = 0; k < 4; k++){ const t = t0 + (t1 - t0) * (k + .5) / 4, px = x1 + dx*t, py = y1 + dy*t, L = 8 + 16*Math.min(Math.abs(cn), 2.5);
+        const ax = px + nx*L, ay = py + ny*L;                                 // punta lejos de la cubierta
+        a += cn >= 0 ? `<line x1="${ax}" y1="${ay}" x2="${px+nx*2}" y2="${py+ny*2}" stroke="#1f3a60" stroke-width="1.3" marker-end="url(#fp)"/>`
+                     : `<line x1="${px+nx*2}" y1="${py+ny*2}" x2="${ax}" y2="${ay}" stroke="#b91c1c" stroke-width="1.3" marker-end="url(#fs)"/>`; }
+      return a; };
+    const izq = s.gam === 0 ? s.CNW : s.CNL, der = s.gam === 0 ? s.CNL : s.CNW;
+    const pIzq = s.gam === 0 ? s.pW : s.pL, pDer = s.gam === 0 ? s.pL : s.pW;
+    const viento = s.gam === 0 ? `<path d="M${ox+8},${oy+70} h24" stroke="#1a56db" stroke-width="2" marker-end="url(#fv)"/>` : `<path d="M${ox+252},${oy+70} h-24" stroke="#1a56db" stroke-width="2" marker-end="url(#fv)"/>`;
+    return `<g><text x="${ox+130}" y="${oy+14}" text-anchor="middle" font-weight="700" font-size="11">Caso ${s.caso} · γ = ${s.gam}°</text>
+      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#111" stroke-width="3"/>
+      <line x1="${x1}" y1="${y1}" x2="${x1}" y2="${oy+122}" stroke="#666"/><line x1="${x2}" y1="${y2}" x2="${x2}" y2="${oy+122}" stroke="#666"/>
+      <line x1="${ox+30}" y1="${oy+122}" x2="${ox+230}" y2="${oy+122}" stroke="#666"/>
+      <line x1="${(x1+x2)/2}" y1="${(y1+y2)/2-30}" x2="${(x1+x2)/2}" y2="${(y1+y2)/2+8}" stroke="#999" stroke-dasharray="3 2"/>
+      ${mitad(0, .5, izq)}${mitad(.5, 1, der)}${viento}
+      <text x="${ox+88}" y="${oy+112}" text-anchor="middle" font-size="9.5">${s.gam===0?'CNW':'CNL'} = ${fx(izq,2)}</text>
+      <text x="${ox+88}" y="${oy+123}" text-anchor="middle" font-size="8.5" fill="#555">${fx(pIzq,3)} kN/m²</text>
+      <text x="${ox+175}" y="${oy+112}" text-anchor="middle" font-size="9.5">${s.gam===0?'CNL':'CNW'} = ${fx(der,2)}</text>
+      <text x="${ox+175}" y="${oy+123}" text-anchor="middle" font-size="8.5" fill="#555">${fx(pDer,3)} kN/m²</text></g>`;
+  };
+  return `<figure class="ax-fig"><svg viewBox="0 0 520 300" width="520" height="300" font-family="serif">
+    <defs><marker id="fp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1f3a60"/></marker>
+    <marker id="fs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker>
+    <marker id="fv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a56db"/></marker></defs>
+    ${W.sp.map(fig).join('')}</svg>
+    <figcaption>Presiones netas sobre la cubierta, sistema principal (esquema según Figura B.6.5-18A). Azul: presión hacia la cubierta; rojo: succión. La flecha horizontal indica la dirección del viento.</figcaption></figure>`;
+}
+// Componentes y revestimiento: zonas 1, 2 y 3 en planta con el valor de a
+function svgZonas(A, W){
+  const L = AnexoA.num(A.viento.L), B = AnexoA.num(A.viento.W);
+  const ew = 380, eh = Math.max(110, Math.min(200, ew * B / L)), x0 = 70, y0 = 20, b = 16;   // franjas dibujadas de ancho fijo (esquema)
+  const e = W.porElem[0], cn = e ? e.cyr : [];
+  const z = k => cn.find(c => c.zona === k);
+  const et = (k, x, y) => { const c = z(k); return `<text x="${x}" y="${y}" text-anchor="middle" font-size="10" font-weight="700">Zona ${k}</text>${c ? `<text x="${x}" y="${y+12}" text-anchor="middle" font-size="8.5" fill="#444">CN ${fx(c.CNp,2)} / ${fx(c.CNs,2)}</text>` : ''}`; };
+  return `<figure class="ax-fig"><svg viewBox="0 0 520 ${eh+92}" width="520" height="${eh+92}" font-family="serif">
+    <rect x="${x0}" y="${y0}" width="${ew}" height="${eh}" fill="#c7d4e8" stroke="#1f3a60" stroke-width="1.5"/>
+    <rect x="${x0+b}" y="${y0+b}" width="${ew-2*b}" height="${eh-2*b}" fill="#dfe7f3" stroke="#1f3a60"/>
+    <rect x="${x0+2*b}" y="${y0+2*b}" width="${ew-4*b}" height="${eh-4*b}" fill="#f4f7fb" stroke="#1f3a60"/>
+    ${et(1, x0+ew/2, y0+eh/2-4)}
+    <text x="${x0+ew-b*1.5}" y="${y0+eh/2+3}" text-anchor="middle" font-size="9" font-weight="700" transform="rotate(-90 ${x0+ew-b*1.5} ${y0+eh/2+3})">Zona 2</text>
+    <text x="${x0+ew-b*.5}" y="${y0+eh/2+3}" text-anchor="middle" font-size="9" font-weight="700" transform="rotate(-90 ${x0+ew-b*.5} ${y0+eh/2+3})">Zona 3</text>
+    <g stroke="#555"><line x1="${x0}" y1="${y0+eh+12}" x2="${x0+b}" y2="${y0+eh+12}"/><line x1="${x0+b}" y1="${y0+eh+12}" x2="${x0+2*b}" y2="${y0+eh+12}"/>
+      <line x1="${x0}" y1="${y0+eh+8}" x2="${x0}" y2="${y0+eh+16}"/><line x1="${x0+b}" y1="${y0+eh+8}" x2="${x0+b}" y2="${y0+eh+16}"/><line x1="${x0+2*b}" y1="${y0+eh+8}" x2="${x0+2*b}" y2="${y0+eh+16}"/>
+      <line x1="${x0}" y1="${y0+eh+36}" x2="${x0+ew}" y2="${y0+eh+36}"/><line x1="${x0-14}" y1="${y0}" x2="${x0-14}" y2="${y0+eh}"/></g>
+    <text x="${x0+2*b+6}" y="${y0+eh+15}" font-size="9">a = ${fx(W.a,3)} m (cada franja)</text>
+    <text x="${x0+ew/2}" y="${y0+eh+50}" text-anchor="middle" font-size="10">L = ${fx(L,2)} m</text>
+    <text x="${x0-20}" y="${y0+eh/2}" text-anchor="middle" font-size="10" transform="rotate(-90 ${x0-20} ${y0+eh/2})">W = ${fx(B,2)} m</text>
+    ${cn.length ? `<text x="260" y="${y0+eh+66}" text-anchor="middle" font-size="9" fill="#333">CN (presión / succión): zona 1 = ${fx(z(1).CNp,2)} / ${fx(z(1).CNs,2)} · zona 2 = ${fx(z(2).CNp,2)} / ${fx(z(2).CNs,2)} · zona 3 = ${fx(z(3).CNp,2)} / ${fx(z(3).CNs,2)}</text>` : ''}
+  </svg><figcaption>Zonas de presión para componentes y revestimiento en planta (esquema según Figura B.6.5-19A; ancho de franjas no a escala).${e ? ` CN para ${esc(e.nombre.toLowerCase())}.` : ''}</figcaption></figure>`;
 }
