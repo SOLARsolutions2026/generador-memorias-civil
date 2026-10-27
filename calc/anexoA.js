@@ -82,7 +82,7 @@ function defaults(){
     panel:{ nombre:'TRINASOLAR 700-720W', L:2.382, W:1.31, peso:38.3 },
     riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906 },
     dBorde:0.40, tribRiel:'', qMant:15,
-    lamina:{ perfil:'master1000', calibre:24, wManual:'', sep:1.61 },
+    lamina:{ perfil:'ninguna', calibre:24, wManual:'', sep:1.61 },
     extras:{ cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 }, otras:[] },
     Lr:50,
     viento:{ grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'',

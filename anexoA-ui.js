@@ -12,6 +12,8 @@ function datosA(){
   }
   // completa claves nuevas si la memoria se creó con una versión anterior
   const d = AnexoA.defaults(), A = m.anexos.A;
+  if(!A._v2){ if(!A.tipo.lamina) A.lamina.perfil = 'ninguna'; A._v2 = true; }
+  A.tipo.lamina = A.lamina.perfil !== 'ninguna';
   if(A.lamina && A.lamina.cielo && !A.extras){ const l = A.lamina; A.extras = { cielo:l.cielo, ductoE:l.ductoE, ductoM:l.ductoM, lum:l.lum, otras:[] }; delete l.cielo; delete l.ductoE; delete l.ductoM; delete l.lum; }
   (function fill(t, s){ for(const k in s){ if(t[k] === undefined) t[k] = JSON.parse(JSON.stringify(s[k])); else if(s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) fill(t[k], s[k]); } })(A, d);
   return A;
@@ -43,7 +45,8 @@ function pintarTabA(){
       let v = inp.type === 'checkbox' ? inp.checked : inp.value;
       setP(A, inp.dataset.a, v);
       if(inp.dataset.a === 'extras.cielo.tipo') A.extras.cielo.w = AnexoA.CIELOS[v] ?? A.extras.cielo.w; // peso típico del tipo elegido
-      if(inp.dataset.a === 'lamina.perfil'){ const mat = AnexoA.LAMINAS[v]; A.lamina.wManual = ''; if(mat.calibres && !mat.calibres[A.lamina.calibre]) A.lamina.calibre = Object.keys(mat.calibres).pop(); }
+      if(inp.dataset.a === 'lamina.perfil') A.tipo.lamina = v !== 'ninguna';
+      if(inp.dataset.a === 'lamina.perfil' && v !== 'ninguna'){ const mat = AnexoA.LAMINAS[v]; A.lamina.wManual = ''; if(mat.calibres && !mat.calibres[A.lamina.calibre]) A.lamina.calibre = Object.keys(mat.calibres).pop(); }
       guardarMemoria();
       if(inp.dataset.re) pintarTabA(); else { const out = $('#resA'); if(out) out.innerHTML = RES_A[tabA](A, AnexoA.calcular(A)); }
     });
@@ -56,16 +59,17 @@ const TABS_A = {
 cubierta(A, R){
   const l = A.lamina, mat = AnexoA.LAMINAS[l.perfil] || AnexoA.LAMINAS.master1000, e = A.extras, L = R.lamina;
   const fila = (k, nombre, def) => `<div class="xrow"><div class="f">${fChk(A,`extras.${k}.aplica`,nombre)}</div>${e[k].aplica ? fIn(A,`extras.${k}.w`,'Peso [kg/m²]',{ph:String(def)}) : '<div></div>'}</div>`;
-  return `<div class="card"><div class="ct">¿Qué lleva la estructura?</div>
-    <div style="display:grid;gap:10px">${fChk(A,'tipo.paneles','<b>Paneles solares sobre rieles</b> — peso del panel y del riel, mantenimiento')}
-    ${fChk(A,'tipo.lamina','<b>Cubierta sobre correas</b> — lámina metálica, zinc, Eternit, teja de arcilla u otra')}</div>
-    ${!A.tipo.paneles && !A.tipo.lamina ? '<div class="note amber" style="margin-top:12px">Escoge al menos una opción.</div>' : ''}</div>
-  ${A.tipo.lamina ? `<div class="card"><div class="ct">Tipo de cubierta</div>
-    <div class="fg g4">${fSel(A,'lamina.perfil','Material',Object.entries(AnexoA.LAMINAS).map(([k,v]) => [k,v.nombre]),{cls:'span2',re:1})}
-      ${mat.calibres ? fSel(A,'lamina.calibre','Calibre',Object.keys(mat.calibres).map(c => [c,`Calibre ${c}`]),{re:1}) : '<div></div>'}
+  return `<div class="card"><div class="ct">Paneles solares</div>
+    <div class="f"><label>¿El proyecto lleva paneles solares?</label>
+      <div class="seg" role="group" aria-label="Lleva paneles solares"><button type="button" data-seg="1" class="${A.tipo.paneles?'on':''}" ${ro()}>Sí</button><button type="button" data-seg="0" class="${!A.tipo.paneles?'on':''}" ${ro()}>No</button></div>
+      <div class="hint">${A.tipo.paneles ? 'El panel y el riel se escogen en la pestaña Carga muerta.' : 'Sin paneles: no se calculan cargas de paneles ni de rieles.'}</div></div></div>
+  <div class="card"><div class="ct">Tipo de cubierta</div>
+    <div class="fg g4">${fSel(A,'lamina.perfil','Material de la cubierta',[['ninguna','Ninguna (no lleva cubierta)'],...Object.entries(AnexoA.LAMINAS).map(([k,v]) => [k,v.nombre])],{cls:'span2',re:1})}
+      ${A.tipo.lamina ? `${mat.calibres ? fSel(A,'lamina.calibre','Calibre',Object.keys(mat.calibres).map(c => [c,`Calibre ${c}`]),{re:1}) : '<div></div>'}
       ${fIn(A,'lamina.sep','Separación de correas [m]')}
-      ${fIn(A,'lamina.wManual','Peso de la cubierta [kg/m²]',{cls:'span2',ph:L&&L.wAuto?fx(L.wAuto,2)+' (de la tabla)':'Escribe el peso',h:'Vacío = valor de la tabla. Escribe otro si tu material pesa distinto.'})}</div>
-    <div class="hint" id="fuenteCub" style="margin-top:6px">${L ? 'Fuente: ' + esc(L.fuente) + (L.metal && !L.manual ? ` — ${fx(L.pesoLin,3)} kg/m ÷ ${fx(L.ancho,2)} m de ancho útil` : '') : ''}</div></div>` : ''}
+      ${fIn(A,'lamina.wManual','Peso de la cubierta [kg/m²]',{cls:'span2',ph:L&&L.wAuto?fx(L.wAuto,2)+' (de la tabla)':'Escribe el peso',h:'Vacío = valor de la tabla. Escribe otro si tu material pesa distinto.'})}` : ''}</div>
+    ${A.tipo.lamina ? `<div class="hint" id="fuenteCub" style="margin-top:6px">${L ? 'Fuente: ' + esc(L.fuente) + (L.metal && !L.manual ? ` — ${fx(L.pesoLin,3)} kg/m ÷ ${fx(L.ancho,2)} m de ancho útil` : '') : ''}</div>` : ''}
+    ${!A.tipo.lamina && !A.tipo.paneles ? '<div class="note amber" style="margin-top:10px">Sin paneles y sin cubierta no hay cargas que calcular. Escoge al menos una.</div>' : ''}</div>
   <div class="card"><div class="ct">Cargas adicionales (solo si existen en el proyecto)</div>
     <div class="xrow"><div class="f">${fChk(A,'extras.cielo.aplica','Cielo raso')}</div>${e.cielo.aplica ? fSel(A,'extras.cielo.tipo','Tipo',Object.keys(AnexoA.CIELOS).map(k => [k,k]),{re:1}) + fIn(A,'extras.cielo.w','Peso [kg/m²]') : '<div></div>'}</div>
     ${fila('ductoE','Ductería eléctrica',5)}${fila('ductoM','Ductería mecánica',20)}${fila('lum','Iluminaria suspendida',5)}
@@ -193,6 +197,7 @@ function expoHTML(W){
 // Acciones extra por pestaña (botones)
 const EXTRA_A = {
 cubierta(A){
+  $$('[data-seg]').forEach(b => b.onclick = () => { A.tipo.paneles = b.dataset.seg === '1'; guardarMemoria(); pintarTabA(); });
   if($('#addX')) $('#addX').onclick = () => { A.extras.otras.push({ n:'', w:'' }); guardarMemoria(); pintarTabA(); const ins = $$('[data-a$=".n"]'); ins[ins.length-1]?.focus(); };
   $$('[data-delx]').forEach(b => b.onclick = () => { A.extras.otras.splice(+b.dataset.delx, 1); guardarMemoria(); pintarTabA(); });
 },
