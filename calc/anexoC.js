@@ -21,7 +21,7 @@ function leer(texto){
       if(s[i] === '"'){                      // valor entre comillas (puede tener espacios y hasta comillas internas)
         let j = i + 1;
         while(j < s.length && !(s[j] === '"' && (j + 1 >= s.length || s[j+1] === ' ' || s[j+1] === '\t'))) j++;
-        v = s.slice(i + 1, j); i = j + 1;
+        v = s.slice(i + 1, j).replace(/""/g, '"'); i = j + 1;   // SAP escribe la comilla interna doble: 3/8"" → 3/8"
       } else { let j = i; while(j < s.length && s[j] !== ' ' && s[j] !== '\t') j++; v = s.slice(i, j); i = j; }
       if(k) o[k] = v;
     }
