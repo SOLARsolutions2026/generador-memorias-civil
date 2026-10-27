@@ -241,6 +241,7 @@ const STEPS = [
   { id:'portada',    ph:'Proyecto',   n:'2', t:'Portada',                 s:'Vista previa e impresión' },
   { id:'A',  ph:'Cálculos',   n:'A', t:'Anexo A — Cargas',        s:'Muerta, viva y viento' },
   { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Análisis sísmico' },
+  { id:'K',  ph:'Cálculos',   n:'∑', t:'Combinaciones',           s:'Irregularidades y NSR-10 B.2' },
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — SAP2000',       s:'Datos del modelo' },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Próximamente', off:1 },
   { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Próximamente', off:1 },
@@ -390,6 +391,12 @@ const ANEXOS_LISTO = {
     if(!an.B) return ['datos del anexo'];
     if(an.B.aplica === false) return [];
     const R = calcB(); return R.ok ? [] : R.faltan; } },
+  K: { n:'paso de combinaciones', huella: an => huella(an.K, an.B?.aplica), faltan(an){
+    if(!an.K) return ['datos del paso'];
+    const R = Combos.calcular(an.K, an.B?.aplica !== false), f = [];
+    if(an.B?.aplica !== false && !(R.R.R > 0)) f.push('R0 del sistema estructural');
+    if(R.faltaPat.length) f.push('patrón de SAP para ' + R.faltaPat.join(', '));
+    return f; } },
   C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
     const C = an.C, f = [];
     if(!C?.modelo) f.push('archivo del modelo (.$2k)');
@@ -418,7 +425,7 @@ function pintarListo(){
   const an = S.m.anexos || {}, X = an[id] || {}, f = D.faltan(an), est = estadoAnexo(id);
   const fecha = X.listoFecha ? new Date(X.listoFecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }) : '';
   bar.innerHTML = `<div class="card listo ${est === 'ok' ? 'ok' : ''}">` + (
-    est === 'ok' ? `<div class="listo-t"><span class="listo-i">✓</span><div><b>${D.n} terminado</b><div class="hint">Marcado el ${esc(fecha)}. Si cambias un dato, vuelve a «en proceso».</div></div></div>
+    est === 'ok' ? `<div class="listo-t"><span class="listo-i">✓</span><div><b>${D.n[0].toUpperCase() + D.n.slice(1)} terminado</b><div class="hint">Marcado el ${esc(fecha)}. Si cambias un dato, vuelve a «en proceso».</div></div></div>
       <button class="btn sm" type="button" id="btnListo" data-v="0">Volver a abrir</button>`
     : f.length ? `<div class="listo-t"><span class="listo-i no">!</span><div><b>Para marcar el ${D.n} como terminado falta:</b><div class="hint">${f.map(esc).join(' · ')}</div></div></div>
       <button class="btn sm" type="button" disabled>✓ Marcar como terminado</button>`
@@ -469,6 +476,7 @@ function pintarNotas(){
 const PANES = {
 A(){ paneAnexoA(); },
 B(){ paneAnexoB(); },
+K(){ paneCombos(); },
 C(){ paneAnexoC(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';

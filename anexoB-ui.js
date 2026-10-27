@@ -11,6 +11,7 @@ function datosB(){
 function calcB(){ const B = datosB(), A = datosA(); return AnexoB.calcular(B, A, AnexoA.calcular(A)); }
 
 function paneAnexoB(){
+  if(typeof sincronizarIrregular === 'function') sincronizarIrregular();
   const B = datosB(), ro_ = esIng() ? '' : 'disabled';
   if(B.aplica && B.metodo !== 'manual' && !window.NSR_SISMO){ cargarSismo().then(() => { prellenarMunicipio(B); if(S.m && document.getElementById('pane')) paneAnexoB(); }); }
   let h = `<div class="card"><div class="ct">Alcance del análisis</div>
@@ -82,7 +83,7 @@ function paneAnexoB(){
       <div class="card"><div class="ct">B-2.4 Comparación con el análisis modal de SAP2000</div>
         <div class="fg g4">${fIn(B,'Tx','Periodo modal Tx [s]',{ph:'de SAP2000'})}${fIn(B,'Ty','Periodo modal Ty [s]',{ph:'de SAP2000'})}
           ${fIn(B,'Vtx','Cortante basal modal Vtx [kN]',{ph:'de SAP2000'})}${fIn(B,'Vty','Cortante basal modal Vty [kN]',{ph:'de SAP2000'})}
-          <div class="f span2">${fChk(B,'irregular','Estructura irregular (exige 90 % en vez de 80 %)')}</div></div>
+          <div class="f span2">${S.m.anexos?.K ? `<div class="hint" style="padding-top:6px">Estructura <b>${B.irregular ? 'irregular (se exige 90 %)' : 'regular (se exige 80 %)'}</b>, según el paso Combinaciones e irregularidades.</div>` : fChk(B,'irregular','Estructura irregular (exige 90 % en vez de 80 %)')}</div></div>
         <div id="modalB" style="margin-top:10px"></div>
         <div class="hint" style="margin-top:6px">A.4.2.1: el periodo del análisis no puede ser mayor que Cu·Ta. A.5.4.5: el cortante modal en la base no puede ser menor que el 80 % de Vs (90 % si es irregular); si es menor, los resultados modales se multiplican por el factor de ajuste.</div>
         <div class="iter-box"><div class="iter-t">Historial de iteraciones</div>

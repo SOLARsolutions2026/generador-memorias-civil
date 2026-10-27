@@ -124,8 +124,15 @@ function analizar(texto){
     for(const k of ['F1','F2','F3','M1','M2','M3']) o[k] += num(r[k]); o.ids.push(r.Joint); }
   const nudosF = Object.values(jl).map(o => ({ ...o, F1:r3(o.F1), F2:r3(o.F2), F3:r3(o.F3), M1:r3(o.M1), M2:r3(o.M2), M3:r3(o.M3), n:o.ids.length, ids:rangos(o.ids.map(String)) }));
 
+  // Combinaciones definidas en el modelo (para compararlas con el paso de Combinaciones)
+  const cb = {}; let ult = '';
+  for(const r of tb('COMBINATION DEFINITIONS')){ const n = r.ComboName || ult; ult = n; if(!n) continue;
+    const o = cb[n] = cb[n] || { n, tipo:r.ComboType || '', casos:{} };
+    if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF)); }
+  const combos = Object.values(cb);
+
   return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
-    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF,
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos,
     tablas:Object.keys(T) };
 }
 
@@ -152,7 +159,7 @@ function pesoPropio(M, sinPeso){
 
 // ─── 5. Revisión cruzada con los Anexos A y B (solo en pantalla) ───
 // Devuelve filas { grupo, que, esperado, sap, estado:'ok'|'no'|'info', txt }
-function revisar(M, RA, RB){
+function revisar(M, RA, RB, CB){
   const out = []; if(!M?.ok) return out;
   // la categoría se recalcula siempre (así las reglas nuevas aplican también a modelos ya cargados)
   M = { ...M, patrones:M.patrones.map(p => ({ ...p, cat:categoria(p.n, p.tipo) })) };
@@ -191,6 +198,19 @@ function revisar(M, RA, RB){
   for(const d of M.dist.filter(d => !usados.has(d) && !['E','N'].includes(d.cat) && (d.a || d.b)))
     out.push({ grupo:'Cargas sin referencia', estado:'info', txt:`${d.pat} ${f2(d.a)}${d.b !== d.a ? '→' + f2(d.b) : ''} kN/m (${d.dir === 'Gravity' ? 'gravedad' : (d.sis === 'Local' ? 'local ' : '') + d.dir}) en ${d.n} elemento${d.n>1?'s':''} (${d.ids}). No corresponde a un valor del Anexo A; verifica de dónde sale (p. ej. otras cargas del Anexo B).` });
 
+  // Combinaciones del paso «Combinaciones» frente a las del modelo
+  if(CB && CB.length){
+    if(!M.combos) out.push({ grupo:'Combinaciones', estado:'info', txt:'Este modelo se cargó antes de que la app leyera las combinaciones. Usa «Reemplazar» con el mismo archivo para revisarlas.' });
+    else {
+      const firma = o => Object.entries(o).filter(([, f]) => f).map(([p, f]) => `${p.toUpperCase()}:${r3(f)}`).sort().join('|');
+      const sapF = new Map(M.combos.map(c => [firma(c.casos), c.n]));
+      const falt = CB.filter(c => !sapF.has(firma(c.sap)));
+      const ok = CB.length - falt.length;
+      if(ok) out.push({ grupo:'Combinaciones', estado:'ok', txt:`${ok} de ${CB.length} combinaciones de la app están en el modelo con los mismos factores.` });
+      for(const c of falt.slice(0, 15)) out.push({ grupo:'Combinaciones', estado:'no', txt:`Falta ${c.id}: ${c.txt} (${Object.entries(c.sap).map(([p, f]) => p + ' ' + f).join(', ')}).` });
+      if(falt.length > 15) out.push({ grupo:'Combinaciones', estado:'no', txt:`… y ${falt.length - 15} combinaciones más que no están en el modelo.` });
+    }
+  }
   // Fuerzas sísmicas frente a la FHE del Anexo B
   if(RB?.ok){
     const qs = M.nudosF.filter(o => o.cat === 'E');

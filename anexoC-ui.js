@@ -114,7 +114,8 @@ function pintarRevC(){
   const C = datosC(), el = $('#revC'); if(!el) return;
   const A = datosA(), RA = AnexoA.calcular(A), bOn = S.m.anexos?.B && S.m.anexos.B.aplica !== false;
   const RB = bOn ? calcB() : null;
-  const filas = AnexoC.revisar(C.modelo, RA, RB);
+  const K = S.m.anexos?.K, CB = K && typeof Combos !== 'undefined' ? Combos.calcular(K, bOn).activas : null;
+  const filas = AnexoC.revisar(C.modelo, RA, RB, CB);
   const n = k => filas.filter(f => f.estado === k).length;
   const ic = { ok:'✓', no:'✗', info:'!' };
   const grupos = [...new Set(filas.map(f => f.grupo))];

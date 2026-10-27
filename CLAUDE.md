@@ -66,6 +66,15 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Abierto en pantallas > 900 px: `body.notas-on` corre la página (padding-right) para no tapar el contenido; en celular se superpone.
   Anexo C: patrones IMP* = impacto de vehículos (parqueaderos) u otras especiales = categoría N (sin aviso de tipo).
 
+- Paso «Combinaciones» (id `K`, entre B y C; `calc/combos.js` = `Combos`, pantalla `combos-ui.js`), datos `anexos.K`:
+  irregularidades A.3.3 como lista Sí/No con nota (`irrP`, `irrA`, `notasIrr`; Tablas A.3-6/A.3-7), `redundante` (φr 1.0/0.75), `sisR` (R0 de Tabla A.3-3: DES 7, DMO 5, DMI 3, otro → `R0`);
+  R = φa·φp·φr·R0; `sincronizarIrregular()` fija `anexos.B.irregular` (el Anexo B ya no tiene la casilla si existe K).
+  Patrones SAP por símbolo `pat{D,Lr,W,Ex,Ey,Tx,Ty,IMPx,IMPy}` (se proponen desde el modelo del Anexo C). Decisiones de Amo: viva de cubierta = Lr (L = 0);
+  impacto de vehículos en combinaciones aparte 1.2D + 1.0IMP + 1.0L (se usa Lr al 1.0); sismo E = Fs/R con ±Ex ±Tx ±0.3Ey (`orto`), derivas sin R, servicio B.2.3 (con sismo opcional),
+  `off[]` combinaciones desactivadas, `otras[]` {nom, txt} escritas como «1.2D + 1.0IMPx». Copiar/descargar tabla ComboName/ComboType/CaseName/ScaleSF.
+  El Anexo C lee «COMBINATION DEFINITIONS» del .$2k (`modelo.combos`) y revisa que estén con los mismos factores.
+  Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -75,7 +84,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
   imagen 3D, revisiones, portada imprimible (carta), Configuración (perfiles, datos del ingeniero, firma, roles), vista Consulta.
 - Hecho también: Anexo A (cargas muerta, viva y viento B.6.5 para cubierta libre a un agua), con páginas imprimibles.
 - Hecho: Anexo B (FHE, iteraciones) y Anexo C (modelo SAP2000 desde .$2k).
-- Siguiente: D (IPE/HEA/tubulares, zapatas,
+- Hecho: paso Combinaciones e irregularidades (solo pantalla).
+- Siguiente: memoria general (plantilla de Amo), D (IPE/HEA/tubulares, zapatas,
   pedestales), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas
