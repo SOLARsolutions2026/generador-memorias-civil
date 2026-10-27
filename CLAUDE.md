@@ -24,7 +24,11 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 
 ## Anexos (`mem_memorias.anexos` jsonb)
 - `anexos.A` = datos del Anexo A (ver `AnexoA.defaults()` en `calc/anexoA.js`). Cálculo puro en `calc/anexoA.js`, pantalla en `anexoA-ui.js`.
-- Biblioteca de paneles y rieles: `mem_config.biblioteca` = { paneles:[{nombre,L,W,H,peso,cargaF,cargaP}] (6 paneles de la tabla de Amo, cargas en Pa), rieles:[{nombre,alto,ancho,peso,material?,vmax?}] (sin inercias, decisión de Amo) } (Alurack 0.906 kg/m; CHIKO 537 0.73 kg/m = 14 kg ÷ 8 piezas ÷ 2.4 m).
+- Biblioteca de paneles y rieles: `mem_config.biblioteca` = { paneles:[{nombre,L,W,H,peso,cargaF,cargaP}] (6 paneles de la tabla de Amo, cargas en Pa), rieles:[{nombre,alto,ancho,peso,material?,vmax?,luzMax}] (sin inercias, decisión de Amo); todos con `ficha` (ruta del PDF) } (Alurack 0.906 kg/m; CHIKO 537 0.73 kg/m = 14 kg ÷ 8 piezas ÷ 2.4 m).
+- Fichas técnicas: las de la biblioteca base están en el repo `fichas/*.pdf` (públicas, comprimidas con qpdf); las que sube Amo van a
+  Supabase `<memoria_id>/fichas/{panel|riel}.pdf` y, al "Guardar en biblioteca", se copian a `biblioteca/<lista>-<nombre>.pdf`. `urlFicha()` resuelve ambas.
+  Se unirán al PDF final después de las páginas del Anexo A (pendiente).
+- Separación máxima de apoyos del riel (`riel.luzMax`): CHIKO 1.5 m, Alurack 2.0 m (fichas técnicas). Se compara con `viento.luz`; aviso en pantalla y nota impresa.
 - Correcciones acordadas frente a los Excel originales (26-oct-2026): D de lámina multiplica por la separación (el Excel dividía);
   peso de lámina kg/m ÷ ancho útil; ancho aferente del riel = L/2 (editable) en muerta, viva y viento; g = 9.81;
   exposición según B.6.5.6.3 (propuesta automática + opción manual); CN leídos de las figuras B.6.5-18A (SPRFV, θ<7.5° usa 0°)

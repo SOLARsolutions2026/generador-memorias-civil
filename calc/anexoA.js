@@ -79,8 +79,8 @@ function interpTabla(tabla, theta, sacar, minAng){
 function defaults(){
   return {
     tipo:{ paneles:true, lamina:false },
-    panel:{ nombre:'TRINASOLAR 700-720W', L:2.384, W:1.303, H:0.033, peso:38.3, cargaF:5400, cargaP:2400 },
-    riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906 },
+    panel:{ nombre:'TRINASOLAR 700-720W', L:2.384, W:1.303, H:0.033, peso:38.3, cargaF:5400, cargaP:2400, ficha:'fichas/panel-trinasolar-700-720w.pdf' },
+    riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906, material:'Aluminio 6005-T6', luzMax:2.0, ficha:'fichas/riel-alurack-master-rail.pdf' },
     dBorde:0.40, tribRiel:'', qMant:15,
     lamina:{ perfil:'ninguna', calibre:24, wManual:'', sep:1.61 },
     extras:{ cielo:{ aplica:false, tipo:'Drywall', w:15 }, ductoE:{ aplica:false, w:5 }, ductoM:{ aplica:false, w:20 }, lum:{ aplica:false, w:5 }, otras:[] },
@@ -112,7 +112,8 @@ function paneles(A){
   const ext = A.tipo.lamina ? [] : extras(A), wExt = ext.reduce((a, x) => a + x.w, 0), Dext = wExt * trib * G / 1000;
   const D = Dpanel + Driel + Dext;
   const qM = num(A.qMant, 15), Lm = qM * trib * G / 1000;
-  return { wPanel, trib, tribAuto, sepRieles, areaTrib: trib*W, kgmPanel, Dpanel, Driel, ext, wExt, Dext, D, Dr:r3(D), qM, L:Lm, Lr3:r3(Lm) };
+  const luz = num(A.viento?.luz, 0), luzMax = num(A.riel.luzMax, 0);
+  return { luz, luzMax, luzExcede: luzMax > 0 && luz > luzMax, wPanel, trib, tribAuto, sepRieles, areaTrib: trib*W, kgmPanel, Dpanel, Driel, ext, wExt, Dext, D, Dr:r3(D), qM, L:Lm, Lr3:r3(Lm) };
 }
 
 // ─── Carga muerta y viva: cubierta en lámina sobre correas ───

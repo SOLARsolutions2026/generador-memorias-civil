@@ -134,16 +134,24 @@ async function cargarMemorias(){
   if(error) throw error;
   S.mems = data;
 }
-async function tamanoCarpeta(prefijo){
+// Lista todos los archivos de una carpeta del bucket, incluidas sus subcarpetas
+async function archivosDe(prefijo){
   const { data, error } = await sb.storage.from(BUCKET).list(prefijo, { limit:1000 });
-  if(error || !data) return 0;
-  return data.reduce((a, o) => a + (o.metadata?.size || 0), 0);
+  if(error || !data) return [];
+  let out = [];
+  for(const o of data){
+    const ruta = `${prefijo}/${o.name}`;
+    if(o.id === null || !o.metadata) out = out.concat(await archivosDe(ruta)); // es una subcarpeta
+    else out.push({ ruta, size:o.metadata.size || 0 });
+  }
+  return out;
 }
+async function tamanoCarpeta(prefijo){ return (await archivosDe(prefijo)).reduce((a, f) => a + f.size, 0); }
 async function renderLista(){
   $('#app').innerHTML = '<p class="muted">Cargando memorias…</p>';
   try{ await cargarMemorias(); }catch(e){ return err(e); }
   const tam = await Promise.all(S.mems.map(m => tamanoCarpeta(m.id)));
-  const tamCfg = await tamanoCarpeta('config');
+  const tamCfg = (await tamanoCarpeta('config')) + (await tamanoCarpeta('biblioteca'));
   const MB = b => b / 1048576;
   const usado = MB(tam.reduce((a,b)=>a+b,0) + tamCfg), pct = usado / CAP_MB * 100;
   const cols = ['#1a56db','#10b981','#a855f7','#f59e0b'];
@@ -175,8 +183,8 @@ async function renderLista(){
 async function borrarMemoria(m){
   if(!m || !confirm(`¿Eliminar ${m.consecutivo} con sus revisiones e imágenes? No se puede deshacer.`)) return;
   try{
-    const { data:arch } = await sb.storage.from(BUCKET).list(m.id, { limit:1000 });
-    if(arch?.length) await sb.storage.from(BUCKET).remove(arch.map(o => `${m.id}/${o.name}`));
+    const arch = await archivosDe(m.id);
+    if(arch.length) await sb.storage.from(BUCKET).remove(arch.map(f => f.ruta));
     const { error } = await sb.from('mem_memorias').delete().eq('id', m.id);
     if(error) throw error;
     if(S.m?.id === m.id) S.m = null;

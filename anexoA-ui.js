@@ -29,6 +29,8 @@ const fChk = (A, p, l) => `<label class="chk"><input type="checkbox" data-a="${p
 const tabla = (cab, filas, cls='') => `<div class="tw"><table class="t ${cls}"><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.map(f => `<tr>${f.map((c,i) => `<td class="${i&&typeof c==='number'?'n':''}">${typeof c==='number'?fx(c):c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 const res = (filas) => `<div class="sap">${filas.map(([t,v,hi]) => `<div class="row ${hi?'hi':''}"><span>${t}</span><b>${v}</b></div>`).join('')}</div>`;
 
+const fichaHTML = (obj, quien) => `<div class="f span2"><label>Ficha técnica (PDF)</label><div class="nav-btns">${obj.ficha ? `<button class="btn sm" type="button" data-verficha="${quien}">📄 Ver ficha técnica</button>` : '<span class="hint">Sin ficha técnica</span>'}${esIng() && !String(obj.ficha||'').startsWith('fichas/') ? `<button class="btn sm pri" type="button" data-subficha="${quien}">📎 ${obj.ficha?'Cambiar':'Adjuntar'} PDF</button>` : ''}</div><div class="hint">${obj.ficha ? 'Se adjunta al Anexo A de la memoria.' : 'Adjunta el PDF para que vaya en el Anexo A.'}</div></div>`;
+
 function paneAnexoA(){
   const A = datosA();
   const T = { cubierta:'Cubierta', muerta:'Carga muerta', viva:'Carga viva', viento:'Viento (B.6.5)', resumen:'Resumen SAP2000' };
@@ -44,6 +46,7 @@ function pintarTabA(){
     inp.addEventListener(ev, () => {
       let v = inp.type === 'checkbox' ? inp.checked : inp.value;
       setP(A, inp.dataset.a, v);
+      for(const q of ['panel','riel']) if(inp.dataset.a === q + '.nombre' && String(A[q].ficha||'').startsWith('fichas/')) A[q].ficha = '';
       if(inp.dataset.a === 'extras.cielo.tipo') A.extras.cielo.w = AnexoA.CIELOS[v] ?? A.extras.cielo.w; // peso típico del tipo elegido
       if(inp.dataset.a === 'lamina.perfil') A.tipo.lamina = v !== 'ninguna';
       if(inp.dataset.a === 'lamina.perfil' && v !== 'ninguna'){ const mat = AnexoA.LAMINAS[v]; A.lamina.wManual = ''; if(mat.calibres && !mat.calibres[A.lamina.calibre]) A.lamina.calibre = Object.keys(mat.calibres).pop(); }
@@ -87,11 +90,12 @@ muerta(A, R){
       <div class="fg g4"><div class="f span2"><label>Panel de la biblioteca</label><select id="selPanel" ${ro()}><option value="">— Escribir datos —</option>${pans.map((p,i) => `<option value="${i}" ${p.nombre===A.panel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         ${fIn(A,'panel.nombre','Referencia del panel',{cls:'span2',num:false})}${fIn(A,'panel.L','Longitud L [m]')}${fIn(A,'panel.W','Ancho A [m]')}${fIn(A,'panel.H','Espesor H [m]')}${fIn(A,'panel.peso','Peso [kg/un]')}
         ${fIn(A,'panel.cargaF','Carga mecánica frontal [Pa]',{h:'De la ficha técnica'})}${fIn(A,'panel.cargaP','Carga mecánica posterior [Pa]')}
-        <div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibPanel">＋ Guardar en biblioteca</button>':''}</div></div>
+        ${fichaHTML(A.panel,'panel')}<div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibPanel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px"><div class="f span2"><label>Riel de la biblioteca</label><select id="selRiel" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         ${fIn(A,'riel.nombre','Referencia del riel',{cls:'span2',num:false})}${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/ml]')}
         ${A.riel.material ? `<div class="hint span4">Ficha técnica: ${[A.riel.material && 'material ' + esc(A.riel.material), A.riel.vmax && 'viento hasta ' + esc(A.riel.vmax) + ' m/s'].filter(Boolean).join(' · ')}</div>` : ''}
-        <div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibRiel">＋ Guardar en biblioteca</button>':''}</div></div>
+        ${fIn(A,'viento.luz','Separación entre perfiles de apoyo del riel [m]',{h:'Distancia entre las vigas o correas metálicas donde se apoya el riel'})}${fIn(A,'riel.luzMax','Separación máxima del fabricante [m]',{ph:'—'})}
+        ${fichaHTML(A.riel,'riel')}<div class="f"><label>&nbsp;</label>${esIng()?'<button class="btn sm" type="button" id="bibRiel">＋ Guardar en biblioteca</button>':''}</div></div>
       <div class="fg g4" style="margin-top:10px">${fIn(A,'dBorde','Riel al borde del panel [m]')}${fIn(A,'tribRiel','Ancho aferente por riel [m]',{ph:fx(R.paneles.tribAuto,3)+' (auto = L/2)',h:'Vacío = la mitad del largo del panel'})}</div></div>`;
   }
   if(A.tipo.lamina && !A.tipo.paneles) h += '<div class="note blue">El material de la cubierta, las correas y las cargas adicionales se escogen en la pestaña <b>Cubierta</b>.</div>';
@@ -133,6 +137,8 @@ viento(A, R){
 resumen(A, R){
   return `<div class="card"><div class="ct">Cargas para SAP2000 [kN/ml]${esIng()?'<button class="btn sm" type="button" id="copiarA">Copiar tabla</button>':''}</div><div id="resA">${RES_A.resumen(A,R)}</div>
     <div class="hint" style="margin-top:8px">Valores redondeados hacia arriba a 3 decimales. W↓ = presión hacia la cubierta, W↑ = succión. Presión mínima de diseño 0.40 kN/m².</div></div>
+    <div class="card"><div class="ct">Fichas técnicas del Anexo A</div>${(() => { const f = [A.tipo.paneles && ['Panel', A.panel], A.tipo.paneles && ['Riel', A.riel]].filter(Boolean);
+      return f.length ? f.map(([t,o]) => `<div class="file"><div class="ic p">PDF</div><div class="nm">${t}: ${esc(o.nombre||'—')}<small>${o.ficha ? 'Adjunta' : 'Falta adjuntar en Carga muerta'}</small></div>${o.ficha ? `<button class="btn sm" type="button" data-verficha2="${t==='Panel'?'panel':'riel'}">Ver</button>` : pill('pend','Falta')}</div>`).join('') + '<div class="hint" style="margin-top:6px">Se unirán al PDF final de la memoria, después de las páginas del Anexo A.</div>' : '<div class="hint">Sin fichas técnicas.</div>'; })()}</div>
     <div class="card"><div class="ct">Páginas del Anexo A</div>
       <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo A con el formato de la memoria (carta).</p>
       <button class="btn grn" type="button" id="printA">🖨 Imprimir / Guardar PDF del Anexo A</button></div>`;
@@ -152,6 +158,7 @@ cubierta(A, R){
 muerta(A, R){
   let h = '';
   if(R.paneles){ const p = R.paneles;
+    if(p.luzExcede) h += `<div class="note amber"><b>Separación de apoyos muy grande:</b> ${fx(p.luz,2)} m supera los ${fx(p.luzMax,2)} m que permite el fabricante para el riel ${esc(A.riel.nombre)}.</div>`;
     h += `<h4 class="sub">Paneles solares → riel</h4>` + res([['Peso del panel por área', fx(p.wPanel)+' kg/m²'],['Ancho aferente por riel', fx(p.trib)+' m'],['Separación entre rieles', fx(p.sepRieles,2)+' m'],
       ['Panel sobre el riel', `${fx(p.kgmPanel,2)} kg/m → ${fx(p.Dpanel,4)} kN/m`],['Riel '+esc(A.riel.nombre), fx(p.Driel,4)+' kN/m'],...(p.ext.length?[['Cargas adicionales', `${fx(p.wExt,2)} kg/m² × ${fx(p.trib,3)} m → ${fx(p.Dext,4)} kN/m`]]:[]),['D total sobre riel', fx(p.Dr)+' kN/ml', 1]]); }
   if(R.lamina){ const l = R.lamina;
@@ -211,20 +218,41 @@ cubierta(A){
 },
 muerta(A){
   const bib = S.cfg.biblioteca = S.cfg.biblioteca || {};
-  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value]; if(x){ if(destino === 'panel') Object.assign(A.panel, { H:'', cargaF:'', cargaP:'' }); if(destino === 'riel') Object.assign(A.riel, { material:'', vmax:'' }); delete A.riel.Ix; delete A.riel.Iy; Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); } }; };
+  const usar = (sel, lista, destino) => { const s = $(sel); if(!s) return; s.onchange = () => { const x = (bib[lista]||[])[s.value];
+    if(!x){ A[destino].ficha = ''; A[destino].nombre = ''; guardarMemoria(); pintarTabA(); return; } // escribir datos propios
+    if(destino === 'panel') Object.assign(A.panel, { H:'', cargaF:'', cargaP:'', ficha:'' });
+    if(destino === 'riel') Object.assign(A.riel, { material:'', vmax:'', luzMax:'', ficha:'' });
+    delete A.riel.Ix; delete A.riel.Iy; Object.assign(A[destino], x); guardarMemoria(); pintarTabA(); }; };
   usar('#selPanel', 'paneles', 'panel'); usar('#selRiel', 'rieles', 'riel');
   const guardarBib = async (lista, obj) => {
     if(!obj.nombre?.trim()) return toast('Escribe primero la referencia.');
-    bib[lista] = (bib[lista] || []).filter(x => x.nombre !== obj.nombre); bib[lista].push({ ...obj });
+    const nuevo = { ...obj };
+    if(nuevo.ficha && !nuevo.ficha.startsWith('fichas/') && !nuevo.ficha.startsWith('biblioteca/')){
+      const dest = `biblioteca/${lista}-${nuevo.nombre.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}.pdf`;
+      await sb.storage.from(BUCKET).remove([dest]);
+      const { error:ec } = await sb.storage.from(BUCKET).copy(nuevo.ficha, dest);
+      if(ec) return err(ec, 'No se pudo copiar la ficha'); nuevo.ficha = dest;
+    }
+    bib[lista] = (bib[lista] || []).filter(x => x.nombre !== nuevo.nombre); bib[lista].push(nuevo);
     const { error } = await sb.from('mem_config').update({ biblioteca:bib }).eq('id', 1);
     error ? err(error) : (toast(`"${obj.nombre}" guardado en la biblioteca.`), pintarTabA());
   };
+  $$('[data-verficha]').forEach(b => b.onclick = async () => { const u = await urlFicha(A[b.dataset.verficha].ficha); u ? window.open(u, '_blank') : toast('No se encontró el PDF.'); });
+  $$('[data-subficha]').forEach(b => b.onclick = async () => {
+    const q = b.dataset.subficha, file = await elegirArchivo('application/pdf'); if(!file) return;
+    if(file.type !== 'application/pdf') return toast('El archivo debe ser PDF.');
+    try{ toast('Subiendo ficha técnica…', 15000);
+      const path = `${S.m.id}/fichas/${q}.pdf`; await subir(path, file, 'application/pdf');
+      A[q].ficha = path; guardarMemoria(); toast(`Ficha técnica adjunta (${(file.size/1048576).toFixed(1)} MB).`); pintarTabA();
+    }catch(e){ err(e, 'No se pudo subir el PDF'); }
+  });
   if($('#bibPanel')) $('#bibPanel').onclick = () => guardarBib('paneles', A.panel);
   if($('#bibRiel')) $('#bibRiel').onclick = () => guardarBib('rieles', A.riel);
 },
 viento(A){ const W = AnexoA.calcular(A).viento; if(W.ok && $('#expo')) $('#expo').innerHTML = expoHTML(W); },
 resumen(A){
   const R = AnexoA.calcular(A);
+  $$('[data-verficha2]').forEach(b => b.onclick = async () => { const u = await urlFicha(A[b.dataset.verficha2].ficha); u ? window.open(u, '_blank') : toast('No se encontró el PDF.'); });
   if($('#copiarA')) $('#copiarA').onclick = () => {
     const t = [...document.querySelectorAll('table.sapres tr')].map(tr => [...tr.children].map(td => td.textContent).join('\t')).join('\n');
     navigator.clipboard.writeText(t).then(() => toast('Tabla copiada: pégala en Excel o en tus notas de SAP2000.'));
@@ -256,6 +284,8 @@ function anexoAPrintHTML(A, R){
       <h4>${s}-2 Perfil de soporte — ${esc(A.riel.nombre)}</h4>${kv([['Alto [m]',fx(AnexoA.num(A.riel.alto),4)],['Ancho [m]',fx(AnexoA.num(A.riel.ancho),4)],['Peso [kg/ml]',fx(AnexoA.num(A.riel.peso),3)],...(A.riel.material?[['Material',esc(A.riel.material)]]:[])])}
       <h4>${s}-3 Cargas lineales sobre el perfil</h4>${svgPanel(A, p)}
       ${kv([['Ubicación del perfil respecto al borde del panel',fx(AnexoA.num(A.dBorde),2)+' m'],['Separación entre perfiles',fx(p.sepRieles,2)+' m'],['Ancho aferente para cada perfil',fx(p.trib,3)+' m'],['Área aferente para cada perfil (por panel)',fx(p.areaTrib,3)+' m²']])}
+      ${p.luzMax ? `<p class="ax-nota"><b>Nota:</b> la separación de los perfiles metálicos donde se apoyan los rieles ${esc(A.riel.nombre)} no puede ser mayor a ${fx(p.luzMax,2)} m, según la ficha técnica del fabricante.${p.luz ? ` En este proyecto la separación es de ${fx(p.luz,2)} m${p.luzExcede ? ', <b>que supera el máximo</b>' : ''}.` : ''}</p>` : ''}
+      ${[A.panel.ficha && 'panel solar', A.riel.ficha && 'riel'].filter(Boolean).length ? `<p>Se anexan las fichas técnicas del ${[A.panel.ficha && 'panel solar ' + esc(A.panel.nombre), A.riel.ficha && 'riel ' + esc(A.riel.nombre)].filter(Boolean).join(' y del ')}.</p>` : ''}
       <p>Carga del panel sobre el perfil: w = ${fx(p.wPanel,3)} kg/m² × ${fx(p.trib,3)} m = ${fx(p.kgmPanel,2)} kg/m → ${fx(p.Dpanel,4)} kN/m (g = 9.81 m/s²).</p>
       ${p.ext.length ? `<p>Cargas adicionales sobre la estructura de paneles: ${p.ext.map(x => `${esc(x.n)} ${fx(x.w,1)} kg/m²`).join(', ')} = ${fx(p.wExt,2)} kg/m² × ${fx(p.trib,3)} m → ${fx(p.Dext,4)} kN/m.</p>` : ''}
       ${tb(['Ítem','Unidad','Cantidad','Peso/unidad [kN/m]','Peso total [kN/m]'],[['Panel solar','ml','1',fx(p.Dpanel,4),fx(p.Dpanel,4)],[esc(A.riel.nombre),'ml','1',fx(p.Driel,4),fx(p.Driel,4)],...(p.ext.length?[['Cargas adicionales','ml','1',fx(p.Dext,4),fx(p.Dext,4)]]:[])],fx(p.D,4))}
@@ -329,3 +359,6 @@ function imprimirConMargen(titulo){
   window.print();
   document.title = t; setTimeout(() => st.remove(), 500);
 }
+
+// URL de una ficha técnica: las de la biblioteca base viven en el sitio (fichas/), las subidas en Supabase
+async function urlFicha(path){ if(!path) return null; return path.startsWith('fichas/') ? path : urlDe(path); }
