@@ -22,6 +22,16 @@ Usuario principal: Gabriel Tellez ("Amo"), ingeniero civil. Explicar en español
 tipo (natural|empresa), prop, docTipo (NIT|C.C.|C.E.), doc, rep, dirCorr, tel, mail, proyecto, uso, dir, lote, mz, mun, depto,
 coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 
+## Anexos (`mem_memorias.anexos` jsonb)
+- `anexos.A` = datos del Anexo A (ver `AnexoA.defaults()` en `calc/anexoA.js`). Cálculo puro en `calc/anexoA.js`, pantalla en `anexoA-ui.js`.
+- Biblioteca de paneles y rieles: `mem_config.biblioteca` = { paneles:[{nombre,L,W,peso}], rieles:[{nombre,alto,ancho,peso}] }.
+- Correcciones acordadas frente a los Excel originales (26-oct-2026): D de lámina multiplica por la separación (el Excel dividía);
+  peso de lámina kg/m ÷ ancho útil; ancho aferente del riel = L/2 (editable) en muerta, viva y viento; g = 9.81;
+  exposición según B.6.5.6.3 (propuesta automática + opción manual); CN leídos de las figuras B.6.5-18A (SPRFV, θ<7.5° usa 0°)
+  y B.6.5-19A (CyR, interpolación por θ y clase de área); zona 3 = franja exterior de ancho a; Kz con z mín. 4.0 m (9.0 m CyR exp. B);
+  Kd = 0.85 (edificios/cubiertas); presión mínima 0.40 kN/m².
+- Impresión de anexos: `imprimirConMargen()` agrega `@page` con márgenes solo al imprimir (la portada usa margen 0).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -29,7 +39,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 ## Estado
 - Hecho: login, lista con medidor de espacio, nueva memoria (consecutivo DOC-MEM-DD-MM-AA), ficha con autoguardado,
   imagen 3D, revisiones, portada imprimible (carta), Configuración (perfiles, datos del ingeniero, firma, roles), vista Consulta.
-- Siguiente: Anexo A (cargas) con las plantillas Excel de Amo; luego B (FHE), C (SAP2000), D (IPE/HEA/tubulares, zapatas,
+- Hecho también: Anexo A (cargas muerta, viva y viento B.6.5 para cubierta libre a un agua), con páginas imprimibles.
+- Siguiente: B (FHE), C (SAP2000), D (IPE/HEA/tubulares, zapatas,
   pedestales), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas

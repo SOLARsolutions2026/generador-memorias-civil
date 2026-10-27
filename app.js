@@ -230,7 +230,7 @@ const STEPS = [
   { id:'ficha',      ph:'Proyecto',   n:'0', t:'Ficha del proyecto',      s:'Propietario, proyecto, ubicación' },
   { id:'revisiones', ph:'Proyecto',   n:'1', t:'Control de revisiones',   s:'Tabla de la portada' },
   { id:'portada',    ph:'Proyecto',   n:'2', t:'Portada',                 s:'Vista previa e impresión' },
-  { id:'A',  ph:'Cálculos',   n:'A', t:'Anexo A — Cargas',        s:'Próximamente', off:1 },
+  { id:'A',  ph:'Cálculos',   n:'A', t:'Anexo A — Cargas',        s:'Muerta, viva y viento' },
   { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Próximamente', off:1 },
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — SAP2000',       s:'Próximamente', off:1 },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Próximamente', off:1 },
@@ -253,7 +253,7 @@ async function abrirMemoria(id, paso){
 }
 function renderWS(cur){
   const m = S.m, pasos = esIng() ? STEPS : STEPS.filter(s => s.id === 'portada');
-  const st = s => s.off ? '' : s.id === 'ficha' ? (fichaCompleta() ? 'ok' : 'wip') : s.id === 'revisiones' ? (S.revs.length ? 'ok' : 'wip') : '';
+  const st = s => s.off ? '' : s.id === 'ficha' ? (fichaCompleta() ? 'ok' : 'wip') : s.id === 'revisiones' ? (S.revs.length ? 'ok' : 'wip') : s.id === 'A' ? (m.anexos?.A ? 'wip' : '') : '';
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
     side += `<button type="button" class="step ${s.id===cur?'on':''}" data-step="${s.id}" ${s.off?'disabled':''}><span class="dot ${st(s)}">${st(s)==='ok'?'✓':s.n}</span><span class="lbl">${s.t}<small>${s.s}</small></span></button>`; });
@@ -286,7 +286,7 @@ function marcaGuardado(estado){ const el = $('#saved'); if(!el) return;
 const guardarMemoria = debounce(async () => {
   const m = S.m; if(!m) return;
   marcaGuardado('...');
-  const { error } = await sb.from('mem_memorias').update({ ficha:m.ficha, titulo:(m.ficha.proyecto||'').trim() || 'Sin nombre', perfil_id:m.perfil_id, estado:m.estado }).eq('id', m.id);
+  const { error } = await sb.from('mem_memorias').update({ ficha:m.ficha, anexos:m.anexos || {}, titulo:(m.ficha.proyecto||'').trim() || 'Sin nombre', perfil_id:m.perfil_id, estado:m.estado }).eq('id', m.id);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
   else m.titulo = (m.ficha.proyecto||'').trim() || 'Sin nombre';
 }, 700);
@@ -360,6 +360,7 @@ async function subirPortada(file, luego){
 
 // ═══ PANELES DE CADA PASO ═══
 const PANES = {
+A(){ paneAnexoA(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;
