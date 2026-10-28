@@ -141,7 +141,8 @@ function torsionHTML(K, M, ro_){
       <div class="f"><label>Caso para Y</label>${selC('casoY', 'DERY')}</div></div>
     ${!M?.ok ? '<div class="note amber">Primero sube el modelo en el Anexo C.</div>'
       : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En SAP2000, después de correr el análisis: <b>File → Export → SAP2000 .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge DERX y DERY). Luego usa «Reemplazar» en el Anexo C.
-          <details style="margin-top:6px"><summary>O pega aquí la tabla «Joint Displacements» copiada desde SAP</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
+          <details open style="margin-top:6px"><summary><b>O pega aquí la tabla «Joint Displacements» copiada desde SAP</b> (en la ventana de la tabla: Edit → Copy Entire Table)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
+    ${hay ? `<details style="margin-top:8px"><summary class="hint">Usar otra tabla de desplazamientos (pegarla desde SAP)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	StepType	U1	U2 …" ${ro_}></textarea></details>` : ''}
     ${esIng() && M?.ok ? '<button class="btn sm pri" type="button" id="torCalc" style="margin-top:8px">⚙ Revisar irregularidad torsional</button>' : ''}
     ${res?.ok ? `<div class="tor-res">${filaDir('X')}${filaDir('Y')}</div><div class="hint">Calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))}. Si cambias el modelo, vuelve a revisar.</div>` : ''}
     ${res?.error ? `<div class="note amber" style="margin-top:8px">${esc(res.error)}</div>` : ''}</div>`;
@@ -161,10 +162,15 @@ function activarTorsion(K, M){
       if(!D.n){ T.res = { error: D.tablas.length
           ? `El archivo trae ${D.tablas.length} tablas, pero ninguna de desplazamientos de nudos${D.conResultados.length ? ' (tablas de resultados: ' + D.conResultados.join(', ') + ')' : ' ni de ningún otro resultado del análisis'}. Revisa que al exportar estuviera marcada ANALYSIS RESULTS → Joint Output → Displacements y que el modelo estuviera corrido (candado cerrado).`
           : 'No se encontraron desplazamientos en el archivo ni en la tabla pegada.' }; guardarMemoria(); return paneCombos(); }
-      const dir = (nudos, caso) => { const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) }));
+      // el nombre del caso se compara sin importar mayúsculas ni espacios de más
+      const nor = t => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+      const dir = (nudos, caso0) => { const caso = D.casos.find(c => nor(c) === nor(caso0));
+        if(!caso) throw new Error(`No encuentro el caso «${caso0}». Casos en los datos: ${D.casos.join(' · ')}.`);
+        const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) }));
         const falt = n.filter(x => x.U1 === undefined).map(x => x.j); if(falt.length) throw new Error(`No hay desplazamientos del nudo ${falt.join(', ')} en el caso ${caso}.`);
         n.forEach(x => x.D = Math.hypot(x.U1, x.U2)); return { caso, n, t:Combos.torsion(n[0], n[1]) }; };
       const X = dir(nx, T.casoX), Y = dir(nyy, T.casoY);
+      T.casoX = X.caso; T.casoY = Y.caso;
       T.res = { ok:true, X, Y, fecha:new Date().toISOString() };
       const tipos = [X.t.tipo, Y.t.tipo];
       K.irrP['1bP'] = tipos.includes('1bP'); K.irrP['1aP'] = !K.irrP['1bP'] && tipos.includes('1aP');
