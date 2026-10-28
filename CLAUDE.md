@@ -97,6 +97,11 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   cortante φv/Aw correctos, torsión I por esfuerzo, L y K por eje, J de tabla; HSS t = 0.93t, Q (f = Fcr con Q=1), torsión (i)(ii)(iii), Aw = 2·h·t;
   tensión L/rmín ≤ 300, pernos 0.75·2.4·d·t·Fu y corte; barra: solo tensión, rotura 0.75, aviso si hay compresión). Verificado contra los Excel: IPE 200 φMn 56.5, IPE 120 13.2 (int 0.57).
   Dibujo de la sección con cotas (`svgSeccion`, I con radios, HSS, barra) + propiedades principales (`propsSeccion`, unidades 10⁶/10³ según tamaño) en pantalla (`#dSec`) y en el PDF de cada elemento.
+  Diseño del software (mejora 9, aprobada 27-oct): `AnexoC.disenoDe` lee «STEEL DESIGN 1 - SUMMARY DATA - <norma>» y «STEEL DESIGN 2 - PMM DETAILS - <norma>» (columnas buscadas por patrón,
+  pendiente confirmar nombres con un export real de Amo) → `modelo.diseno` {norma, n, max, porticos, conL, frames{F:{L,ratio,combo,tipo,portico,l33,l22,lltb,k33,k22,cb}}} (l = factor × L).
+  Anexo C revisión: aviso de diseño, relaciones > 1, norma ≠ 360-10, pórtico vs `K.sisR` (DES→SMF, DMO→IMF, DMI→OMF).
+  Anexo D: `calcMet` revisa cada elemento del grupo con sus filas (`res.porEl`, `res.Fc` = el que controla, `res.rp` = máx. del software); `el.fuente` 'programa' (L, K, Cb del software por elemento, `el.ov{F:{Lx,Ly,Lb,Cb}}` = ✎) | 'manual';
+  nuevos desde el Anexo C = 'programa' si hay diseño con longitudes. Bloque `progHTML` en cada elemento, resumen `pintarCompSw` (#dComp, «Revisar» si |dif| > 15 %), tabla en el PDF `swPrintHTML` (10 mayores).
   Botón «Ordenar por nombre» (orden natural) en las tres pestañas; el orden guardado es el del PDF.
   Concreto (`calc/concreto.js` = `Concreto`, pantalla `anexoDc-ui.js`): reacciones de «JOINT REACTIONS» del .$2k (`AnexoC.reacciones`, resumen en `modelo.reac` {nudos,casos,res,serv});
   combinaciones `D.cServ` / `D.cRes` (por defecto serv = con D y no de resistencia). `D.zap[]` {nom Z-n, nudos[], pos centrada|medianera|esquinera (αs 40/30/20), B,L,h,Df [m], ped (enlace → bx,by,Hp),

@@ -127,7 +127,7 @@ function pintarRevC(){
   const A = datosA(), RA = AnexoA.calcular(A), bOn = S.m.anexos?.B && S.m.anexos.B.aplica !== false;
   const RB = bOn ? calcB() : null;
   const K = S.m.anexos?.K, CB = K && typeof Combos !== 'undefined' ? Combos.calcular(K, bOn).activas : null;
-  const filas = AnexoC.revisar(C.modelo, RA, RB, CB);
+  const filas = AnexoC.revisar(C.modelo, RA, RB, CB, K?.sisR);
   const n = k => filas.filter(f => f.estado === k).length;
   const ic = { ok:'✓', no:'✗', info:'!' };
   const grupos = [...new Set(filas.map(f => f.grupo))];

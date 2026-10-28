@@ -25,14 +25,111 @@ function filasDe(el, G){
   const g = S.m.anexos?.C?.modelo?.fuerzas?.grupos?.find(x => x.sec + '|' + x.fun === el.grupo);   // sin descarga: filas críticas guardadas
   return g ? [...Object.values(g.crit), ...Object.values(g.env).flatMap(e => [e.max, e.min])].filter(Boolean) : [];
 }
-// Calcula y guarda el resumen en el elemento (para la lista, la barra de «terminado» y la impresión)
+// Diseño en acero del software (Anexo C), si el archivo lo trae
+const disenoSw = () => { const Dz = S.m.anexos?.C?.modelo?.diseno; return Dz?.n ? Dz : null; };
+// Longitudes [m], K y Cb que usó el software en un elemento del modelo, con los cambios a mano (✎) del ingeniero
+function valoresSw(el, id, Dz){
+  const d = Dz?.frames?.[id]; if(!d) return null;
+  const L = d.L || 0, ov = el.ov?.[id] || {}, r = v => +(+v).toFixed(3);
+  const v = { L, Lx:r(d.l33 != null ? d.l33*L : L), Ly:r(d.l22 != null ? d.l22*L : L), Lb:r(d.lltb != null ? d.lltb*L : d.l22 != null ? d.l22*L : L), Kx:d.k33 || 1, Ky:d.k22 || 1, Cb:d.cb || 1 };
+  const ed = {}; for(const k of ['Lx','Ly','Lb','Cb']) if(ov[k] !== undefined && ov[k] !== '' && isFinite(parseFloat(ov[k]))){ v[k] = parseFloat(ov[k]); ed[k] = true; }
+  return { ...v, ed, rp:d.ratio, combo:d.combo };
+}
+// Calcula y guarda el resumen en el elemento (para la lista, la barra de «terminado» y la impresión).
+// Con las filas del modelo, cada elemento del grupo se revisa con sus propias fuerzas (y, si se escoge, con las longitudes y Cb del software).
 function calcMet(el, G){
   const filas = filasDe(el, G);
   if(!filas.length){ el.res = { ok:false, error: el.fuerzas === 'manual' ? 'Escribe las fuerzas.' : 'Escoge el grupo de elementos del modelo.' }; return null; }
-  const R = AnexoD.revisar(el, filas);
-  el.res = R.ok ? { ok:true, ratio:+R.ratio.toFixed(3), cumple:R.cumple, n:R.filas, fecha:new Date().toISOString(),
-    checks:Object.fromEntries(Object.entries(R.checks).map(([k, v]) => [k, { r:+v.r.toFixed(4), f:v.f }])), avisos:R.avisos } : { ok:false, error:R.error };
+  const Dz = disenoSw(), sw = el.fuente === 'programa' && !!Dz;
+  let R, porEl = null;
+  if(el.fuerzas !== 'manual' && G?.[el.grupo]){
+    const ids = [...new Set(filas.map(f => f.F))], lista = [];
+    for(const id of ids){
+      const fi = filas.filter(f => f.F === id), v = valoresSw(el, id, Dz);
+      const Ri = AnexoD.revisar(sw && v ? { ...el, Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Lz:v.Lb, Kx:v.Kx, Ky:v.Ky, Kz:1, Cb:v.Cb } : el, fi);
+      lista.push({ id, Ri, v });
+    }
+    const okL = lista.filter(x => x.Ri.ok);
+    if(!okL.length) R = lista[0].Ri;
+    else {
+      const g = okL.reduce((a, b) => b.Ri.ratio > a.Ri.ratio ? b : a);
+      R = { ...g.Ri, filas:filas.length, Fc:g.id, avisos:[...g.Ri.avisos] };
+      const sin = lista.length - okL.length;
+      if(sin) R.avisos.push(`${sin} elemento${sin > 1 ? 's' : ''} del grupo no se revisaron: falta Lx${sw ? ' (el software no trae sus longitudes)' : ''}.`);
+    }
+    porEl = lista.map(({ id, Ri, v }) => ({ F:id, L:v?.L ?? null, r:Ri.ok ? +Ri.ratio.toFixed(3) : null, rp:v?.rp ?? null,
+      u:Ri.ok ? { Lx:+(Ri.Lx/1000).toFixed(3), Ly:+(Ri.Ly/1000).toFixed(3), Lb:+(Ri.Lb/1000).toFixed(3), Kx:Ri.Kx, Ky:Ri.Ky, Cb:Ri.Cb } : null,
+      sw:v ? { Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Kx:v.Kx, Ky:v.Ky, Cb:v.Cb } : null, ed:v?.ed || {} }));
+  } else R = AnexoD.revisar(el, filas);
+  el.res = R.ok ? { ok:true, ratio:+R.ratio.toFixed(3), cumple:R.cumple, n:R.filas, fecha:new Date().toISOString(), Fc:R.Fc || null, fuente:sw ? 'programa' : 'manual',
+    rp: porEl && porEl.some(x => x.rp != null) ? Math.max(...porEl.map(x => x.rp ?? 0)) : null, porEl,
+    checks:Object.fromEntries(Object.entries(R.checks).map(([k, v]) => [k, { r:+v.r.toFixed(4), f:v.f }])), avisos:R.avisos } : { ok:false, error:R.error, porEl };
   return R;
+}
+// Diferencia plantilla frente al software, en %
+const difSw = (r, rp) => r == null || !rp ? null : (r - rp)/rp*100;
+const colDif = d => d == null ? '#64748b' : Math.abs(d) <= 5 ? '#057a55' : Math.abs(d) <= 15 ? '#b45309' : '#b91c1c';
+const txtDif = d => d == null ? '—' : `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(0)} %`;
+
+// Bloque «Comparación con el diseño del software» dentro de cada elemento
+function progHTML(e){
+  if(e.fuerzas === 'manual' || !e.grupo) return '';
+  const Dz = disenoSw(), P = e.res?.porEl;
+  if(!Dz) return '<p class="hint" style="margin-top:8px">Si al exportar marcas también las tablas de diseño en acero (Design Data → Steel Design 1 – Summary Data y Steel Design 2 – PMM Details), aquí verás la comparación con el software y podrás usar sus longitudes y Cb.</p>';
+  if(!P?.length) return '';
+  const sw = e.fuente === 'programa';
+  const filas = [...P].sort((a, b) => (b.r ?? -1) - (a.r ?? -1));
+  const celda = (x, k) => {
+    const val = sw ? (x.u?.[k] ?? x.sw?.[k]) : x.sw?.[k];
+    if(val == null) return '—';
+    if(sw && esIng() && x.sw) return `<input class="ov-in" data-ov="${esc(x.F)}|${k}" value="${esc(String(+(+val).toFixed(3)))}" inputmode="decimal" aria-label="${k} del elemento ${esc(x.F)}"/>${x.ed[k] ? ' ✎' : ''}`;
+    return fx(val, 2) + (sw && x.ed[k] ? ' ✎' : '');
+  };
+  const fila = x => { const d = difSw(x.r, x.rp);
+    return `<tr class="${x.F === e.res.Fc ? 'ctl' : ''}"><td><b>E${esc(x.F)}</b>${x.F === e.res.Fc ? ' <span class="hint">controla</span>' : ''}</td><td class="n">${fx(x.L,2)}</td>
+      <td class="n">${celda(x,'Lx')}</td><td class="n">${celda(x,'Ly')}</td><td class="n">${celda(x,'Lb')}</td><td class="n">${x.sw ? `${fx(x.sw.Kx,2)} / ${fx(x.sw.Ky,2)}` : '—'}</td><td class="n">${celda(x,'Cb')}</td>
+      <td class="n">${x.rp != null ? fx(x.rp,3) : '—'}</td><td class="n"><b>${x.r != null ? fx(x.r,3) : '—'}</b></td><td class="n" style="color:${colDif(d)};font-weight:800">${txtDif(d)}</td></tr>`; };
+  const tb = rs => `<div class="tw"><table class="t sw-t"><thead><tr><th>Elemento</th><th>Long. [m]</th><th>Lx [m]</th><th>Ly [m]</th><th>Lb [m]</th><th>Kx / Ky</th><th>Cb</th><th>Software</th><th>Plantilla</th><th>Diferencia</th></tr></thead><tbody>${rs.map(fila).join('')}</tbody></table></div>`;
+  return `<div class="sw-box"><h4 class="sub" style="margin-top:0">Comparación con el diseño del software</h4>
+    <div class="note blue" style="margin-bottom:8px">${sw ? `El grupo tiene ${P.length} elemento${P.length > 1 ? 's' : ''} en el modelo. Cada uno se revisa con <b>sus fuerzas y con las longitudes, K y Cb del software</b>. Puedes cambiar Lx, Ly, Lb o Cb de un elemento (queda marcado ✎).`
+      : `Longitudes y Cb de la tabla: los que usó el software (referencia). Relación de la plantilla: con <b>tus longitudes</b>, las mismas para todo el grupo.`}</div>
+    ${tb(filas.slice(0, 8))}${filas.length > 8 ? `<details class="d-opc"><summary>Ver los otros ${filas.length - 8} elementos</summary>${tb(filas.slice(8))}</details>` : ''}
+    <p class="hint">Diferencia hasta ±5 % en verde (la plantilla usa las propiedades de catálogo con radios; la sección del modelo suele no tenerlos) · 5–15 % ámbar · más de 15 % rojo: revisa longitud, Cb o combinaciones.</p>
+    ${esIng() ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${sw ? `<button class="btn sm" type="button" data-fuente="reset">Volver a los valores del software</button><button class="btn sm" type="button" data-fuente="manual">Usar mis longitudes (a mano)</button>`
+      : Dz.conL ? '<button class="btn sm pri" type="button" data-fuente="programa">Usar longitudes y Cb del software</button>' : '<span class="hint">El archivo no trae los factores de longitud y Cb: exporta también «Steel Design 2 – PMM Details».</span>'}</div>` : ''}</div>`;
+}
+function activarProg(e){
+  $$('[data-fuente]').forEach(b => b.onclick = () => { const k = b.dataset.fuente;
+    if(k === 'reset') e.ov = {}; else e.fuente = k === 'programa' ? 'programa' : 'manual';
+    guardarMemoria(); paneAnexoD(); });
+  $$('[data-ov]').forEach(i => i.addEventListener('change', () => { const [id, k] = i.dataset.ov.split('|');
+    e.ov = e.ov || {}; e.ov[id] = e.ov[id] || {}; const v = i.value.trim().replace(',', '.');
+    if(v === '') delete e.ov[id][k]; else e.ov[id][k] = v;
+    guardarMemoria(); pintarResMet(e); }));
+}
+// Tabla de elementos en el PDF (los 10 de mayor relación)
+function swPrintHTML(e){
+  const P = e.res?.porEl; if(!P || P.length < 1 || !disenoSw()) return '';
+  const rs = [...P].sort((a, b) => (b.r ?? -1) - (a.r ?? -1)).slice(0, 10), nm = esc(swNom());
+  return `<table class="ax-tb"><thead><tr><th>Elemento</th><th>L [m]</th><th>Lx [m]</th><th>Ly [m]</th><th>Lb [m]</th><th>Cb</th><th>Relación modelo</th><th>Relación memoria</th></tr></thead><tbody>${rs.map(x => { const u = x.u || {};
+    return `<tr><td>${esc(x.F)}${x.F === e.res.Fc ? ' (controla)' : ''}</td><td class="c">${fx(x.L,2)}</td><td class="c">${fx(u.Lx,2)}</td><td class="c">${fx(u.Ly,2)}</td><td class="c">${fx(u.Lb,2)}</td><td class="c">${fx(u.Cb,2)}</td><td class="c">${x.rp != null ? fx(x.rp,3) : '—'}</td><td class="c">${x.r != null ? fx(x.r,3) : '—'}</td></tr>`; }).join('')}</tbody></table>
+    <p class="ax-nota">Relación modelo = resultado del diseño en acero del ${nm}; relación memoria = esta revisión (NSR-10 F.2).${P.length > 10 ? ` Se muestran los 10 elementos de mayor relación de ${P.length}.` : ''}</p>`;
+}
+// Resumen de todos los perfiles: software frente a plantilla
+async function pintarCompSw(D){
+  const box = $('#dComp'); if(!box || !disenoSw() || !D.met.length) return;
+  let G = null; try{ G = await filasModelo(); }catch(err){ console.warn(err); }
+  for(const e of D.met) calcMet(e, G);
+  const b = $('#dComp'); if(!b) return;
+  const fil = D.met.map(e => { const r = e.res, d = r?.ok ? difSw(r.ratio, r.rp) : null, c = r?.checks?.int?.f?.c || '';
+    const est = !r?.ok ? pill('gray', 'Sin datos') : pill(r.cumple ? 'ok' : 'no', r.cumple ? 'Cumple' : 'No cumple') + (d != null && Math.abs(d) > 15 ? ' ' + pill('pend', 'Revisar') : '');
+    return `<tr data-selcomp="${e.id}" class="sw-row"><td><b>${esc(e.nom)}</b></td><td>${esc(nomSec(e))}</td><td>${esc(e.desc || '')}</td><td class="n">${r?.porEl?.length || '—'}</td><td>${r?.Fc ? 'E' + esc(r.Fc) : '—'}</td><td>${esc(c)}</td>
+      <td class="n">${r?.rp != null ? fx(r.rp,2) : '—'}</td><td class="n"><b>${r?.ok ? fx(r.ratio,2) : '—'}</b></td><td class="n" style="color:${colDif(d)};font-weight:800">${txtDif(d)}</td><td>${est}</td><td class="hint">${r?.fuente === 'programa' ? 'del software' : 'a mano'}</td></tr>`; }).join('');
+  b.innerHTML = `<div class="card"><div class="ct">Comparación con el diseño del software</div>
+    <div class="tw"><table class="t sw-t"><thead><tr><th>Elemento</th><th>Sección</th><th>Descripción</th><th>Elem.</th><th>Controla</th><th>Combinación</th><th>Software</th><th>Plantilla</th><th>Diferencia</th><th></th><th>Longitudes</th></tr></thead><tbody>${fil}</tbody></table></div>
+    <p class="hint">«Revisar» = diferencia mayor que 15 %: toca la fila para abrir el elemento y ver qué valor no coincide.</p></div>`;
+  $$('[data-selcomp]').forEach(t => t.onclick = () => { selMet = t.dataset.selcomp; paneAnexoD(); window.scrollTo({ top:0, behavior:'smooth' }); });
+  const lst = $$('.d-el[data-sel]'); lst.forEach(x => { const el = D.met.find(m => m.id === x.dataset.sel); const p = x.querySelector('.pill'); if(el && p) p.outerHTML = pillRes(el.res); });
 }
 
 // Ordena la lista por nombre con los números en orden natural (PF-2 antes que PF-10). El orden se guarda y es el mismo del PDF.
@@ -55,9 +152,11 @@ function paneAnexoD(){
         <button class="btn sm" type="button" id="dNuevo" style="width:100%;margin-top:6px">＋ Agregar elemento</button>
         ${D.met.length > 1 ? '<button class="btn sm" type="button" data-ordenar="met" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>' : ''}` : ''}
     </div><div id="dDet">${sel ? detMetHTML(sel) : '<div class="card"><p class="muted">Crea o escoge un elemento.</p></div>'}</div></div>
+    <div id="dComp"></div>
     <div class="card"><div class="ct">Páginas del Anexo D</div><button class="btn grn" type="button" id="printD">🖨 Imprimir / Guardar PDF del Anexo D</button></div>`;
   pane(h);
   activarTabsD();
+  pintarCompSw(D);
   $$('[data-sel]').forEach(b => b.onclick = () => { selMet = b.dataset.sel; paneAnexoD(); });
   if($('#printD')) $('#printD').onclick = () => imprimirD();
   if(!esIng()){ if(sel) pintarResMet(sel); return; }
@@ -69,7 +168,7 @@ function paneAnexoD(){
     for(const g of Fz.grupos){
       const key = g.sec + '|' + g.fun; if(usados.has(key)) continue;
       const t = AnexoD.desdeNombre(g.sec); if(!t){ omit.push(g.sec); continue; }
-      const e = nuevoMet(D.met.length + 1, { ...t, desc:g.fun, grupo:key, Lx:'', acero: t.tipo === 'HSS' ? 'A500 Gr C' : t.tipo === 'BAR' ? 'A36' : 'A572 Gr 50' });
+      const e = nuevoMet(D.met.length + 1, { ...t, desc:g.fun, grupo:key, Lx:'', fuente: disenoSw()?.conL ? 'programa' : 'manual', acero: t.tipo === 'HSS' ? 'A500 Gr C' : t.tipo === 'BAR' ? 'A36' : 'A572 Gr 50' });
       calcMet(e, G); D.met.push(e);
     }
     selMet = D.met[0]?.id; guardarMemoria(); paneAnexoD();
@@ -93,9 +192,11 @@ function detMetHTML(e){
     <div class="f" style="margin:8px 0"><label>Tipo de sección</label>${tipoSeg}</div>
     <div class="fg g4">${e.tipo === 'I' ? perfilSel : e.tipo === 'HSS' ? fIn(e,'H','Alto H [mm]') + fIn(e,'B','Ancho B [mm]') + fIn(e,'t','Espesor t [mm]',{h:'Se usa 0.93·t (F.2.2.4.2)'}) : fIn(e,'d','Diámetro [mm]',{h:'1/2" = 12.7 · 5/8" = 15.9'}) + fChk(e,'tension.roscada','Barra roscada (rotura en la rosca)')}</div>
     <div id="dSec">${seccionHTML(e)}</div>
+    ${e.fuente === 'programa' && e.fuerzas !== 'manual' && disenoSw() ? `<h4 class="sub">Longitudes y coeficientes</h4><div class="note blue">Se usan las longitudes, K y Cb del software para cada elemento del grupo (tabla «Comparación con el diseño del software», más abajo).</div>` : `
     <h4 class="sub">Longitudes y coeficientes</h4>
     <div class="fg g4">${fIn(e,'Lx','Lx [m] (pandeo eje fuerte)',{h:'Longitud entre apoyos; la escribes tú'})}${e.tipo !== 'BAR' ? fIn(e,'Ly','Ly [m] (eje débil)',{ph:'= Lx'}) + fIn(e,'Lb','Lb [m] (arriostramiento lateral)',{ph:'= Lx'}) + fIn(e,'Lz','Lz [m] (torsión)',{ph:'= Lx'}) : ''}</div>
     ${e.tipo !== 'BAR' ? `<div class="fg g4">${fIn(e,'Kx','Kx')}${fIn(e,'Ky','Ky')}${fIn(e,'Kz','Kz')}${e.tipo === 'I' ? fIn(e,'Cb','Cb',{h:'1.0 = conservador'}) : ''}</div>` : ''}
+    `}
     <details class="d-opc"><summary>Tensión: área neta y pernos (opcional)</summary>
       <div class="fg g4">${e.tipo !== 'BAR' ? fIn(e,'tension.U','Factor U (Tabla F.2.4.3-1)') + fIn(e,'tension.nAg','Agujeros en la sección crítica') + fIn(e,'tension.dperno','Ø perno de los agujeros',{num:false,ph:'1/2"'}) + fIn(e,'tension.tAg','Espesor donde están [mm]',{ph:e.tipo === 'I' ? 'tf' : 't'}) : ''}</div>
       ${e.tipo !== 'BAR' ? `<div class="fg g4">${fIn(e,'pernos.n','Número de pernos')}<div class="f"><label>Ø perno</label><select data-a="pernos.d" ${ro_}>${Object.keys(AnexoD.PULG).map(k => opt(k, k, e.pernos.d)).join('')}</select></div>
@@ -106,6 +207,7 @@ function detMetHTML(e){
       : Fz?.grupos?.length ? `<div class="f"><label>Grupo de elementos del modelo</label><select data-a="grupo" ${ro_}>${opt('', '— escoge —', e.grupo)}${Fz.grupos.map(g => opt(g.sec + '|' + g.fun, `${g.sec} · ${g.fun} (${g.n} elem.)`, e.grupo)).join('')}</select>
           <div class="hint">Se revisan todas las filas del grupo en las combinaciones de resistencia del Anexo C y se toma la que controla en cada chequeo.</div></div>`
       : '<div class="note amber">No hay fuerzas del modelo: súbelo con resultados en el Anexo C o escríbelas a mano.</div>'}
+    <div id="dProg"></div>
     <div id="dRes" style="margin-top:12px"><p class="muted">Calculando…</p></div></div>`;
 }
 
@@ -184,13 +286,14 @@ async function pintarResMet(e){
   let G = null; try{ G = await filasModelo(); }catch(err){ console.warn(err); }
   const R = calcMet(e, G);
   const b = $('#dRes'); if(!b || selMet !== e.id) return;
+  if($('#dProg')){ $('#dProg').innerHTML = progHTML(e); activarProg(e); }
   if(!R || !R.ok){ b.innerHTML = `<div class="note amber">${esc(e.res?.error || 'Faltan datos.')}</div>`; return; }
   const filas = Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => {
     const c = R.checks[k], f = c.f, col = c.r > 1 ? '#dc2626' : c.r > 0.9 ? '#d97706' : '#10b981';
     return [`<b>${n}</b> <span class="hint">${k === 'int' ? (f.ec || ref) : ref}</span>`, k === 'int' ? `P/φPn = ${fx(f.pr,3)} · ΣM/φMn = ${fx(f.mm,3)}` : `${fx(dem(f),2)} ${u}`, k === 'int' ? '1.00' : `${fx(cap(R),2)} ${u}`,
       `<span class="bar-d"><i style="width:${Math.min(100, c.r*100)}%;background:${col}"></i></span> <b>${fx(c.r,3)}</b>`, pill(c.r <= 1 ? 'ok' : 'no', c.r <= 1 ? 'Cumple' : 'No cumple'), `<span class="ids">${filaTxt(f)}</span>`]; });
   b.innerHTML = `${tabla(['Chequeo','Demanda','Capacidad (φRn)','Relación','','Fila que controla'], filas)}
-    <div class="wtot" style="background:${R.cumple ? '' : '#b91c1c'}"><span>Relación demanda / capacidad máxima (${R.filas} filas revisadas)</span><span>${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
+    <div class="wtot" style="background:${R.cumple ? '' : '#b91c1c'}"><span>Relación demanda / capacidad máxima (${R.filas} filas revisadas${R.Fc ? ` · controla el elemento E${esc(R.Fc)}` : ''})</span><span>${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
     ${R.avisos.map(a => `<div class="note amber" style="margin-top:8px">${esc(a)}</div>`).join('')}
     <details class="d-opc" style="margin-top:10px"><summary>Ver cálculo detallado</summary>${detalleMetHTML(R)}</details>`;
   const lista = document.querySelector(`[data-sel="${e.id}"] .pill`); if(lista) lista.outerHTML = pillRes(e.res);
@@ -266,9 +369,11 @@ function anexoDPrintHTML(Rs, conc=''){
   ${ok.map(({ e, R }, i) => `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(e.nom)} — ${esc(nomSec(e))}${e.desc ? ' (' + esc(e.desc) + ')' : ''}</h3>
     <div class="ax-mapas" style="grid-template-columns:1fr 1.5fr;align-items:center"><figure>${svgSeccion(R.s)}</figure>
       <table class="ax-kv">${(ps => ps.filter((_, i) => i % 2 === 0).map((q, i) => `<tr><td>${q[0]}</td><td>${q[1]}</td>${ps[2*i+1] ? `<td>${ps[2*i+1][0]}</td><td>${ps[2*i+1][1]}</td>` : '<td></td><td></td>'}</tr>`).join(''))(propsSeccion(R.s))}</table></div>
-    <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
+    <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]${R.Fc ? ` (elemento ${esc(R.Fc)}, el que controla)` : ''}</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
       ${R.s.tipo !== 'BAR' ? `<tr><td>Kx · Ky · Kz · Cb</td><td>${R.Kx} · ${R.Ky} · ${R.Kz} · ${R.Cb}</td></tr>` : ''}
-      <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados`}</td></tr></table>
+      <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados${e.res?.porEl?.length > 1 ? `, ${e.res.porEl.length} elementos revisados uno por uno` : ''}`}</td></tr>
+      ${e.res?.porEl ? `<tr><td>Longitudes y Cb</td><td>${e.res.fuente === 'programa' ? `los del diseño del ${esc(swNom())} para cada elemento${e.res.porEl.some(x => Object.keys(x.ed || {}).length) ? ' (con ajustes del diseñador)' : ''}` : 'definidas por el diseñador'}</td></tr>` : ''}</table>
+    ${swPrintHTML(e)}
     ${tb(['Chequeo','Demanda','Capacidad φRn','Relación','Fila que controla'], Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => { const ch = R.checks[k], fl = ch.f;
       return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr,3)} / ${fx(fl.mm,3)}` : `${fx(dem(fl),2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R),2)} ${u}`, fx(ch.r,3), filaTxt(fl)]; }))}
     <div class="ax-box">Relación máxima = ${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>

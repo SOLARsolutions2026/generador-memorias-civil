@@ -434,3 +434,11 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .sec-props span{color:#64748b}
 @media (max-width:640px){.sec-box{grid-template-columns:1fr}}
 .ax .ax-mapas figure .sec-svg{max-height:2.4in;width:auto;max-width:100%}
+/* Anexo D: comparación con el diseño del software */
+.sw-box{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fbfdff}
+.sw-t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sw-t tr.ctl td{background:var(--blue-bg)}
+.sw-t .ov-in{width:62px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:right;font:inherit}
+.sw-row{cursor:pointer}.sw-row:hover td{background:var(--gray-bg)}
+.sw-box .sw-t{font-size:12px}.sw-box .sw-t th,.sw-box .sw-t td{padding:5px 6px}
+.sw-t .ov-in{width:54px}

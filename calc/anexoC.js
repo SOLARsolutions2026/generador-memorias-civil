@@ -133,7 +133,7 @@ function analizar(texto){
   const dsp = desplazamientos(texto), fz = fuerzasDe(T, null), rc = reaccionesDe(T);
 
   return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
-    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz, reac:{ n:rc.n, nudos:rc.nudos, casos:rc.casos, res:rc.res, serv:rc.serv },
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz, reac:{ n:rc.n, nudos:rc.nudos, casos:rc.casos, res:rc.res, serv:rc.serv }, diseno:disenoDe(T),
     tablas:Object.keys(T) };
 }
 
@@ -183,7 +183,7 @@ function pesoPropio(M, sinPeso){
 
 // ─── 5. Revisión cruzada con los Anexos A y B (solo en pantalla) ───
 // Devuelve filas { grupo, que, esperado, sap, estado:'ok'|'no'|'info', txt }
-function revisar(M, RA, RB, CB){
+function revisar(M, RA, RB, CB, sisR){
   const out = []; if(!M?.ok) return out;
   // la categoría se recalcula siempre (así las reglas nuevas aplican también a modelos ya cargados)
   M = { ...M, patrones:M.patrones.map(p => ({ ...p, cat:categoria(p.n, p.tipo) })) };
@@ -193,6 +193,19 @@ function revisar(M, RA, RB, CB){
   const cerca = (a, b) => Math.abs(Math.abs(a) - Math.abs(b)) <= Math.max(0.006, 0.03 * Math.abs(b));
   const f2 = v => (Math.round(v * 1000) / 1000).toString();
   if(!M.okUnid) out.push({ grupo:'Unidades', estado:'no', txt:`El archivo está en «${M.unidades || 'sin dato'}». Para comparar, exporta el modelo con las unidades KN, m, C.` });
+  // Diseño en acero del programa (si el archivo lo trae)
+  const Dz = M.diseno;
+  if(Dz?.n){
+    const malos = Object.entries(Dz.frames).filter(([, o]) => o.ratio > 1);
+    out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El archivo trae el diseño en acero del software: ${Dz.n} elementos revisados, relación máxima ${Dz.max.r} (elemento ${Dz.max.F}).${Dz.conL ? '' : ' No trae los factores de longitud y Cb (exporta también «Steel Design 2 – PMM Details»).'}` });
+    if(malos.length) out.push({ grupo:'Diseño en acero del software', estado:'no', txt:`${malos.length} elemento${malos.length > 1 ? 's' : ''} con relación mayor que 1.0 en el software: ${malos.slice(0, 12).map(([id, o]) => `${id} (${o.ratio})`).join(', ')}${malos.length > 12 ? '…' : ''}.` });
+    if(Dz.norma && !/360-10/.test(Dz.norma)) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`El diseño del software está con la norma «${Dz.norma}». La memoria usa NSR-10 Título F, basado en AISC 360-10: conviene escoger esa norma en las preferencias de diseño.` });
+    const esp = ({ des:'SMF', dmo:'IMF', dmi:'OMF' })[sisR];
+    const momento = Dz.porticos.filter(p => /^(S|I|O)MF$/i.test(String(p).trim()));
+    const otros = momento.filter(p => String(p).trim().toUpperCase() !== esp);
+    if(esp && otros.length) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`Tipo de pórtico en el software: ${otros.join(', ')}. Con el sistema escogido en Combinaciones (${({ des:'DES', dmo:'DMO', dmi:'DMI' })[sisR]}) debería ser ${esp}.` });
+    else if(esp && momento.length) out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El tipo de pórtico del software (${esp}) coincide con el sistema escogido en Combinaciones.` });
+  }
 
   // Patrones: tipo coherente con el nombre y peso propio una sola vez
   for(const p of M.patrones){ const esp = TIPO_ESPERADO[p.cat];
@@ -333,6 +346,41 @@ function reaccionesDe(T){
   return { n:filas.length, filas, casos, nudos, res, serv };
 }
 const reacciones = texto => reaccionesDe(leer(texto));
+
+// ─── Diseño en acero hecho por el programa (tablas «STEEL DESIGN 1 - SUMMARY DATA - <norma>» y «STEEL DESIGN 2 - PMM DETAILS - <norma>») ───
+// Por elemento: relación, combinación, tipo, pórtico y los factores de longitud (relativos a la longitud del elemento), K y Cb.
+// Los nombres de columna cambian entre versiones: se buscan por patrón.
+const campo = (r, ...res) => { for(const re of res) for(const k of Object.keys(r)) if(re.test(k)) return r[k]; return undefined; };
+const numO = v => { if(v === undefined || v === '') return null; const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+function disenoDe(T){
+  const n1 = Object.keys(T).find(n => /^STEEL DESIGN 1 - SUMMARY DATA/i.test(n)), n2 = Object.keys(T).find(n => /^STEEL DESIGN 2 - PMM DETAILS/i.test(n));
+  if(!n1 && !n2) return null;
+  const norma = ((n1 || n2).split(' - ').slice(2).join(' - ') || '').trim();
+  const J = {}; for(const r of T['JOINT COORDINATES'] || []) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const lon = {}; for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ]; if(a && b) lon[r.Frame] = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]); }
+  const F = {};
+  const tomar = (r, prioridad) => {
+    const id = r.Frame; if(!id) return;
+    const o = F[id] = F[id] || { L:r3(lon[id] || 0) };
+    const ratio = numO(campo(r, /^(Total)?Ratio$/i, /^PMMRatio$/i));
+    if(ratio !== null && (o.ratio == null || prioridad || ratio > o.ratio)){ o.ratio = r3(ratio); o.combo = campo(r, /^(PMM)?Combo$/i, /Combo/i) || o.combo; o.loc = numO(campo(r, /^(PMM)?Loc(ation)?$/i)) ?? o.loc; o.rtipo = campo(r, /^RatioType$/i) || o.rtipo; }
+    const set = (k, v) => { if(v !== null && v !== undefined && v !== '') o[k] = v; };
+    set('sec', campo(r, /^DesignSect$/i, /^Section$/i)); set('tipo', campo(r, /^DesignType$/i)); set('portico', campo(r, /^FramingType$/i, /^FrameType$/i)); set('estado', campo(r, /^Status$/i));
+    set('l33', numO(campo(r, /^X?L_?(33|Maj(or)?)$/i, /^LRatio_?(33|Maj(or)?)$/i, /^Unbraced_?(33|Maj(or)?)$/i, /^L(Major|33)Ratio$/i)));
+    set('l22', numO(campo(r, /^X?L_?(22|Min(or)?)$/i, /^LRatio_?(22|Min(or)?)$/i, /^Unbraced_?(22|Min(or)?)$/i, /^L(Minor|22)Ratio$/i)));
+    set('lltb', numO(campo(r, /^X?L_?LTB$/i, /^LRatio_?LTB$/i, /^LLTBRatio$/i)));
+    set('k33', numO(campo(r, /^X?K1?_?(33|Maj(or)?)$/i))); set('k22', numO(campo(r, /^X?K1?_?(22|Min(or)?)$/i)));
+    set('cb', numO(campo(r, /^X?Cb$/i)));
+  };
+  for(const r of T[n1] || []) tomar(r, true);
+  for(const r of T[n2] || []) tomar(r, false);
+  const frames = Object.fromEntries(Object.entries(F).filter(([, o]) => o.ratio != null));
+  const lista = Object.entries(frames), max = lista.reduce((a, [id, o]) => !a || o.ratio > a.r ? { F:id, r:o.ratio } : a, null);
+  const porticos = [...new Set(lista.map(([, o]) => o.portico).filter(Boolean))];
+  const conL = lista.some(([, o]) => o.l33 != null || o.lltb != null);
+  return { norma, n:lista.length, max, porticos, conL, frames };
+}
+
 
 const api = { reacciones, filasGrupos, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
