@@ -33,7 +33,7 @@ function paneCombos(){
     return `<div class="irr-row ${ab ? 'ab' : ''}" data-abre="${k}"><span class="chev">${ab ? '▾' : '▸'}</span><b class="ik">${esc(k === 'red' ? 'φr' : k)}</b><span class="in">${esc(nombre)}${marca || ''}</span><span class="iphi">${phi}</span>${ctrl}</div>
       ${ab ? `<div class="irr-det">${det}</div>` : ''}`; };
   const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = torAuto && (i.k === '1aP' || i.k === '1bP');
-    const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí' : 'No'} · calculado</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
+    const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí aplica' : 'No aplica'} · según cálculo</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
     const det = (i.k === '1aP' || i.k === '1bP') ? torsionHTML(K, M, ro_) + `<div style="margin-top:10px">${nota(i.k, v)}</div>` : nota(i.k, v);
     return fila(i.k, i.n, 'φ ' + fx(i.phi,1), ctrl, det, K.notasIrr[i.k] ? ' <span class="hint">· con nota</span>' : ''); };
   let h = '';
