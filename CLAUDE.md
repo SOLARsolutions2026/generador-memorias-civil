@@ -55,7 +55,11 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   `C.img` (`<id>/modelo-sap.jpg`, una sola imagen), `C.notaImg`, `C.descripcion` (vacío = texto automático), `C.completas` (tablas completas en el PDF, descargando el .s2k y en varias columnas),
   `C.sinPeso` (secciones fuera del peso propio; null = rieles por defecto, ya están en el Anexo A). Botón para enviar el peso propio al Anexo B ② (modo sap).
   Revisión cruzada solo en pantalla (`AnexoC.revisar`): tipos de patrón, SelfWtMult = 1 una vez, cargas D/L/W del Anexo A (tolerancia 3 %), Fx/Fy/Tx/Ty en nudos frente a la FHE y Mt del Anexo B.
-  Pendiente: probar con un .$2k real de Amo (el formato se probó con un archivo armado desde su Excel).
+  Fuerzas (C-7): «ELEMENT FORCES - FRAMES» del .s2k → `modelo.fuerzas` = `fuerzasDe()`: grupos sección + función (Columna si |dz|/L > 0.9, Viga si < 0.15, si no Diagonal),
+  solo combinaciones de resistencia (`combosResistencia`: con D y factor > 1, sismo o impacto; editable con chips, recalcula descargando el .s2k);
+  por grupo `env` (máx/mín de P,V2,V3,T,M2,M3 con elemento, combinación y estación) y `crit` (filas concomitantes: comp, tens, M3, M2, V2, V3, T). Decisión de Amo:
+  el Anexo D diseña con las filas concomitantes (toma la de mayor interacción) y la envolvente queda de referencia. Filas Max/Min de combinaciones envolventes = aviso.
+  Ya probado con un .s2k real de Amo (v24.2.0).
 
 - Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` en `#listoBar` debajo del panel): la app revisa datos faltantes y habilita «✓ Marcar como terminado»;
   guarda `X.listo` = huella de los datos (B incluye los del A) y `X.listoFecha`. Si los datos cambian, la huella ya no coincide y el paso vuelve a «en proceso» solo. B sin sismo = ✓ directo.
@@ -77,6 +81,9 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   o de la tabla pegada (`AnexoC.desplazamientos`); Δ = √(U1²+U2²), 1aP si Δmáx > 1.2·prom, 1bP si > 1.4·prom (`Combos.torsion`) → fija irrP 1aP/1bP. `modelo.desp.casos` lista los casos.
   Pantalla de irregularidades = lista con desplegable por fila (opción A de Amo): `irrAbierta` (una a la vez); 1aP/1bP abren el cálculo de torsión, las demás una nota, φr el cálculo + foto.
   Redundancia: `redundante`, `redCalc` (texto), `redImg` (`<id>/redundancia.jpg`), `redNota`.
+  Sismo por envolventes (método de Amo, `metodoE:'env'` por defecto; 'lineal' = combinación por combinación): componentes sin reducir SX1–8 / SY1–8 (±Ex ±Tx ±0.3Ey),
+  envolventes `nomEX` «100% X 30% Y» y `nomEY` «30% X 100% Y» (tipo Envelope; sirven para derivas y torsión), U7X/U7Y = 1.2D + ENV/R y U8X/U8Y = 0.9D + ENV/R (Amo aprobó incluir 0.9D).
+  Términos que usan otra combinación: `T('@Nombre', f, lbl)`. Tabla para SAP con CaseType (Combination / Linear Static).
   Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
 
 ## Almacenamiento

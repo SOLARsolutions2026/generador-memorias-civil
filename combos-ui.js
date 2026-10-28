@@ -73,12 +73,15 @@ function paneCombos(){
   h += `<div class="card"><div class="ct">Combinaciones de carga <span class="pill gray">${RK.activas.length} activas de ${RK.lista.length}</span></div>
     <div class="opc-k">
       ${sis ? `<label class="chk"><input type="checkbox" data-a="orto" data-re="1" ${K.orto ? 'checked' : ''} ${ro_}/> 30 % en la dirección ortogonal (A.3.6.3)</label>
-      <label class="chk"><input type="checkbox" data-a="derivas" data-re="1" ${K.derivas ? 'checked' : ''} ${ro_}/> Combinaciones para derivas (A.6, sin dividir por R)</label>` : ''}
+      ${K.metodoE === 'lineal' ? `<label class="chk"><input type="checkbox" data-a="derivas" data-re="1" ${K.derivas ? 'checked' : ''} ${ro_}/> Combinaciones para derivas (A.6, sin dividir por R)</label>` : ''}` : ''}
       <label class="chk"><input type="checkbox" data-a="servicio" data-re="1" ${K.servicio ? 'checked' : ''} ${ro_}/> Servicio (B.2.3)</label>
       ${sis && K.servicio ? `<label class="chk"><input type="checkbox" data-a="servicioSismo" data-re="1" ${K.servicioSismo ? 'checked' : ''} ${ro_}/> Servicio con sismo (0.7E)</label>` : ''}
       <label class="chk"><input type="checkbox" data-a="impacto" data-re="1" ${K.impacto ? 'checked' : ''} ${ro_}/> Impacto de vehículos (1.2D + 1.0IMP + 1.0L)</label></div>
+    ${sis ? `<div class="fg g4" style="margin-top:10px;align-items:end"><div class="f span2"><label>Método para el sismo</label><div class="seg" role="group"><button type="button" data-met="env" class="${K.metodoE !== 'lineal' ? 'on' : ''}" ${ro_}>Envolventes (100 % X / 100 % Y)</button><button type="button" data-met="lineal" class="${K.metodoE === 'lineal' ? 'on' : ''}" ${ro_}>Combinación por combinación</button></div></div>
+      ${K.metodoE !== 'lineal' ? fIn(K,'nomEX','Nombre envolvente X',{num:false,ph:'100% X 30% Y'}) + fIn(K,'nomEY','Nombre envolvente Y',{num:false,ph:'30% X 100% Y'}) : ''}</div>
+      <div class="hint">${K.metodoE !== 'lineal' ? 'Componentes sin reducir (SX, SY) → envolvente por dirección (sirve para derivas y torsión) → 1.2D y 0.9D + envolvente × 1/R.' : 'Cada combinación con ±Ex ±Tx ±0.3Ey dividida por R.'}</div>` : ''}
     ${RK.faltaPat.length ? `<div class="note amber" style="margin-top:10px">Falta el nombre del patrón de SAP para: <b>${RK.faltaPat.join(', ')}</b>.</div>` : ''}
-    ${['Resistencia','Servicio','Derivas','Impacto','Otras'].map(g => { const l = RK.lista.filter(c => c.grupo === g); if(!l.length) return '';
+    ${['Resistencia','Sismo: componentes','Sismo: envolventes','Servicio','Derivas','Impacto','Otras'].map(g => { const l = RK.lista.filter(c => c.grupo === g); if(!l.length) return '';
       return `<h4 class="sub">${g}${g === 'Resistencia' ? ' (B.2.4.2)' : g === 'Servicio' ? ' (B.2.3.1)' : ''}</h4>${tabla(['','Nombre','Combinación','Ref.','Factores en SAP2000'], l.map(c => [
         `<input type="checkbox" data-con="${esc(c.id)}" ${c.on ? 'checked' : ''} ${ro_} aria-label="Usar ${esc(c.id)}"/>`, `<b>${esc(c.id)}</b>`, esc(c.txt) + (c.nota ? ` <span class="hint">(${esc(c.nota)})</span>` : ''), esc(c.ref),
         `<span class="ids">${Object.entries(c.sap).map(([p, f]) => esc(p) + ' ' + f).join(' · ')}</span>`]), 'comb-tb')}`; }).join('')}
@@ -88,13 +91,14 @@ function paneCombos(){
     ${esIng() ? '<button class="btn sm" type="button" id="addK" style="margin-top:6px">＋ Agregar combinación</button>' : ''}
     <div class="hint" style="margin-top:4px">Símbolos: ${Object.keys(Combos.SIMB).join(', ')}.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn grn" type="button" id="copiaK">📋 Copiar tabla para SAP2000 / Excel</button><button class="btn" type="button" id="bajaK">⬇ Descargar (.txt)</button></div>
-    <div class="hint" style="margin-top:6px">La tabla trae una fila por patrón: ComboName, ComboType, CaseName, ScaleSF. Al subir el modelo en el Anexo C, la app revisa que estas combinaciones estén con los mismos factores.</div></div>`;
+    <div class="hint" style="margin-top:6px">La tabla trae una fila por caso: ComboName, ComboType, CaseType, CaseName, ScaleSF (las componentes van antes de las envolventes que las usan). Al subir el modelo en el Anexo C, la app revisa que estas combinaciones estén con los mismos factores.</div></div>`;
   h += `<div class="note blue">Estas tablas se explicarán en la <b>memoria general</b> (pendiente de construir); aquí se trabajan y se revisan.</div>`;
   pane(h);
   if(K.redImg) urlDe(K.redImg).then(u => { const b = $('#redImgV'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Cálculo de la redundancia" style="max-width:100%;max-height:300px"/>` : '<span class="muted">No se encontró la foto.</span>'; });
   if(!esIng()) return;
   const re = () => { sincronizarIrregular(); guardarMemoria(); paneCombos(); };
   $$('[data-irr]').forEach(b => b.onclick = () => { const [lado, k] = b.dataset.irr.split('.'); K[lado][k] = b.dataset.v === '1'; re(); });
+  $$('[data-met]').forEach(b => b.onclick = () => { K.metodoE = b.dataset.met; guardarMemoria(); paneCombos(); });
   $$('[data-red]').forEach(b => b.onclick = () => { K.redundante = b.dataset.red === '1'; re(); });
   if($('#redCalc')) $('#redCalc').oninput = e => { K.redCalc = e.target.value; guardarMemoria(); };
   if($('#redNota')) $('#redNota').oninput = e => { K.redNota = e.target.value; guardarMemoria(); };
@@ -114,7 +118,7 @@ function paneCombos(){
     if(inp.dataset.re) paneCombos();
   }));
   // al salir de un campo de texto se redibuja (para ver los factores nuevos sin perder el foco mientras se escribe)
-  $$('#pane input[data-a^="pat."], #pane input[data-a^="otras."], #pane input[data-a="R0"]').forEach(i => i.addEventListener('change', () => paneCombos()));
+  $$('#pane input[data-a^="pat."], #pane input[data-a^="otras."], #pane input[data-a="R0"], #pane input[data-a^="nomE"]').forEach(i => i.addEventListener('change', () => paneCombos()));
   if($('#patModelo')) $('#patModelo').onclick = () => { const p = Combos.patronesDeModelo(M, AnexoC.categoria); for(const k in p) if(p[k]) K.pat[k] = p[k]; guardarMemoria(); paneCombos(); toast('Nombres tomados del modelo.'); };
   if($('#addK')) $('#addK').onclick = () => { K.otras.push({ nom:'', txt:'' }); guardarMemoria(); paneCombos(); };
   $$('[data-delk]').forEach(b => b.onclick = () => { K.otras.splice(+b.dataset.delk, 1); guardarMemoria(); paneCombos(); });

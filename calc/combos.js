@@ -36,6 +36,7 @@ function defaults(){
   return { irrP:{}, irrA:{}, notasIrr:{}, redundante:true, sisR:'dmo', R0:'',
     pat:{ D:'DEAD, DEAD SI', Lr:'LIVE', W:'WIND', Ex:'Fx', Ey:'Fy', Tx:'Tx', Ty:'Ty', IMPx:'IMPx', IMPy:'IMPy' }, patAuto:true,
     tor:{ nudos:'', nudosY:'', casoX:'', casoY:'', res:null }, redCalc:'', redImg:'', redNota:'',
+    metodoE:'env', nomEX:'100% X 30% Y', nomEY:'30% X 100% Y',
     orto:true, servicio:true, servicioSismo:false, derivas:true, impacto:true, off:[], otras:[] };
 }
 
@@ -70,15 +71,16 @@ function coefR(K){
   return { p, a, phiP, phiA, phiR, R0, R: r3(phiA * phiP * phiR * R0), irregular: !!(p.length || a.length), sis };
 }
 
-const T = (k, f) => ({ k, f });
+const T = (k, f, lbl) => ({ k, f, lbl });   // k = símbolo, o '@Nombre' para usar otra combinación de SAP
 const fmtF = f => (Math.round(f * 1000) / 1000).toString();
 // Expresión legible: 1.2D + 1.6Lr − 0.3Ey
-const expr = ts => ts.map((t, i) => `${t.f < 0 ? (i ? ' − ' : '−') : (i ? ' + ' : '')}${Math.abs(t.f) === 1 ? '' : fmtF(Math.abs(t.f))}${t.k}`).join('');
+const expr = ts => ts.map((t, i) => `${t.f < 0 ? (i ? ' − ' : '−') : (i ? ' + ' : '')}${Math.abs(t.f) === 1 ? '' : fmtF(Math.abs(t.f)) + (t.lbl ? '·' : '')}${t.lbl || t.k}`).join('');
 
 // Genera la lista completa (antes de quitar las desactivadas)
 function generar(K, conSismo){
   const R = coefR(K), out = [];
-  const add = (id, grupo, ref, ts, nota) => out.push({ id, grupo, ref, ts:ts.filter(t => t.f), nota });
+  const add = (id, grupo, ref, ts, nota, tipo) => out.push({ id, grupo, ref, ts:ts.filter(t => t.f), nota, tipo:tipo || 'Linear Add' });
+  const env = K.metodoE !== 'lineal';
   // Casos de sismo: E = ±Ex ± Tx ± 0.3Ey (y viceversa), todo dividido por R.
   // La torsión accidental se toma con los dos signos (excentricidad ±5 %, A.3.6.7); el 30 % ortogonal según A.3.6.3.
   const casosE = [];
@@ -98,8 +100,20 @@ function generar(K, conSismo){
   add('U4', 'Resistencia', 'B.2.4-3', [T('D', 1.2), T('Lr', 1.6), T('W', 0.8)]);
   add('U5', 'Resistencia', 'B.2.4-4', [T('D', 1.2), T('W', 1.6), T('Lr', 0.5)]);
   add('U6', 'Resistencia', 'B.2.4-6', [T('D', 0.9), T('W', 1.6)]);
-  casosE.forEach((c, i) => add(`U7-${i+1}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), ...c.ts], 'E = Fs/R'));
-  casosE.forEach((c, i) => add(`U8-${i+1}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), ...c.ts], 'E = Fs/R'));
+  // Método de envolventes (el de Amo): componentes sin reducir → envolvente por dirección → 1.2D / 0.9D + ENV/R
+  const nomE = { X:(K.nomEX || '100% X 30% Y').trim(), Y:(K.nomEY || '30% X 100% Y').trim() };
+  if(env && casosE.length){
+    const cont = { X:0, Y:0 };
+    casosE.forEach(c => { const n = `S${c.P}${++cont[c.P]}`; c.id = n;
+      add(n, 'Sismo: componentes', 'A.3.6.3', c.ts.map(t => T(t.k, t.f * R.R)), 'sin reducir'); });
+    for(const P of ['X','Y']) add(nomE[P], 'Sismo: envolventes', 'A.3.6.3', casosE.filter(c => c.P === P).map(c => T('@' + c.id, 1, c.id)), 'derivas y torsión', 'Envelope');
+    const e = 1 / R.R;
+    for(const P of ['X','Y']) add(`U7${P}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), T('@' + nomE[P], e, 'E' + P)], 'E = envolvente / R');
+    for(const P of ['X','Y']) add(`U8${P}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), T('@' + nomE[P], e, 'E' + P)], 'E = envolvente / R');
+  } else {
+    casosE.forEach((c, i) => add(`U7-${i+1}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), ...c.ts], 'E = Fs/R'));
+    casosE.forEach((c, i) => add(`U8-${i+1}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), ...c.ts], 'E = Fs/R'));
+  }
   // Servicio B.2.3.1
   if(K.servicio){
     add('S1', 'Servicio', 'B.2.3-1', [T('D', 1)]);
@@ -107,11 +121,14 @@ function generar(K, conSismo){
     add('S3', 'Servicio', 'B.2.3-5', [T('D', 1), T('W', 1)]);
     add('S4', 'Servicio', 'B.2.3-6', [T('D', 1), T('W', 0.75), T('Lr', 0.75)]);
     add('S5', 'Servicio', 'B.2.3-7', [T('D', 0.6), T('W', 1)]);
-    if(K.servicioSismo) casosE.forEach((c, i) => add(`S6-${i+1}`, 'Servicio', 'B.2.3-5', [T('D', 1), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
-    if(K.servicioSismo) casosE.forEach((c, i) => add(`S7-${i+1}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
+    if(K.servicioSismo && env && casosE.length) for(const P of ['X','Y']){
+      add(`S6${P}`, 'Servicio', 'B.2.3-5', [T('D', 1), T('@' + nomE[P], 0.7 / R.R, 'E' + P)], '0.7E');
+      add(`S7${P}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), T('@' + nomE[P], 0.7 / R.R, 'E' + P)], '0.7E'); }
+    if(K.servicioSismo && !env) casosE.forEach((c, i) => add(`S6-${i+1}`, 'Servicio', 'B.2.3-5', [T('D', 1), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
+    if(K.servicioSismo && !env) casosE.forEach((c, i) => add(`S7-${i+1}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
   }
   // Derivas (A.6): fuerzas sísmicas sin dividir por R
-  if(K.derivas && casosE.length){
+  if(K.derivas && casosE.length && !env){
     casosE.filter(c => c.sp === 1).forEach((c, i) => add(`DER${c.P}-${i % (K.orto ? 4 : 2) + 1}`, 'Derivas', 'A.6', c.ts.map(t => T(t.k, t.f * R.R)), 'Fs sin dividir por R'));
   }
   // Impacto de vehículos (combinación aparte, criterio de Amo)
@@ -141,16 +158,20 @@ function calcular(K, conSismo){
   const faltaPat = new Set();
   const lista = G.lista.map(c => {
     const sap = {};
-    for(const t of c.ts){ if(!pats[t.k].length) faltaPat.add(t.k); for(const p of pats[t.k]) sap[p] = r3((sap[p] || 0) + t.f); }
-    return { ...c, txt:expr(c.ts), sap, on:!off.has(c.id) };
+    for(const t of c.ts){
+      if(t.k[0] === '@'){ const n = t.k.slice(1); sap[n] = r3((sap[n] || 0) + t.f); continue; }
+      if(!pats[t.k].length) faltaPat.add(t.k); for(const p of pats[t.k]) sap[p] = r3((sap[p] || 0) + t.f); }
+    const txt = c.tipo === 'Envelope' ? `Envolvente de ${c.ts[0].lbl} a ${c.ts[c.ts.length-1].lbl}` : expr(c.ts);
+    return { ...c, txt, sap, on:!off.has(c.id) };
   });
   return { ...G, lista, activas:lista.filter(c => c.on), pats, faltaPat:[...faltaPat] };
 }
 
 // Texto para pegar en Excel / SAP (Load Combination Definitions)
 function tablaSAP(lista){
-  const filas = [['ComboName', 'ComboType', 'CaseName', 'ScaleSF']];
-  for(const c of lista) for(const [p, f] of Object.entries(c.sap)) filas.push([c.id, 'Linear Add', p, f]);
+  const combos = new Set(lista.map(c => c.id));
+  const filas = [['ComboName', 'ComboType', 'CaseType', 'CaseName', 'ScaleSF']];
+  for(const c of lista) for(const [p, f] of Object.entries(c.sap)) filas.push([c.id, c.tipo || 'Linear Add', combos.has(p) ? 'Combination' : 'Linear Static', p, f]);
   return filas.map(r => r.join('\t')).join('\n');
 }
 

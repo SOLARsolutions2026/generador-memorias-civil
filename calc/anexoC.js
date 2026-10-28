@@ -130,10 +130,10 @@ function analizar(texto){
     const o = cb[n] = cb[n] || { n, tipo:r.ComboType || '', casos:{} };
     if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF)); }
   const combos = Object.values(cb);
-  const dsp = desplazamientos(texto);
+  const dsp = desplazamientos(texto), fz = fuerzasDe(T, null);
 
   return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
-    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n },
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz,
     tablas:Object.keys(T) };
 }
 
@@ -249,6 +249,60 @@ function revisar(M, RA, RB, CB){
   return out;
 }
 
-const api = { desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+// ─── Fuerzas en los elementos (ELEMENT FORCES - FRAMES) condensadas por grupo (sección + función) ───
+// Por grupo: envolvente (máx/mín de cada fuerza con su elemento y combinación) y filas críticas con las fuerzas
+// concomitantes (la misma fila de SAP), que son las que se usan para la interacción P–M en el Anexo D.
+const FZ = ['P','V2','V3','T','M2','M3'];
+function funcionElem(a, b){
+  if(!a || !b) return 'Elemento';
+  const L = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]); if(!(L > 0)) return 'Elemento';
+  const r = Math.abs(a[2]-b[2]) / L;
+  return r > 0.9 ? 'Columna' : r < 0.15 ? 'Viga' : 'Diagonal';
+}
+// Combinaciones de resistencia por defecto: llevan carga muerta y (algún factor > 1, sismo o impacto). Las de servicio (1.0D + 1.0Lr) y las envolventes sin carga muerta (derivas) quedan fuera.
+function combosResistencia(T){
+  const pat = Object.fromEntries((T['LOAD PATTERN DEFINITIONS'] || []).map(r => [r.LoadPat, categoria(r.LoadPat, r.DesignType)]));
+  const cb = {}; let ult = '';
+  for(const r of T['COMBINATION DEFINITIONS'] || []){ const n = r.ComboName || ult; ult = n; if(!n || !r.CaseName) continue; (cb[n] = cb[n] || []).push([r.CaseName, num(r.ScaleSF)]); }
+  const info = (n, prof = 0) => { const o = { D:false, E:false, N:false, max:0 };
+    for(const [c, f] of cb[n] || []){
+      if(cb[c] && prof < 5){ const i = info(c, prof + 1); o.D ||= i.D; o.E ||= i.E; o.N ||= i.N; o.max = Math.max(o.max, Math.abs(f) * (i.max || 1)); continue; }
+      const k = pat[c] || categoria(c, ''); if(k === 'D') o.D = true; if(k === 'E') o.E = true; if(k === 'N') o.N = true; o.max = Math.max(o.max, Math.abs(f)); }
+    return o; };
+  return Object.keys(cb).filter(n => { const i = info(n); return i.D && (i.max > 1.0001 || i.E || i.N); });
+}
+function fuerzasDe(T, res){
+  const filas = T['ELEMENT FORCES - FRAMES'] || [];
+  if(!filas.length) return { n:0, casos:[], res:[], grupos:[] };
+  const casos = [...new Set(filas.map(r => r.OutputCase))];
+  const defRes = combosResistencia(T).filter(c => casos.includes(c));
+  const usar = new Set(res || (defRes.length ? defRes : casos));
+  const J = {}; for(const r of T['JOINT COORDINATES'] || []) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const fun = {}; for(const r of T['CONNECTIVITY - FRAME'] || []) fun[r.Frame] = funcionElem(J[r.JointI], J[r.JointJ]);
+  const sec = {}; for(const r of T['FRAME SECTION ASSIGNMENTS'] || []) sec[r.Frame] = r.AnalSect || r.DesignSect || '?';
+  const G = {};
+  for(const r of filas){
+    if(!usar.has(r.OutputCase)) continue;
+    const f = { F:r.Frame, c:r.OutputCase, st:num(r.Station), step:r.StepType || '' }; for(const k of FZ) f[k] = num(r[k]);
+    const s = sec[r.Frame] || '?', fn = fun[r.Frame] || 'Elemento', key = s + '|' + fn;
+    const g = G[key] = G[key] || { sec:s, fun:fn, ids:new Set(), env:{}, crit:{} };
+    g.ids.add(r.Frame);
+    for(const k of FZ){ const e = g.env[k] = g.env[k] || { max:null, min:null };
+      if(!e.max || f[k] > e.max[k]) e.max = f; if(!e.min || f[k] < e.min[k]) e.min = f; }
+    const cr = g.crit, upd = (n, better) => { if(!cr[n] || better(f, cr[n])) cr[n] = f; };
+    upd('comp', (a, b) => a.P < b.P); upd('tens', (a, b) => a.P > b.P);
+    upd('M3', (a, b) => Math.abs(a.M3) > Math.abs(b.M3)); upd('M2', (a, b) => Math.abs(a.M2) > Math.abs(b.M2));
+    upd('V2', (a, b) => Math.abs(a.V2) > Math.abs(b.V2)); upd('V3', (a, b) => Math.abs(a.V3) > Math.abs(b.V3)); upd('T', (a, b) => Math.abs(a.T) > Math.abs(b.T));
+  }
+  const red = f => f && ({ ...f, ...Object.fromEntries(FZ.map(k => [k, Math.round(f[k] * 1e4) / 1e4])) });
+  const grupos = Object.values(G).map(g => ({ sec:g.sec, fun:g.fun, n:g.ids.size, ids:rangos([...g.ids]),
+    env:Object.fromEntries(FZ.map(k => [k, { max:red(g.env[k].max), min:red(g.env[k].min) }])),
+    crit:Object.fromEntries(Object.entries(g.crit).map(([k, f]) => [k, red(f)])) }))
+    .sort((a, b) => a.sec.localeCompare(b.sec) || a.fun.localeCompare(b.fun));
+  return { n:filas.length, casos, res:[...usar], defRes, grupos, envMaxMin: filas.some(r => r.StepType === 'Max' || r.StepType === 'Min') };
+}
+const fuerzas = (texto, res) => fuerzasDe(leer(texto), res);
+
+const api = { fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

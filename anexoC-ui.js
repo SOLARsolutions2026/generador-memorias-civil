@@ -79,6 +79,7 @@ function paneAnexoC(){
         <h4 class="sub">Distribuidas</h4>${M.dist.length ? cg(M.dist.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.a,3)}${d.b !== d.a ? ' → ' + fx(d.b,3) : ''} kN/m`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`])) : '<p class="muted">No hay.</p>'}
         ${M.punt.length ? `<h4 class="sub">Puntuales en elementos</h4>${cg(M.punt.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.P,3)} kN a ${fx(d.rel,2)} L`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`]))}` : ''}
         ${M.nudosF.length ? `<h4 class="sub">En nudos (sumas por patrón)</h4>${tabla(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), `<span class="ids">${esc(o.ids)}</span>`]))}` : ''}</div>`;
+    h += fuerzasCardHTML(C, M);
     h += `<div class="card"><div class="ct">Páginas del Anexo C</div>
         <p class="lead" style="margin-bottom:10px">En la memoria salen los resúmenes. Las tablas completas (cada nudo, cada elemento y cada carga) son opcionales y ocupan varias páginas.</p>
         <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="compC" ${C.completas ? 'checked' : ''} ${ro_}/> Incluir también las tablas completas</label><br/>
@@ -106,6 +107,7 @@ function paneAnexoC(){
   $('#descC').oninput = e => { C.descripcion = e.target.value.trim() === descDefC(M) ? '' : e.target.value; guardarMemoria(); };
   $('#notaImgC').oninput = e => { C.notaImg = e.target.value; guardarMemoria(); };
   $('#compC').onchange = e => { C.completas = e.target.checked; guardarMemoria(); };
+  activarFuerzas(C, M);
   $$('[data-sp]').forEach(i => i.onchange = () => { const ex = new Set(sinPesoC(C)); i.checked ? ex.delete(i.dataset.sp) : ex.add(i.dataset.sp); C.sinPeso = [...ex]; guardarMemoria(); paneAnexoC(); });
   if($('#aB')) $('#aB').onclick = () => {
     const B = datosB(), pp = AnexoC.pesoPropio(M, sinPesoC(C));
@@ -176,11 +178,60 @@ function anexoCPrintHTML(C, M, K, url){
     ${M.punt.length ? `<h4>Cargas puntuales en elementos</h4>${tb(['Patrón','Dirección','Carga [kN]','Posición','Elementos','Cuáles'], M.punt.map(d => [esc(d.pat), esc(dirTxt(d)), fx(d.P,3), fx(d.rel,2) + ' L', d.n, esc(d.ids)]), null, 'ids')}` : ''}
     ${M.nudosF.length ? `<h4>Cargas en nudos (sumas por patrón)</h4>${tb(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), esc(o.ids)]), null, 'ids')}` : ''}
   </section>
-  ${K ? `<section><h3>${L}-7 Tablas completas del modelo</h3>
+  ${M.fuerzas?.grupos?.length ? `<section><h3>${L}-7 Resultados del análisis: fuerzas en los elementos</h3>${fuerzasPrintHTML(M.fuerzas, tb)}</section>` : ''}
+  ${K ? `<section><h3>${L}-8 Tablas completas del modelo</h3>
     <h4>Coordenadas de los nudos</h4>${multi(['Nudo','X [m]','Y [m]','Z [m]'], K.nudos.map(r => [esc(r[0]), fx(r[1],3), fx(r[2],3), fx(r[3],3)]), 3)}
     <h4>Secciones asignadas a cada elemento</h4>${multi(['Elem.','Sección','L [m]'], K.secciones.map(r => [esc(r[0]), esc(r[5]), r[3] == null ? '—' : fx(r[3],2)]), 3)}
     ${K.dist.length ? `<h4>Cargas distribuidas por elemento</h4>${multi(['Elem.','Patrón','Dir.','kN/m'], K.dist.map(r => [esc(r[0]), esc(r[1]), esc(dirTxt({ sis:r[2], dir:r[4] })), fx(r[5],3) + (r[6] !== r[5] ? '→' + fx(r[6],3) : '')]), 2)}` : ''}
     ${K.punt.length ? `<h4>Cargas puntuales por elemento</h4>${multi(['Elem.','Patrón','Dir.','Pos.','kN'], K.punt.map(r => [esc(r[0]), esc(r[1]), esc(dirTxt({ sis:r[2], dir:r[4] })), fx(r[5],2), fx(r[6],3)]), 2)}` : ''}
     ${K.jl.length ? `<h4>Cargas en nudos</h4>${tb(['Nudo','Patrón','F1 [kN]','F2 [kN]','F3 [kN]','M1','M2','M3 [kN·m]'], K.jl.map(r => [esc(r[0]), esc(r[1]), ...r.slice(2).map(v => fx(v,3))]), null, 'larga')}` : ''}
   </section>` : ''}</div>`;
+}
+
+// ═══ C-7 Fuerzas en los elementos (resultados de SAP2000) ═══
+const FZ_U = { P:'kN', V2:'kN', V3:'kN', T:'kN·m', M2:'kN·m', M3:'kN·m' };
+const CRIT_N = { comp:'Máx. compresión', tens:'Máx. tensión', M3:'Máx. |M3|', M2:'Máx. |M2|', V2:'Máx. |V2|', V3:'Máx. |V3|', T:'Máx. |T|' };
+const CRIT_K = { comp:'P', tens:'P', M3:'M3', M2:'M2', V2:'V2', V3:'V3', T:'T' };
+const filaCrit = f => `E${esc(f.F)} · ${esc(f.c)}${f.step ? ' (' + esc(f.step) + ')' : ''}`;
+function critUnicos(g){ // quita filas repetidas (la misma fila puede ser crítica en varias fuerzas)
+  const vistos = new Map();
+  for(const [k, f] of Object.entries(g.crit)){ if(!f) continue; if(k === 'tens' && !(f.P > 0)) continue; if(k === 'comp' && !(f.P < 0)) continue;
+    if(!['comp','tens'].includes(k) && !Math.abs(f[CRIT_K[k]])) continue;
+    const id = [f.F, f.c, f.st, f.step].join('|'); if(vistos.has(id)) vistos.get(id).k.push(k); else vistos.set(id, { f, k:[k] }); }
+  return [...vistos.values()];
+}
+function fuerzasCardHTML(C, M){
+  const Fz = M.fuerzas;
+  if(!Fz?.n) return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados SAP2000)</div>
+    <div class="note blue">Para traer las fuerzas, al exportar el .s2k marca también <b>Analysis Results → Element Output → Frame Output → Element Forces – Frames</b> y, en <b>Select Load Cases</b>, las combinaciones de diseño. Luego usa «Reemplazar». La app condensa las miles de filas por grupo de elementos.</div></div>`;
+  const ro_ = esIng() ? '' : 'disabled', res = new Set(Fz.res);
+  return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados SAP2000) <span class="pill gray">${Fz.n.toLocaleString('es-CO')} filas → ${Fz.grupos.length} grupos</span></div>
+    <div class="f"><label>Combinaciones que se usan para diseñar (resistencia)</label>
+      <div class="chips-c">${Fz.casos.map(c => `<label class="chip-c ${res.has(c) ? 'on' : ''}"><input type="checkbox" data-fres="${esc(c)}" ${res.has(c) ? 'checked' : ''} ${ro_}/> ${esc(c)}</label>`).join('')}</div>
+      <div class="hint">La app deja fuera, por defecto, las de servicio (p. ej. 1.0D + 1.0Lr) y las envolventes sin carga muerta (derivas). Puedes cambiarlo.</div></div>
+    ${Fz.envMaxMin ? '<div class="note amber" style="margin-top:8px">Algunas combinaciones vienen como envolvente (filas Max/Min). En esas filas las fuerzas no son estrictamente simultáneas: es el resultado normal del método de envolventes y queda del lado de la seguridad.</div>' : ''}
+    <div class="hint" style="margin:8px 0">Por grupo (sección + función según la geometría): ① envolvente con el elemento y la combinación de cada valor (referencia) y ② filas críticas con las fuerzas que ocurren al tiempo, que son las que se usarán en el Anexo D.</div>
+    ${Fz.grupos.map((g, i) => `<details class="fz-g" ${i === 0 ? 'open' : ''}><summary><b>${esc(g.sec)}</b> · ${esc(g.fun)} <span class="hint">· ${g.n} elemento${g.n > 1 ? 's' : ''} · Pmín ${fx(g.env.P.min?.P,2)} kN · |M3|máx ${fx(Math.max(Math.abs(g.env.M3.max?.M3 || 0), Math.abs(g.env.M3.min?.M3 || 0)),2)} kN·m</span></summary>
+      <div class="hint">Elementos: ${esc(g.ids)}</div>
+      <h4 class="sub">① Envolvente</h4>${tabla(['', ...Object.keys(FZ_U).map(k => `${k} [${FZ_U[k]}]`)], ['max','min'].map(m => [`<b>${m === 'max' ? 'Máx' : 'Mín'}</b>`,
+        ...Object.keys(FZ_U).map(k => { const f = g.env[k][m]; return f ? `${fx(f[k],2)}<div class="ids">E${esc(f.F)} · ${esc(f.c)}</div>` : '—'; })]), 'fz-tb')}
+      <h4 class="sub">② Filas críticas (fuerzas concomitantes)</h4>${tabla(['Caso','Elemento · combinación', ...Object.keys(FZ_U)], critUnicos(g).map(({ f, k }) => [
+        `<b>${k.map(x => CRIT_N[x]).join('<br/>')}</b>`, `${filaCrit(f)}<div class="ids">estación ${fx(f.st,2)} m</div>`,
+        ...Object.keys(FZ_U).map(q => `<span class="${k.some(x => CRIT_K[x] === q) ? 'fz-hl' : ''}">${fx(f[q],2)}</span>`)]), 'fz-tb')}</details>`).join('')}</div>`;
+}
+function activarFuerzas(C, M){
+  $$('[data-fres]').forEach(i => i.onchange = async () => {
+    const res = new Set(M.fuerzas.res); i.checked ? res.add(i.dataset.fres) : res.delete(i.dataset.fres);
+    if(!res.size){ i.checked = true; return toast('Deja al menos una combinación.'); }
+    try{ toast('Recalculando las fuerzas…', 15000); M.fuerzas = AnexoC.fuerzas(await textoModelo(C), [...res]); guardarMemoria(); toast('Listo.'); paneAnexoC(); }
+    catch(e){ err(e, 'No se pudo recalcular'); }
+  });
+}
+function fuerzasPrintHTML(Fz, tb){
+  return `<p>Fuerzas obtenidas del análisis en ${esc(String(Fz.n))} filas de resultados, condensadas por grupo de elementos (sección y función). Combinaciones de resistencia usadas: ${Fz.res.map(esc).join('; ')}.
+    Para cada grupo se presenta la envolvente (valor máximo y mínimo de cada fuerza, con el elemento y la combinación donde ocurre) y las filas críticas con las fuerzas concomitantes, que son las que se emplean en el diseño de los elementos.</p>
+    ${Fz.grupos.map(g => `<h4>${esc(g.sec)} — ${esc(g.fun)} (${g.n} elemento${g.n > 1 ? 's' : ''})</h4>
+      ${tb(['', ...Object.keys(FZ_U).map(k => `${k} [${FZ_U[k]}]`)], ['max','min'].map(m => [m === 'max' ? 'Máx' : 'Mín',
+        ...Object.keys(FZ_U).map(k => { const f = g.env[k][m]; return f ? `${fx(f[k],2)}<br/><span style="font-size:7pt">E${esc(f.F)} · ${esc(f.c)}</span>` : '—'; })]), null, 'fz-p')}
+      ${tb(['Caso','Elemento · combinación', ...Object.keys(FZ_U)], critUnicos(g).map(({ f, k }) => [k.map(x => CRIT_N[x]).join(' / '), filaCrit(f) + ` · x = ${fx(f.st,2)} m`, ...Object.keys(FZ_U).map(q => fx(f[q],2))]), null, 'fz-p')}`).join('')}`;
 }
