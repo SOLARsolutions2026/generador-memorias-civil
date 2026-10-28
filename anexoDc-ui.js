@@ -44,7 +44,8 @@ function paneConcreto(tipo, h){
   let sel = lista.find(e => e.id === (tipo === 'zap' ? selZap : selPed)) || lista[0];
   if(tipo === 'zap') selZap = sel?.id || null; else selPed = sel?.id || null;
   h += combosCimHTML(D, M) + `<div class="d-grid"><div class="d-lista">${listaCimHTML(lista, sel?.id, tipo)}
-    ${esIng() ? `<button class="btn sm" type="button" id="cNuevo" style="width:100%;margin-top:6px">＋ Agregar ${tipo === 'zap' ? 'zapata' : 'pedestal'}</button>` : ''}</div>
+    ${esIng() ? `<button class="btn sm" type="button" id="cNuevo" style="width:100%;margin-top:6px">＋ Agregar ${tipo === 'zap' ? 'zapata' : 'pedestal'}</button>
+      ${lista.length > 1 ? `<button class="btn sm" type="button" data-ordenar="${tipo}" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>` : ''}` : ''}</div>
     <div id="cDet">${sel ? (tipo === 'zap' ? detZapHTML(sel, D, M) : detPedHTML(sel, D, M)) : '<div class="card"><p class="muted">Agrega un elemento.</p></div>'}</div></div>
     <div class="card"><div class="ct">Páginas del Anexo D</div><button class="btn grn" type="button" id="printD">🖨 Imprimir / Guardar PDF del Anexo D</button></div>`;
   pane(h); activarTabsD();
@@ -53,6 +54,7 @@ function paneConcreto(tipo, h){
   if(esIng()){
     $$('[data-cc]').forEach(i => i.onchange = () => { const c = combosD(D, M), k = i.dataset.cc, s = new Set(c[k]); i.checked ? s.add(i.value) : s.delete(i.value);
       if(k === 'serv') D.cServ = [...s]; else D.cRes = [...s]; guardarMemoria(); paneAnexoD(); });
+    activarOrdenar(D);
     $('#cNuevo').onclick = () => { const e = tipo === 'zap' ? nuevoZap(D.zap.length + 1) : nuevoPed(D.ped.length + 1);
       if(M?.reac?.nudos?.length && !lista.length) e.nudos = [...M.reac.nudos];
       if(tipo === 'zap' && D.ped[0]) e.ped = D.ped[0].id; if(tipo === 'ped' && D.zap[0]) e.zap = D.zap[0].id;

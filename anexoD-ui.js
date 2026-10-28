@@ -35,6 +35,12 @@ function calcMet(el, G){
   return R;
 }
 
+// Ordena la lista por nombre con los números en orden natural (PF-2 antes que PF-10). El orden se guarda y es el mismo del PDF.
+const ordenNombre = lista => lista.sort((a, b) => String(a.nom || '').localeCompare(String(b.nom || ''), 'es', { numeric:true, sensitivity:'base' }));
+function activarOrdenar(D){
+  $$('[data-ordenar]').forEach(b => b.onclick = () => { ordenNombre(D[b.dataset.ordenar]); guardarMemoria(); paneAnexoD(); toast('Lista ordenada por nombre.'); });
+}
+
 function paneAnexoD(){
   const D = datosD(), C = S.m.anexos?.C, Fz = C?.modelo?.fuerzas;
   const tabs = { met:`Elementos metálicos (${D.met.length})`, zap:`Concreto: zapatas (${D.zap.length})`, ped:`Concreto: pedestales (${D.ped.length})` };
@@ -46,7 +52,8 @@ function paneAnexoD(){
         <small>${e.fuerzas === 'manual' ? 'fuerzas escritas a mano' : esc(e.grupo ? e.grupo.replace('|', ' · ') : 'sin grupo')}</small></span>${pillRes(e.res)}</button>`).join('')}
       ${!D.met.length ? '<p class="hint">Aún no hay elementos.</p>' : ''}
       ${esIng() ? `${Fz?.grupos?.length ? '<button class="btn sm pri" type="button" id="dDesdeC" style="width:100%;margin-top:6px">⚡ Crear elementos desde el Anexo C</button>' : '<div class="note amber" style="margin-top:6px">Para traer las fuerzas, sube el modelo con resultados en el Anexo C (pestaña Resultados).</div>'}
-        <button class="btn sm" type="button" id="dNuevo" style="width:100%;margin-top:6px">＋ Agregar elemento</button>` : ''}
+        <button class="btn sm" type="button" id="dNuevo" style="width:100%;margin-top:6px">＋ Agregar elemento</button>
+        ${D.met.length > 1 ? '<button class="btn sm" type="button" data-ordenar="met" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>' : ''}` : ''}
     </div><div id="dDet">${sel ? detMetHTML(sel) : '<div class="card"><p class="muted">Crea o escoge un elemento.</p></div>'}</div></div>
     <div class="card"><div class="ct">Páginas del Anexo D</div><button class="btn grn" type="button" id="printD">🖨 Imprimir / Guardar PDF del Anexo D</button></div>`;
   pane(h);
@@ -54,6 +61,7 @@ function paneAnexoD(){
   $$('[data-sel]').forEach(b => b.onclick = () => { selMet = b.dataset.sel; paneAnexoD(); });
   if($('#printD')) $('#printD').onclick = () => imprimirD();
   if(!esIng()){ if(sel) pintarResMet(sel); return; }
+  activarOrdenar(D);
   if($('#dNuevo')) $('#dNuevo').onclick = () => { const e = nuevoMet(D.met.length + 1); D.met.push(e); selMet = e.id; guardarMemoria(); paneAnexoD(); };
   if($('#dDesdeC')) $('#dDesdeC').onclick = async () => {
     const usados = new Set(D.met.map(e => e.grupo)), omit = [];
