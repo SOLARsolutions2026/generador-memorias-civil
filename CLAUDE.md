@@ -11,7 +11,8 @@ Usuario principal: Gabriel Tellez ("Amo"), ingeniero civil. Explicar en español
 
 ## Base de datos (prefijo `mem_`)
 - `mem_usuarios(user_id, email, rol)` — rol `ingeniero` (crea/edita/firma) o `consulta` (solo ve aprobadas/archivadas). Trigger crea la fila al registrarse un usuario.
-- `mem_config` (fila id=1): nombre_firma, matricula, iniciales, firma_path, prefijo.
+- `mem_config` (fila id=1): nombre_firma, matricula, iniciales, firma_path, prefijo, `software` (nombre del programa en lo impreso; default «software de análisis estructural»).
+  Por licencia NO se imprime «SAP2000» ni la versión en anexos/memoria: usar `swNom()` / `enSw()` (app.js). En pantalla sí se dice SAP2000.
 - `mem_perfiles_pie`: perfiles de pie de página (nombre, l1, l2, correo, dir, ciudad, tel, predeterminado).
 - `mem_memorias`: consecutivo, titulo, estado (`wip`/`apr`/`arch`), perfil_id, `ficha` (jsonb), imagen_path, paquete, archivada_en.
 - `mem_revisiones`: memoria_id, rev, fecha, descripcion, elaboro, reviso, aprobo.

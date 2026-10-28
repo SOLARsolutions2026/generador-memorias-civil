@@ -218,7 +218,7 @@ function anexoBPrintHTML(B, R){
   const kv = filas => `<table class="ax-kv">${filas.map(([a,b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`;
   const tb = (cab, filas, tot) => `<table class="ax-tb"><tr>${cab.map(x => `<th>${x}</th>`).join('')}</tr>${filas.map(r => `<tr>${r.map((x,i) => `<td class="${i?'c':''}">${x}</td>`).join('')}</tr>`).join('')}${tot ? `<tr class="tot"><td colspan="${cab.length-1}" style="text-align:right">${tot[0]}</td><td class="c">${tot[1]}</td></tr>` : ''}</table>`;
   const box = t => `<div class="ax-box">${t}</div>`;
-  const usoT = t => t.din ? (t.limitado ? 'Cu·Ta (periodo de SAP2000 limitado)' : 'periodo de SAP2000') : 'Ta';
+  const usoT = t => t.din ? (t.limitado ? 'Cu·Ta (periodo del análisis dinámico limitado)' : 'periodo del análisis dinámico') : 'Ta';
   return `<div class="ax"><section>
     <div class="ax-hd"><div class="ax-t">ANEXO ${L} - ANÁLISIS DE FUERZA HORIZONTAL EQUIVALENTE "FHE"</div><div class="ax-n">NSR-10. A.4 Método de la fuerza horizontal equivalente</div><div class="ax-n2">Cálculo de fuerzas sísmicas</div>
       <table class="ax-id"><tr><td><b>Proyecto:</b></td><td>${esc(f.proyecto||m.titulo||'')}</td><td><b>Ingeniero:</b></td><td>${esc((c.nombre_firma||'').replace(/^ING\.\s*/,''))}</td></tr>
@@ -243,8 +243,8 @@ function anexoBPrintHTML(B, R){
     <h4>${L}-2.1 Peso sísmico W</h4>
     <p>Cargas por área (Anexo A):</p>
     ${tb(['Ítem','kg/m²','Área [m²]','Peso [kN]'], R.cargas.filter(x => x.on).map(x => [esc(x.n), fx(x.w,2), fx(x.area,2), fx(x.kN,2)]), ['Subtotal', fx(R.Wcargas,2)])}
-    <p>Peso propio de la estructura${B.estructura.modo === 'sap' ? ` (${esc(B.estructura.sapFuente||'SAP2000')}): <b>${fx(R.Wprop,2)} kN</b>.` : ':'}</p>
-    ${B.estructura.modo === 'sap' ? (B.estructura._url ? `<figure class="ax-fig"><img src="${esc(B.estructura._url)}" style="max-width:100%;max-height:3.2in;border:1px solid #888" alt=""/><figcaption>Tabla de SAP2000 con el peso propio.</figcaption></figure>` : '')
+    <p>Peso propio de la estructura${B.estructura.modo === 'sap' ? ` (obtenido del modelo en ${esc(enSw())}): <b>${fx(R.Wprop,2)} kN</b>.` : ':'}</p>
+    ${B.estructura.modo === 'sap' ? (B.estructura._url ? `<figure class="ax-fig"><img src="${esc(B.estructura._url)}" style="max-width:100%;max-height:3.2in;border:1px solid #888" alt=""/><figcaption>Tabla del modelo estructural con el peso propio.</figcaption></figure>` : '')
       : tb(['Perfil','kg/m','Longitud [m]','Peso [kg]','Peso [kN]'], R.perfiles.map(p => [esc(p.perfil === 'otro' ? (p.nom || 'Otro') : p.perfil), fx(p.kgmU,2), fx(p.Lm,2), fx(p.kg,1), fx(p.kN,2)]), ['Subtotal', fx(R.Wprop,2)])}
     ${R.otras.length ? `<p>Otras cargas:</p>${tb(['Descripción','Cantidad','Peso unitario','Ubicación','Peso [kN]'], R.otras.map(o => [esc(o.n||''), `${fx(AnexoB.num(o.cant),2)} ${esc(o.unidad||'')}`, `${fx(AnexoB.num(o.pu),2)} kg/${esc(o.unidad||'und')}`, esc(o.ubic||''), fx(o.kN,2)]), ['Subtotal', fx(R.Wotras,2)])}` : ''}
     ${box(`W = ${fx(R.W,2)} kN (${fx(R.W*1000/AnexoB.G,0)} kg)`)}
@@ -254,12 +254,12 @@ function anexoBPrintHTML(B, R){
     <h4>${L}-2.3 Torsión accidental (A.3.6.7.1)</h4>
     ${tb(['Fuerza','Vs [kN]','Dimensión perpendicular [m]','Excentricidad','Momento torsor [kN·m]'], [['En X',fx(R.tx.Vs,2),fx(R.dimY,2),fx(R.e,2),fx(R.MtX,2)],['En Y',fx(R.ty.Vs,2),fx(R.dimX,2),fx(R.e,2),fx(R.MtY,2)]])}
     ${box(`FHE x = ${fx(R.tx.Vs,2)} kN · FHE y = ${fx(R.ty.Vs,2)} kN`)}
-    ${R.modal.some(r => r.Tdin || r.Vt) ? `<h4>${L}-2.4 Comparación con el análisis modal (SAP2000)</h4>
+    ${R.modal.some(r => r.Tdin || r.Vt) ? `<h4>${L}-2.4 Comparación con el análisis dinámico modal</h4>
       ${tb(['Dirección','T modal [s]','Ta [s]','Cu·Ta [s]','Chequeo periodo','Vs FHE [kN]','Vt modal [kN]','Vt/Vs','Factor de ajuste'], R.modal.map(r => [r.dir, r.Tdin ? fx(r.Tdin,3) : '—', fx(r.Ta,3), fx(r.CuTa,3),
         r.okT == null ? '—' : r.okT ? 'T ≤ Cu·Ta, cumple' : 'Se limita a Cu·Ta', fx(r.Vs,2), r.Vt ? fx(r.Vt,2) : '—', r.Vt ? fx(r.rel*100,1)+' %' : '—', r.Vt ? (r.okV ? '1.00' : fx(r.factor,3)) : '—']))}
       <p>Según A.5.4.5, el cortante dinámico en la base no puede ser menor que el ${fx(R.pct*100,0)} % del cortante de la FHE (${B.irregular ? 'estructura irregular' : 'estructura regular'}). ${R.modal.every(r => !r.Vt || r.okV) ? 'Se cumple en las direcciones evaluadas.' : 'Donde no se cumple, los resultados del análisis modal se multiplican por el factor de ajuste indicado.'}</p>` : ''}
     ${(B.iter||[]).length ? `<h4>${L}-2.5 Historial de iteraciones</h4>
-      <p>Resumen de las iteraciones realizadas con el modelo de SAP2000. Los cálculos completos de este anexo corresponden a la iteración final.</p>
+      <p>Resumen de las iteraciones realizadas con el modelo estructural. Los cálculos completos de este anexo corresponden a la iteración final.</p>
       ${iterTablaHTML(B, R, true)}` : ''}
   </section></div>`;
 }

@@ -19,6 +19,10 @@ const esIng = () => S.rol === 'ingeniero';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Nombre del programa de análisis que sale en lo impreso (Configuración; por licencia no se nombra el programa)
+const SW_DEF = 'software de análisis estructural';
+const swNom = () => (S.cfg?.software || '').trim() || SW_DEF;
+const enSw = () => { const n = swNom(); return /^[a-záéíóúñ]/.test(n) ? 'un ' + n : n; };   // «en un software…» / «en ETABS»
 const pill = (st, t) => `<span class="pill ${st}">${t}</span>`;
 const hoyISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
 const fmtFecha = iso => iso ? iso.slice(0,10).split('-').reverse().join('/') : '';
@@ -615,7 +619,7 @@ const guardarPerfil = debounce(async p => {
 const guardarCfg = debounce(async () => {
   marcaGuardado('...');
   const c = S.cfg;
-  const { error } = await sb.from('mem_config').update({ nombre_firma:c.nombre_firma, matricula:c.matricula, iniciales:c.iniciales, prefijo:c.prefijo }).eq('id', 1);
+  const { error } = await sb.from('mem_config').update({ nombre_firma:c.nombre_firma, matricula:c.matricula, iniciales:c.iniciales, prefijo:c.prefijo, software:(c.software || '').trim() || SW_DEF }).eq('id', 1);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
 }, 700);
 
@@ -635,7 +639,7 @@ async function renderConfig(){
     <div class="prev" id="pprev">${pieHTML(p)}</div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" type="button" id="defP" ${p.predeterminado?'disabled':''}>Usar como predeterminado</button><button class="btn danger" type="button" id="delP" ${S.perfiles.length<2||p.predeterminado?'disabled':''}>Eliminar perfil</button></div>` : ''}</div>
   <div class="card"><div class="ct">Datos del ingeniero y firma</div>
-    <div class="fg g4">${ci('nombre_firma','Nombre en la firma')}${ci('matricula','Matrícula profesional')}${ci('iniciales','Iniciales para revisiones')}${ci('prefijo','Prefijo del consecutivo','Ej: DOC-MEM → DOC-MEM-18-08-26')}</div>
+    <div class="fg g4">${ci('nombre_firma','Nombre en la firma')}${ci('matricula','Matrícula profesional')}${ci('iniciales','Iniciales para revisiones')}${ci('software','Programa de análisis (como sale en lo impreso)','Por licencia, en los anexos no se nombra el programa. Vacío = «software de análisis estructural»')}${ci('prefijo','Prefijo del consecutivo','Ej: DOC-MEM → DOC-MEM-18-08-26')}</div>
     <div class="sig" style="margin-top:12px"><div class="box" id="sigBox">Sin firma</div><div><b>Firma escaneada</b><div class="hint">PNG o JPG con fondo blanco o transparente. Va en la portada sobre la línea de firma.</div>
       <button class="btn sm pri" type="button" id="upSig" style="margin-top:6px">${c.firma_path?'Cambiar firma':'Subir firma'}</button></div></div></div>
   <div class="card"><div class="ct">Usuarios</div><div id="users"><p class="muted">Cargando…</p></div>

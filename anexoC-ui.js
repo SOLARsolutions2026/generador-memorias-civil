@@ -9,7 +9,7 @@ function datosC(){
 }
 const sinPesoC = C => C.sinPeso || (C.modelo?.secciones || []).filter(s => s.riel).map(s => s.s);
 const dirTxt = d => `${d.sis === 'Local' ? 'Local ' : d.sis && d.sis !== 'GLOBAL' ? d.sis + ' ' : ''}${d.dir === 'Gravity' ? 'Gravedad' : d.dir}`;
-const descDefC = M => `La estructura se modeló en ${M.prog} v${M.ver} como un sistema tridimensional de ${M.nudos.n} nudos y ${M.frames} elementos tipo pórtico, con las propiedades de los materiales, las secciones y las cargas que se presentan en este anexo.`;
+const descDefC = M => `La estructura se modeló en ${enSw()} como un sistema tridimensional de ${M.nudos.n} nudos y ${M.frames} elementos tipo pórtico, con las propiedades de los materiales, las secciones y las cargas que se presentan en este anexo.`;
 let _txtSap = null;   // texto del .$2k ya descargado (para las tablas completas)
 
 async function textoModelo(C){
@@ -65,7 +65,7 @@ function paneAnexoC(){
         <div class="img-c">${C.img ? `<div class="drop-img has" id="imgC" style="max-width:none"><span class="muted">Cargando imagen…</span></div>` :
           esIng() ? `<button class="drop-img" type="button" id="imgC" style="max-width:none;min-height:110px"><div class="ph-in"><div style="font-size:20px">🖼️</div><b>Agregar imagen del modelo</b><br/>toca o arrastra aquí</div></button>` : '<p class="muted">Sin imagen.</p>'}
           ${C.img && esIng() ? '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" type="button" id="camImgC">🔄 Cambiar imagen</button><button class="btn sm danger" type="button" id="delImgC">Quitar</button></div>' : ''}</div>
-        <div class="f" style="margin-top:8px"><label for="notaImgC">Pie de la imagen</label><input id="notaImgC" value="${esc(C.notaImg)}" placeholder="Vista 3D del modelo en SAP2000" ${ro_}/></div></div>`;
+        <div class="f" style="margin-top:8px"><label for="notaImgC">Pie de la imagen</label><input id="notaImgC" value="${esc(C.notaImg)}" placeholder="Vista 3D del modelo estructural" ${ro_}/></div></div>`;
     h += `<div class="card"><div class="ct">C-3 Patrones de carga</div>${tabla(['Patrón','Tipo en SAP2000','Se interpreta como','Multiplicador peso propio','Carga automática'],
         M.patrones.map(p => [esc(p.n), esc(p.tipo), 'Carga ' + AnexoC.NOM_CAT[p.cat], fx(p.swm,0), esc(p.auto || '—')]))}</div>`;
     h += `<div class="card"><div class="ct">C-4 Nudos del sistema aporticado</div>
@@ -117,7 +117,7 @@ function paneAnexoC(){
   $$('[data-sp]').forEach(i => i.onchange = () => { const ex = new Set(sinPesoC(C)); i.checked ? ex.delete(i.dataset.sp) : ex.add(i.dataset.sp); C.sinPeso = [...ex]; guardarMemoria(); paneAnexoC(); });
   if($('#aB')) $('#aB').onclick = () => {
     const B = datosB(), pp = AnexoC.pesoPropio(M, sinPesoC(C));
-    B.estructura.modo = 'sap'; B.estructura.sapKN = String(pp); B.estructura.sapFuente = `${M.prog} v${M.ver} — modelo ${C.archivo.nombre} (Anexo C)`;
+    B.estructura.modo = 'sap'; B.estructura.sapKN = String(pp); B.estructura.sapFuente = `modelo ${C.archivo.nombre} (Anexo C)`;
     guardarMemoria(); toast(`Listo: ${fx(pp,2)} kN quedó como peso propio en el Anexo B.`, 3500);
   };
 }
@@ -160,14 +160,14 @@ function anexoCPrintHTML(C, M, K, url){
   const ex = new Set(sinPesoC(C)), pp = AnexoC.pesoPropio(M, [...ex]);
   const secs = M.secciones;
   return `<div class="ax"><section>
-    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - MODELO SOFTWARE ${esc(M.prog)}</div><div class="ax-n">Datos ingresados al software</div><div class="ax-n2">Diseño de elementos metálicos</div>
+    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - MODELO EN ${esc(swNom().toUpperCase())}</div><div class="ax-n">Datos ingresados al software</div><div class="ax-n2">Diseño de elementos metálicos</div>
       <table class="ax-id"><tr><td><b>Proyecto:</b></td><td>${esc(f.proyecto||m.titulo||'')}</td><td><b>Ingeniero:</b></td><td>${esc((c.nombre_firma||'').replace(/^ING\.\s*/,''))}</td></tr>
       <tr><td><b>Proyecto No.:</b></td><td>${esc(m.consecutivo)}</td><td><b>Fecha:</b></td><td>${esc(fecha)}</td></tr></table></div>
     <h3>${L}-1 Propiedades de materiales</h3>
     ${tb(['Material','Tipo','γ [kN/m³]','E [MPa]','ν','Fy [MPa]','Fu [MPa]'], M.materiales.map(x => [esc(x.n), esc(x.tipo), fx(x.gamma,2), fx(x.E,0), x.nu == null ? '—' : fx(x.nu,2), x.Fy ? fx(x.Fy,0) : '—', x.Fu ? fx(x.Fu,0) : '—']))}
-    <h3>${L}-2 Modelación estructural ${esc(M.prog)} v${esc(M.ver)}</h3>
+    <h3>${L}-2 Modelación estructural</h3>
     <p>${esc(C.descripcion || descDefC(M))}</p>
-    ${url ? `<figure class="ax-fig"><img src="${esc(url)}" style="max-width:100%;max-height:2.7in" alt=""/><figcaption>${esc(C.notaImg || `Modelo estructural en ${M.prog}.`)}</figcaption></figure>` : ''}
+    ${url ? `<figure class="ax-fig"><img src="${esc(url)}" style="max-width:100%;max-height:2.7in" alt=""/><figcaption>${esc(C.notaImg || 'Vista 3D del modelo estructural.')}</figcaption></figure>` : ''}
     <h3>${L}-3 Consideraciones de cargas utilizadas</h3>
     <p>El peso propio de los elementos lo calcula el programa en el patrón con multiplicador 1. Las demás cargas corresponden a los Anexos A${S.m.anexos?.B?.aplica !== false ? ' y B' : ''}.</p>
     ${tb(['Patrón de carga','Tipo','Multiplicador de peso propio','Carga automática'], M.patrones.map(p => [esc(p.n), esc(p.tipo), fx(p.swm,0), esc(p.auto || '—')]))}
