@@ -408,3 +408,7 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .fz-hl{background:#fef3c7;font-weight:800;padding:1px 4px;border-radius:4px}
 .fz-tb td{vertical-align:top}
 .ax-tb.fz-p{font-size:8pt}
+.tab-n{display:inline-block;margin-left:6px;background:var(--blue-bg);color:var(--blue);border-radius:10px;padding:0 7px;font-size:11px;font-weight:800}
+.tab-n.vacio{background:var(--gray-bg);color:var(--muted);font-weight:600}
+.tabs button.on .tab-n{background:#fff}
+.chip-c input{width:auto;margin:0;min-height:0}

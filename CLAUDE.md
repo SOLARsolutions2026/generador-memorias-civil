@@ -59,6 +59,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   solo combinaciones de resistencia (`combosResistencia`: con D y factor > 1, sismo o impacto; editable con chips, recalcula descargando el .s2k);
   por grupo `env` (máx/mín de P,V2,V3,T,M2,M3 con elemento, combinación y estación) y `crit` (filas concomitantes: comp, tens, M3, M2, V2, V3, T). Decisión de Amo:
   el Anexo D diseña con las filas concomitantes (toma la de mayor interacción) y la envolvente queda de referencia. Filas Max/Min de combinaciones envolventes = aviso.
+  Pantalla con pestañas (`tabC`): archivo fijo arriba; «Información del modelo» (revisión + C-1…C-6) y «Resultados» (C-7). Impresión fuera de las pestañas.
   Ya probado con un .s2k real de Amo (v24.2.0).
 
 - Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` en `#listoBar` debajo del panel): la app revisa datos faltantes y habilita «✓ Marcar como terminado»;

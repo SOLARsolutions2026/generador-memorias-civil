@@ -40,6 +40,7 @@ async function cargarModeloC(f){
   }catch(e){ err(e, 'No se pudo cargar el modelo'); }
 }
 
+let tabC = 'modelo';   // pestaña del Anexo C: información del modelo | resultados
 function paneAnexoC(){
   const C = datosC(), M = C.modelo, ro_ = esIng() ? '' : 'disabled';
   const pasos = `<ol class="pasos-sap"><li>En SAP2000: <b>File → Export → SAP2000 .s2k Text File…</b></li><li>Deja marcadas todas las tablas y unidades <b>KN, m, C</b>.</li><li>Guarda el archivo y súbelo aquí.</li></ol>`;
@@ -52,6 +53,9 @@ function paneAnexoC(){
         <div class="hint">${esc(M.prog)} v${esc(M.ver)} · unidades ${esc(M.unidades || '—')} · ${M.nudos.n} nudos · ${M.frames} elementos · ${M.patrones.length} patrones de carga</div></div>
         <div class="sap-acc">${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
       <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde SAP2000?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
+    const nRes = M.fuerzas?.n ? `<span class="tab-n">${M.fuerzas.grupos.length}</span>` : '<span class="tab-n vacio">sin datos</span>';
+    h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}</button></div>
+      <div data-tc="modelo" ${tabC === 'modelo' ? '' : 'hidden'}>`;
     h += `<div class="card"><div class="ct">Revisión con los Anexos A y B <span class="pill gray">solo en pantalla</span></div><div id="revC"></div></div>`;
     const mat = M.materiales;
     h += `<div class="card"><div class="ct">C-1 Propiedades de materiales</div>${tabla(['Material','Tipo','γ [kN/m³]','E [MPa]','ν','Fy [MPa]','Fu [MPa]'],
@@ -79,7 +83,7 @@ function paneAnexoC(){
         <h4 class="sub">Distribuidas</h4>${M.dist.length ? cg(M.dist.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.a,3)}${d.b !== d.a ? ' → ' + fx(d.b,3) : ''} kN/m`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`])) : '<p class="muted">No hay.</p>'}
         ${M.punt.length ? `<h4 class="sub">Puntuales en elementos</h4>${cg(M.punt.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.P,3)} kN a ${fx(d.rel,2)} L`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`]))}` : ''}
         ${M.nudosF.length ? `<h4 class="sub">En nudos (sumas por patrón)</h4>${tabla(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), `<span class="ids">${esc(o.ids)}</span>`]))}` : ''}</div>`;
-    h += fuerzasCardHTML(C, M);
+    h += `</div><div data-tc="res" ${tabC === 'res' ? '' : 'hidden'}>` + fuerzasCardHTML(C, M) + '</div>';
     h += `<div class="card"><div class="ct">Páginas del Anexo C</div>
         <p class="lead" style="margin-bottom:10px">En la memoria salen los resúmenes. Las tablas completas (cada nudo, cada elemento y cada carga) son opcionales y ocupan varias páginas.</p>
         <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="compC" ${C.completas ? 'checked' : ''} ${ro_}/> Incluir también las tablas completas</label><br/>
@@ -87,6 +91,8 @@ function paneAnexoC(){
   }
   pane(h);
   if(M) pintarRevC();
+  $$('[data-tabc]').forEach(b => b.onclick = () => { tabC = b.dataset.tabc;
+    $$('[data-tabc]').forEach(x => x.classList.toggle('on', x === b)); $$('[data-tc]').forEach(d => d.hidden = d.dataset.tc !== tabC); });
   if(C.img) urlDe(C.img).then(u => { const b = $('#imgC'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Imagen del modelo" style="max-width:100%;max-height:340px"/>` : '<span class="muted">No se encontró la imagen.</span>'; });
   if($('#bajaS2k')) $('#bajaS2k').onclick = async () => { const u = await urlDe(C.archivo.path); if(!u) return toast('No se encontró el archivo.');
     const a = document.createElement('a'); a.href = u; a.download = C.archivo.nombre; a.click(); };
