@@ -426,3 +426,11 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .ped-svg{width:100%;height:auto;display:block}
 @media (max-width:640px){.ped-vista{grid-template-columns:1fr}}
 .ax .ax-mapas figure .ped-svg{max-height:2.6in;width:auto;max-width:100%}
+/* Anexo D: dibujo de la sección y propiedades */
+.sec-box{display:grid;grid-template-columns:minmax(180px,250px) 1fr;gap:16px;align-items:center;margin:10px 0 4px;padding:10px;border:1px solid var(--line,#e2e8f0);border-radius:10px;background:var(--bg2,#f8fafc)}
+.sec-svg{width:100%;height:auto;display:block}
+.sec-props{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;font-size:13px}
+.sec-props div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted #cbd5e1;padding:2px 0}
+.sec-props span{color:#64748b}
+@media (max-width:640px){.sec-box{grid-template-columns:1fr}}
+.ax .ax-mapas figure .sec-svg{max-height:2.4in;width:auto;max-width:100%}

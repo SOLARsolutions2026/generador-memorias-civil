@@ -96,6 +96,8 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   NSR-10 F.2 con las 16 correcciones aprobadas por Amo (Cw b³/Iw, rts eje débil, LTB A/B/C ≤ Mp, FLB no compacta, φ eje menor, H1-1a/b (H3-6 en HSS si T > 0.2Tc),
   cortante φv/Aw correctos, torsión I por esfuerzo, L y K por eje, J de tabla; HSS t = 0.93t, Q (f = Fcr con Q=1), torsión (i)(ii)(iii), Aw = 2·h·t;
   tensión L/rmín ≤ 300, pernos 0.75·2.4·d·t·Fu y corte; barra: solo tensión, rotura 0.75, aviso si hay compresión). Verificado contra los Excel: IPE 200 φMn 56.5, IPE 120 13.2 (int 0.57).
+  Dibujo de la sección con cotas (`svgSeccion`, I con radios, HSS, barra) + propiedades principales (`propsSeccion`, unidades 10⁶/10³ según tamaño) en pantalla (`#dSec`) y en el PDF de cada elemento.
+  Botón «Ordenar por nombre» (orden natural) en las tres pestañas; el orden guardado es el del PDF.
   Concreto (`calc/concreto.js` = `Concreto`, pantalla `anexoDc-ui.js`): reacciones de «JOINT REACTIONS» del .$2k (`AnexoC.reacciones`, resumen en `modelo.reac` {nudos,casos,res,serv});
   combinaciones `D.cServ` / `D.cRes` (por defecto serv = con D y no de resistencia). `D.zap[]` {nom Z-n, nudos[], pos centrada|medianera|esquinera (αs 40/30/20), B,L,h,Df [m], ped (enlace → bx,by,Hp),
   qa, gs, qsup, fc, fy, rec [m], barX, barY, MmX/MmY (kN·m/m del modelo sobre resortes, se usa el mayor), imgs[] (`<id>/zapata-*.jpg`)}; chequeos Z1–Z6 aprobados (presión + núcleo, cortante, punzonamiento,

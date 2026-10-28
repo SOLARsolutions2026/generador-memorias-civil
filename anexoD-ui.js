@@ -93,6 +93,7 @@ function detMetHTML(e){
       <div class="f"><label>Acero</label><select data-a="acero" ${ro_}>${Object.keys(AnexoD.ACEROS).map(a => opt(a, `${a} (Fy ${AnexoD.ACEROS[a][0]})`, e.acero)).join('')}</select></div></div>
     <div class="f" style="margin:8px 0"><label>Tipo de sección</label>${tipoSeg}</div>
     <div class="fg g4">${e.tipo === 'I' ? perfilSel : e.tipo === 'HSS' ? fIn(e,'H','Alto H [mm]') + fIn(e,'B','Ancho B [mm]') + fIn(e,'t','Espesor t [mm]',{h:'Se usa 0.93·t (F.2.2.4.2)'}) : fIn(e,'d','Diámetro [mm]',{h:'1/2" = 12.7 · 5/8" = 15.9'}) + fChk(e,'tension.roscada','Barra roscada (rotura en la rosca)')}</div>
+    <div id="dSec">${seccionHTML(e)}</div>
     <h4 class="sub">Longitudes y coeficientes</h4>
     <div class="fg g4">${fIn(e,'Lx','Lx [m] (pandeo eje fuerte)')}${e.tipo !== 'BAR' ? fIn(e,'Ly','Ly [m] (eje débil)',{ph:'= Lx'}) + fIn(e,'Lb','Lb [m] (arriostramiento lateral)',{ph:'= Lx'}) + fIn(e,'Lz','Lz [m] (torsión)',{ph:'= Lx'}) : ''}</div>
     ${e.tipo !== 'BAR' ? `<div class="fg g4">${fIn(e,'Kx','Kx')}${fIn(e,'Ky','Ky')}${fIn(e,'Kz','Kz')}${e.tipo === 'I' ? fIn(e,'Cb','Cb',{h:'1.0 = conservador'}) : ''}</div>` : ''}
@@ -109,6 +110,63 @@ function detMetHTML(e){
     <div id="dRes" style="margin-top:12px"><p class="muted">Calculando…</p></div></div>`;
 }
 
+
+// ═══ Dibujo de la sección con sus medidas y propiedades principales (pantalla e impresión) ═══
+function secDe(e){ return e.tipo === 'HSS' ? AnexoD.secHSS(e.H, e.B, e.t) : e.tipo === 'BAR' ? AnexoD.secBar(e.d) : AnexoD.secI(e.perfil); }
+function svgSeccion(s){
+  if(!s) return '';
+  const W = 260, H = 250, cx = 135, cy = 128, f1 = n => String(+Number(n).toFixed(2));
+  const ac = '#1d4ed8', st = '#334155', fill = '#cbd5e1';
+  // cota con marcas en los extremos; (lx, ly) = punto del texto
+  const cota = (x1, y1, x2, y2, txt, lx, ly, anc='middle') => `<g stroke="${ac}" stroke-width="1"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>
+    ${x1 === x2 ? `<line x1="${x1-4}" y1="${y1}" x2="${x1+4}" y2="${y1}"/><line x1="${x2-4}" y1="${y2}" x2="${x2+4}" y2="${y2}"/>` : `<line x1="${x1}" y1="${y1-4}" x2="${x1}" y2="${y1+4}"/><line x1="${x2}" y1="${y2-4}" x2="${x2}" y2="${y2+4}"/>`}</g>
+    <text x="${lx}" y="${ly}" fill="${ac}" text-anchor="${anc}" font-size="11" font-weight="600" stroke="#fff" stroke-width="3" paint-order="stroke">${txt}</text>`;
+  const ejes = (hx, hy) => `<g stroke="#94a3b8" stroke-width=".8" stroke-dasharray="5 3"><line x1="${cx - hx}" y1="${cy}" x2="${cx + hx}" y2="${cy}"/><line x1="${cx}" y1="${cy - hy}" x2="${cx}" y2="${cy + hy}"/></g>
+    <text x="${cx + hx + 3}" y="${cy + 4}" font-size="10" fill="#64748b">x</text><text x="${cx + 4}" y="${cy + hy + 2}" font-size="10" fill="#64748b">y</text>`;
+  let g = '';
+  if(s.tipo === 'I'){
+    const k = Math.min(150/s.b, 170/s.h), b = s.b*k, h = s.h*k, tw = Math.max(1.5, s.tw*k), tf = Math.max(1.5, s.tf*k), r = Math.min(s.r*k, (b - tw)/2 - 1);
+    const L = cx - b/2, R = cx + b/2, T = cy - h/2, B = cy + h/2, wl = cx - tw/2, wr = cx + tw/2;
+    const d = `M${L},${T} H${R} V${T+tf} H${wr+r} A${r},${r} 0 0 0 ${wr},${T+tf+r} V${B-tf-r} A${r},${r} 0 0 0 ${wr+r},${B-tf} H${R} V${B} H${L} V${B-tf} H${wl-r} A${r},${r} 0 0 0 ${wl},${B-tf-r} V${T+tf+r} A${r},${r} 0 0 0 ${wl-r},${T+tf} H${L} Z`;
+    g = `<path d="${d}" fill="${fill}" stroke="${st}" stroke-width="1.3"/>${ejes(b/2 + 14, h/2 + 6)}
+      ${cota(L, T - 12, R, T - 12, `b = ${f1(s.b)}`, cx, T - 17)}
+      ${cota(L - 14, T, L - 14, B, '', 0, 0)}<text x="${L - 18}" y="${cy}" fill="${ac}" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 ${L - 18} ${cy})">h = ${f1(s.h)}</text>
+      ${cota(R + 10, T, R + 10, T + tf, '', 0, 0)}<text x="${R + 15}" y="${T + tf/2 + 4}" fill="${ac}" font-size="11" font-weight="600">tf = ${f1(s.tf)}</text>
+      <line x1="${wr}" y1="${cy + h*0.22}" x2="${R + 6}" y2="${cy + h*0.22}" stroke="${ac}" stroke-width=".8"/><text x="${R + 9}" y="${cy + h*0.22 + 4}" fill="${ac}" font-size="11" font-weight="600">tw = ${f1(s.tw)}</text>
+      ${s.r ? `<text x="${R + 9}" y="${B - 2}" fill="#475569" font-size="10">r = ${f1(s.r)}</text>` : ''}`;
+  } else if(s.tipo === 'HSS'){
+    const k = Math.min(150/s.B, 170/s.H), b = s.B*k, h = s.H*k, t = Math.max(1.8, s.tn*k), ro = Math.min(2*t, b/4), ri = Math.max(0, ro - t);
+    const L = cx - b/2, T = cy - h/2;
+    g = `<rect x="${L}" y="${T}" width="${b}" height="${h}" rx="${ro}" fill="${fill}" stroke="${st}" stroke-width="1.3"/>
+      <rect x="${L + t}" y="${T + t}" width="${b - 2*t}" height="${h - 2*t}" rx="${ri}" fill="#fff" stroke="${st}" stroke-width="1"/>${ejes(b/2 + 14, h/2 + 6)}
+      ${cota(L, T - 12, L + b, T - 12, `B = ${f1(s.B)}`, cx, T - 17)}
+      ${cota(L - 14, T, L - 14, T + h, '', 0, 0)}<text x="${L - 18}" y="${cy}" fill="${ac}" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 ${L - 18} ${cy})">H = ${f1(s.H)}</text>
+      <line x1="${L + b - t/2}" y1="${cy + h*0.25}" x2="${L + b + 6}" y2="${cy + h*0.25}" stroke="${ac}" stroke-width=".8"/><text x="${L + b + 9}" y="${cy + h*0.25 + 4}" fill="${ac}" font-size="11" font-weight="600">t = ${f1(s.tn)}</text>`;
+  } else {
+    const rr = 70;
+    g = `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fill}" stroke="${st}" stroke-width="1.3"/>${ejes(rr + 14, rr + 6)}${cota(cx - rr, cy - rr - 12, cx + rr, cy - rr - 12, `Ø = ${f1(s.d)}`, cx, cy - rr - 17)}`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" class="sec-svg" role="img" aria-label="Sección ${esc(s.n)}" font-family="Segoe UI,system-ui,sans-serif">${g}
+    <text x="${W/2}" y="${H - 4}" text-anchor="middle" font-size="10" fill="#64748b">medidas en mm${s.tipo === 'HSS' ? ' · se diseña con 0.93·t' : ''}</text></svg>`;
+}
+// Propiedades principales (valores en las unidades de los catálogos: 10⁶ mm⁴, 10³ mm³)
+function propsSeccion(s){
+  if(!s) return [];
+  // unidad según el tamaño: 10⁶ / 10³ / sin potencia, para que nunca salga 0.00
+  const pot = (v, u) => v >= 1e6 ? `${fx(v/1e6, 2)} ×10⁶ ${u}` : v >= 1e3 ? `${fx(v/1e3, 1)} ×10³ ${u}` : `${fx(v, 1)} ${u}`;
+  const e6 = v => pot(v, 'mm⁴'), e3 = v => pot(v, 'mm³');
+  const p = [['Área A', fx(s.A, 0) + ' mm²'], ['Peso', fx(s.kgm, 2) + ' kg/m'],
+    ['Ix', e6(s.Ix)], ['Sx', e3(s.Sx)], ['Zx', e3(s.Zx)], ['rx', fx(s.rx, 1) + ' mm']];
+  if(s.tipo !== 'BAR') p.push(['Iy', e6(s.Iy)], ['Sy', e3(s.Sy)], ['Zy', e3(s.Zy)], ['ry', fx(s.ry, 1) + ' mm'], ['J', e6(s.J)]);
+  if(s.tipo === 'I') p.push(['Cw', fx(s.Cw/1e9, 1) + ' ×10⁹ mm⁶']);
+  if(s.tipo === 'HSS') p.push(['t de diseño', fx(s.t, 2) + ' mm']);
+  return p;
+}
+function seccionHTML(e){
+  const s = secDe(e); if(!s) return '<p class="hint">Escoge o escribe la sección para ver su dibujo y sus propiedades.</p>';
+  return `<div class="sec-box">${svgSeccion(s)}<div class="sec-props">${propsSeccion(s).map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div></div>`;
+}
+
 const CHK = {   // nombre, referencia, unidad de la demanda, capacidad desde R
   ten:['Tensión', 'F.2.4', 'kN', R => R.ten.phiPn/1e3, f => Math.max(0, f.P)],
   comp:['Compresión', 'F.2.5', 'kN', R => R.comp.phiPn/1e3, f => -Math.min(0, f.P)],
@@ -123,6 +181,7 @@ const filaTxt = f => !f ? '' : f.F === '—' ? 'fuerzas escritas a mano' : `E${e
 
 async function pintarResMet(e){
   const box = $('#dRes'); if(!box) return;
+  if($('#dSec')) $('#dSec').innerHTML = seccionHTML(e);
   let G = null; try{ G = await filasModelo(); }catch(err){ console.warn(err); }
   const R = calcMet(e, G);
   const b = $('#dRes'); if(!b || selMet !== e.id) return;
@@ -207,6 +266,8 @@ function anexoDPrintHTML(Rs, conc=''){
     ${tb(['Elemento','Sección','Descripción','Acero','Relación D/C','Resultado'], Rs.map(({ e, R }) => [`<b>${esc(e.nom)}</b>`, esc(nomSec(e)), esc(e.desc || ''), esc(e.acero), R?.ok ? fx(R.ratio,3) : '—', R?.ok ? (R.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}` : ''}
   </section>
   ${ok.map(({ e, R }, i) => `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(e.nom)} — ${esc(nomSec(e))}${e.desc ? ' (' + esc(e.desc) + ')' : ''}</h3>
+    <div class="ax-mapas" style="grid-template-columns:1fr 1.5fr;align-items:center"><figure>${svgSeccion(R.s)}</figure>
+      <table class="ax-kv">${(ps => ps.filter((_, i) => i % 2 === 0).map((q, i) => `<tr><td>${q[0]}</td><td>${q[1]}</td>${ps[2*i+1] ? `<td>${ps[2*i+1][0]}</td><td>${ps[2*i+1][1]}</td>` : '<td></td><td></td>'}</tr>`).join(''))(propsSeccion(R.s))}</table></div>
     <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
       ${R.s.tipo !== 'BAR' ? `<tr><td>Kx · Ky · Kz · Cb</td><td>${R.Kx} · ${R.Ky} · ${R.Kz} · ${R.Cb}</td></tr>` : ''}
       <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados`}</td></tr></table>
