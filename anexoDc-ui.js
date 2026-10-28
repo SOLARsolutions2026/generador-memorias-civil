@@ -4,6 +4,10 @@ let selZap = null, selPed = null, _reac = null;
 
 const nuevoZap = n => ({ id:'z' + Date.now().toString(36) + n, nom:`Z-${n}`, desc:'', nudos:[], ped:'', pos:'centrada', B:1.2, L:1.2, h:0.4, bx:0.4, by:0.4, Hp:1.18, Df:1.5,
   qa:'', gs:18, qsup:0, fc:21, fy:420, rec:0.075, barX:'1/2"', barY:'1/2"', MmX:'', MmY:'', imgs:[], res:null });
+// Texto del armado longitudinal: «4 Ø3/4" + 4 Ø5/8"» o «8 Ø5/8"»
+function armadoTxt(p){ const nx = Math.max(2, Math.round(+p.nx || 3)), ny = Math.max(2, Math.round(+p.ny || 3)), nI = 2*(nx - 2) + 2*(ny - 2), e = p.barEsq || p.bar;
+  return e === p.bar || !nI ? `${4 + nI} Ø${e}` : `4 Ø${e} + ${nI} Ø${p.bar}`; }
+const armadoCorto = p => armadoTxt(p);
 const nuevoPed = n => ({ id:'p' + Date.now().toString(36) + n, nom:`PD-${n}`, desc:'', nudos:[], b:400, h:400, Hp:1.18, rec:50, fc:21, fy:420, bar:'5/8"', nx:3, ny:3,
   est:'3/8"', ramasX:2, ramasY:2, sConf:100, sFuera:150, k:2, zap:'', res:null });
 
@@ -33,7 +37,7 @@ function nudosHTML(el, M){
   return `<div class="f"><label>Nudos de apoyo que representa (se toma el que controla)</label><div class="chips-c">${nudos.map(j => `<label class="chip-c ${el.nudos.includes(j) ? 'on' : ''}"><input type="checkbox" data-nudo="${esc(j)}" ${el.nudos.includes(j) ? 'checked' : ''} ${ro_}/> ${esc(j)}</label>`).join('')}</div></div>`;
 }
 function listaCimHTML(lista, sel, tipo){
-  return `${lista.map(e => `<button type="button" class="d-el ${e.id === sel ? 'on' : ''}" data-selc="${e.id}"><span><b>${esc(e.nom)}</b> ${tipo === 'zap' ? `${fx(+e.B,2)}×${fx(+e.L,2)}×${fx(+e.h,2)} m · ${esc(e.pos)}` : `${esc(e.b)}×${esc(e.h)} mm · ${esc(e.nx)}/${esc(e.ny)} Ø${esc(e.bar)}`}
+  return `${lista.map(e => `<button type="button" class="d-el ${e.id === sel ? 'on' : ''}" data-selc="${e.id}"><span><b>${esc(e.nom)}</b> ${tipo === 'zap' ? `${fx(+e.B,2)}×${fx(+e.L,2)}×${fx(+e.h,2)} m · ${esc(e.pos)}` : `${esc(e.b)}×${esc(e.h)} mm · ${esc(armadoCorto(e))}`}
       <small>${e.nudos.length ? 'nudos ' + esc(e.nudos.join(', ')) : 'sin nudos'}</small></span>${pillRes(e.res)}</button>`).join('')}
     ${!lista.length ? '<p class="hint">Aún no hay elementos.</p>' : ''}`;
 }
@@ -90,7 +94,8 @@ function detPedHTML(p, D, M){
     <div class="fg g4">${fIn(p,'b','b (dirección x) [mm]')}${fIn(p,'h','h (dirección y) [mm]')}${fIn(p,'Hp','Altura Hp [m]')}${fIn(p,'rec','Recubrimiento [mm]')}</div>
     <div class="fg g4">${fIn(p,'fc',"f'c [MPa]")}${fIn(p,'fy','fy [MPa]')}${fIn(p,'k','k (esbeltez)',{h:'2.0 = voladizo'})}</div>
     <h4 class="sub">Refuerzo</h4>
-    <div class="fg g4"><div class="f"><label>Barra longitudinal</label><select data-a="bar" ${ro_}>${BAR_OPC(p.bar)}</select></div>${fIn(p,'nx','Barras por cara en x (con esquinas)')}${fIn(p,'ny','Barras por cara en y (con esquinas)')}</div>
+    <div class="fg g4"><div class="f"><label>Barra de esquina (4)</label><select data-a="barEsq" ${ro_}>${BAR_OPC(p.barEsq || p.bar)}</select></div><div class="f"><label>Barra intermedia</label><select data-a="bar" ${ro_}>${BAR_OPC(p.bar)}</select></div>${fIn(p,'nx','Barras por cara en x (con esquinas)')}${fIn(p,'ny','Barras por cara en y (con esquinas)')}</div>
+    <div class="hint" style="margin-top:4px" id="pArmado">${esc(armadoTxt(p))}. Si escoges el mismo diámetro en las dos casillas, todas las barras quedan iguales.</div>
     <div class="fg g4"><div class="f"><label>Estribo</label><select data-a="est" ${ro_}>${BAR_OPC(p.est)}</select></div>${fIn(p,'ramasX','Ramas paralelas a x')}${fIn(p,'ramasY','Ramas paralelas a y')}</div>
     <div class="fg g4">${fIn(p,'sConf','Separación en Lo [mm]')}${fIn(p,'sFuera','Separación fuera de Lo [mm]')}</div>
     <div class="ped-vista" id="pVista"></div>
@@ -121,6 +126,7 @@ async function pintarResCim(el, tipo, D){
   const sg = esIng() && typeof Sugerir !== 'undefined' ? (k => bulbHTML(tipo === 'zap' ? Sugerir.zapata(X._in.obj, X._in.fs, X._in.fr, k) : Sugerir.pedestal(X._in.obj, X._in.fr, k))) : null;
   box.innerHTML = tipo === 'zap' ? resZapHTML(X, false, sg) : resPedHTML(X, false, sg);
   if(tipo === 'ped' && $('#pVista')) $('#pVista').innerHTML = svgPedestal(X) + svgDiagrama(X);
+  if(tipo === 'ped' && $('#pArmado')) $('#pArmado').textContent = armadoTxt(el) + '. Si escoges el mismo diámetro en las dos casillas, todas las barras quedan iguales.';
   const lista = document.querySelector(`[data-selc="${el.id}"] .pill`); if(lista) lista.outerHTML = pillRes(el.res);
   pintarListo();
 }
@@ -211,8 +217,8 @@ function svgPedestal(X){
   const W = 170, s = 130/Math.max(X.b, X.h), w = X.b*s, h = X.h*s, x0 = (W - w)/2, y0 = 18;
   return `<svg viewBox="0 0 ${W} ${h + 40}" class="ped-svg" role="img" aria-label="Sección del pedestal"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#e5e7eb" stroke="#475569"/>
     <rect x="${x0 + X.rec*s}" y="${y0 + X.rec*s}" width="${w - 2*X.rec*s}" height="${h - 2*X.rec*s}" fill="none" stroke="#1d4ed8" stroke-dasharray="3 2"/>
-    ${X.bars.map(r => `<circle cx="${x0 + r.x*s}" cy="${y0 + (X.h - r.y)*s}" r="${Math.max(2.5, X.db*s/2)}" fill="#111"/>`).join('')}
-    <text x="${W/2}" y="12" text-anchor="middle" font-size="10">${X.b} × ${X.h} mm</text><text x="${W/2}" y="${y0 + h + 16}" text-anchor="middle" font-size="9">${X.bars.length} barras · ρ ${fx(X.rho*100,2)} %</text></svg>`;
+    ${X.bars.map(r => `<circle cx="${x0 + r.x*s}" cy="${y0 + (X.h - r.y)*s}" r="${Math.max(2.5, r.db*s/2)}" fill="${X.dos && !r.esq ? '#c2410c' : '#111'}"/>`).join('')}
+    <text x="${W/2}" y="12" text-anchor="middle" font-size="10">${X.b} × ${X.h} mm</text><text x="${W/2}" y="${y0 + h + 16}" text-anchor="middle" font-size="9">${X.dos ? `4 Ø${X.nomE} + ${X.nI} Ø${X.nomI}` : `${X.bars.length} Ø${X.nomI}`} · ρ ${fx(X.rho*100,2)} %</text></svg>`;
 }
 function svgDiagrama(X){
   const W = 360, H = 230, x0 = 46, y0 = 12, w = W - x0 - 12, h = H - y0 - 30;
@@ -234,7 +240,7 @@ function activarCim(el, tipo, D, M){
   const re = () => { guardarMemoria(); pintarResCim(el, tipo, D); };
   $$('#cDet [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', debounce(() => {
     setP(el, inp.dataset.a, inp.type === 'checkbox' ? inp.checked : inp.value);
-    if(['pos','ped','zap','nom'].includes(inp.dataset.a)) { guardarMemoria(); paneAnexoD(); } else re();
+    if(['pos','ped','zap','nom','bar','barEsq'].includes(inp.dataset.a)) { guardarMemoria(); paneAnexoD(); } else re();
   }, 350)));
   $$('#cDet [data-nudo]').forEach(i => i.onchange = () => { const s = new Set(el.nudos); i.checked ? s.add(i.dataset.nudo) : s.delete(i.dataset.nudo); el.nudos = [...s]; guardarMemoria(); paneAnexoD(); });
   if($('#cBorrar')) $('#cBorrar').onclick = () => { if(!confirm(`¿Borrar ${el.nom}?`)) return; const k = tipo === 'zap' ? 'zap' : 'ped'; D[k] = D[k].filter(x => x.id !== el.id); guardarMemoria(); paneAnexoD(); };
@@ -267,7 +273,7 @@ async function conPrintHTML(D, L){
       ${(z.imgs || []).length ? `<div class="ax-mapas">${z.imgs.map(im => `<figure><img src="${esc(urls[im.path] || '')}" style="max-width:100%;max-height:2.6in" alt=""/><figcaption>${esc(im.nota || 'Modelo de la zapata')}</figcaption></figure>`).join('')}</div>` : ''}</div>`).join('')}</section>` : ''}
   ${ps.length ? `<section class="ax-cont"><h3>${L}-${n + (zs.length ? 1 : 0)} Pedestales — NSR-10 Título C</h3>
     <p>Los pedestales se revisan con las reacciones de cada combinación de resistencia (carga axial, momentos y cortantes que actúan al mismo tiempo), trasladando los momentos a la base. La flexo-compresión se verifica con el diagrama de interacción calculado por compatibilidad de deformaciones.</p>
-    ${ps.map(({ p, X }, i) => `<div class="ax-cont"><h4>${L}-${n + (zs.length ? 1 : 0)}.${i+1} ${esc(p.nom)} — ${X.b} × ${X.h} mm, ${X.bars.length} barras de ${esc(p.bar)}, estribo ${esc(p.est)} (nudos ${esc(p.nudos.join(', '))})</h4>
+    ${ps.map(({ p, X }, i) => `<div class="ax-cont"><h4>${L}-${n + (zs.length ? 1 : 0)}.${i+1} ${esc(p.nom)} — ${X.b} × ${X.h} mm, ${esc(armadoTxt(p))}, estribo ${esc(p.est)} (nudos ${esc(p.nudos.join(', '))})</h4>
       <div class="ax-mapas" style="grid-template-columns:1fr 2fr"><figure>${svgPedestal(X)}<figcaption>Sección</figcaption></figure><figure>${svgDiagrama(X)}<figcaption>Diagrama de interacción φPn–φMn</figcaption></figure></div>
       ${resPedHTML(X, true)}</div>`).join('')}</section>` : ''}`;
 }

@@ -149,7 +149,8 @@ function pedestal(p, res, k){
     tit = 'flexo-compresión'; por = `La combinación más exigente (${X.gob.met}) queda fuera del diagrama de interacción.`;
     const rel = x => x.gob.rel;
     for(let i = 1; i <= 6; i++){ const nx = num(p.nx, 3) + Math.ceil(i/2), ny = num(p.ny, 3) + Math.floor(i/2), x = run({ nx, ny }); if(x.ok && rel(x) <= 1){ add(`Más barras: <b>${nx} por cara en x y ${ny} en y</b> (${2*nx + 2*ny - 4} barras)`, x, rel, true); break; } }
-    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.bar) + 1)){ const x = run({ bar:bb }); if(x.ok && rel(x) <= 1){ add(`Barras de <b>${bb}</b> con la misma cantidad`, x, rel); break; } }
+    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.barEsq || p.bar) + 1)){ const x = run({ barEsq:bb }); if(x.ok && rel(x) <= 1){ add(`Solo las 4 esquinas de <b>${bb}</b> (intermedias iguales)`, x, rel); break; } }
+    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.bar) + 1)){ const x = run({ bar:bb, barEsq:bb }); if(x.ok && rel(x) <= 1){ add(`Todas las barras de <b>${bb}</b> con la misma cantidad`, x, rel); break; } }
     for(let d = Math.max(b, h) + 50; d <= 1200; d += 50){ const x = run({ b:d, h:d }); if(x.ok && rel(x) <= 1){ add(`Sección de <b>${d} × ${d} mm</b>`, x, rel); break; } }
   } else if(k === 'corte'){
     tit = 'cortante'; por = 'El cortante supera φ(Vc + Vs) con los estribos actuales.';
@@ -160,7 +161,8 @@ function pedestal(p, res, k){
     tit = 'cuantía mínima'; por = `La cuantía es ${(Math.floor(X.rho*10000)/100).toFixed(2)} % (Ast = ${X.Ast.toFixed(0)} mm²): el refuerzo longitudinal debe ser al menos el 1 % de la sección bruta (Ast ≥ ${X.AstMin.toFixed(0)} mm², C.10.9.1).`;
     const okR = x => x.ok && x.rhoOk;
     for(let i = 1; i <= 8; i++){ const nx = num(p.nx, 3) + Math.ceil(i/2), ny = num(p.ny, 3) + Math.floor(i/2), x = run({ nx, ny }); if(okR(x)){ ops.push({ t:`Más barras: <b>${nx} por cara en x y ${ny} en y</b> (${2*nx + 2*ny - 4} barras, ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple, mejor:true }); break; } }
-    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.bar) + 1)){ const x = run({ bar:bb }); if(okR(x)){ ops.push({ t:`Barras de <b>${bb}</b> con la misma cantidad (ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple }); break; } }
+    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.barEsq || p.bar) + 1)){ const x = run({ barEsq:bb }); if(okR(x)){ ops.push({ t:`Solo las 4 esquinas de <b>${bb}</b> (ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple }); break; } }
+    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.bar) + 1)){ const x = run({ bar:bb, barEsq:bb }); if(okR(x)){ ops.push({ t:`Todas las barras de <b>${bb}</b> con la misma cantidad (ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple }); break; } }
     ops.push({ t:'Si la sección es más grande de lo necesario por resistencia, reducirla también baja el acero mínimo.', r:null });
   } else if(k === 'esb'){
     tit = 'esbeltez'; const need = techoA(num(p.k, 2)*X.Hp/(0.3*22), 50);
@@ -179,7 +181,7 @@ function pedestal(p, res, k){
     por = `Las barras necesitan ${need.toFixed(0)} mm dentro de la zapata y solo hay ${X.anc.disp.toFixed(0)} mm.`;
     const hz = techoA((need + num(p.recZ, 75) + 2*(C.BARRAS[p.barZ] || [12.7])[0])/1000, 0.05);
     ops.push({ t:`Zapata de <b>h = ${hz.toFixed(2)} m</b> como mínimo`, r:null, mejor:true });
-    for(const bb of BAR_ORDEN.slice(0, BAR_ORDEN.indexOf(p.bar)).reverse()){ const x = run({ bar:bb }); if(x.ok && x.anc.ok && x.gob.rel <= 1){ add(`Barras más delgadas: <b>${bb}</b> (siguen cumpliendo la flexo-compresión)`, x, y => y.gob.rel); break; } }
+    for(const bb of BAR_ORDEN.slice(0, BAR_ORDEN.indexOf(p.barEsq && BAR_ORDEN.indexOf(p.barEsq) > BAR_ORDEN.indexOf(p.bar) ? p.barEsq : p.bar)).reverse()){ const x = run({ bar:bb, barEsq:bb }); if(x.ok && x.anc.ok && x.gob.rel <= 1){ add(`Barras más delgadas: <b>${bb}</b> (siguen cumpliendo la flexo-compresión)`, x, y => y.gob.rel); break; } }
   }
   if(!ops.length) ops.push({ t:'No encontré un cambio sencillo: revisa la sección o las cargas.', r:null });
   return { tit, por, ops };

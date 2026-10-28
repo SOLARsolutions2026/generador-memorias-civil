@@ -113,12 +113,18 @@ function zapata(z, servicio, resistencia){
 // p: { b, h [mm] (b en x, h en y), Hp [m], rec [mm], fc, fy, bar, nx (barras por cara paralela a x, incluye esquinas), ny, est (estribo), ramasX, ramasY,
 //      sConf, sFuera [mm], k (esbeltez), hz [mm] altura de la zapata, recZ [mm], barZ (barra de la zapata) }
 function barrasPed(p){
-  const b = num(p.b), h = num(p.h), rec = num(p.rec, 50), [db, Ab] = barra(p.bar), de = barra(p.est)[0];
+  // Dos diámetros (opción A de Amo, 28-oct): p.barEsq = barra de las 4 esquinas (vacío = igual a p.bar); p.bar = barras intermedias
+  const b = num(p.b), h = num(p.h), rec = num(p.rec, 50), de = barra(p.est)[0];
+  const [dbI, AbI] = barra(p.bar), [dbE, AbE] = barra(p.barEsq || p.bar);
   const nx = Math.max(2, Math.round(num(p.nx, 3))), ny = Math.max(2, Math.round(num(p.ny, 3)));
-  const x0 = rec + de + db/2, x1 = b - x0, y0 = rec + de + db/2, y1 = h - y0, out = [];
-  for(let i = 0; i < nx; i++){ const x = x0 + (x1 - x0)*i/(nx - 1); out.push([x, y0], [x, y1]); }
-  for(let j = 1; j < ny - 1; j++){ const y = y0 + (y1 - y0)*j/(ny - 1); out.push([x0, y], [x1, y]); }
-  return { bars:out.map(([x, y]) => ({ x, y, A:Ab })), db, Ab, de, Ast:out.length*Ab };
+  const c = d => rec + de + d/2;                                     // centro de una barra apoyada en el estribo
+  const xE0 = c(dbE), xE1 = b - c(dbE), yE0 = c(dbE), yE1 = h - c(dbE), out = [];
+  const put = (x, y, d, A, esq) => out.push({ x, y, A, db:d, esq });
+  put(xE0, yE0, dbE, AbE, true); put(xE1, yE0, dbE, AbE, true); put(xE0, yE1, dbE, AbE, true); put(xE1, yE1, dbE, AbE, true);
+  for(let i = 1; i < nx - 1; i++){ const x = xE0 + (xE1 - xE0)*i/(nx - 1); put(x, c(dbI), dbI, AbI); put(x, h - c(dbI), dbI, AbI); }
+  for(let j = 1; j < ny - 1; j++){ const y = yE0 + (yE1 - yE0)*j/(ny - 1); put(c(dbI), y, dbI, AbI); put(b - c(dbI), y, dbI, AbI); }
+  const nI = out.length - 4, Ast = out.reduce((a, r) => a + r.A, 0);
+  return { bars:out, db:Math.max(dbE, nI ? dbI : dbE), dbMin:Math.min(dbE, nI ? dbI : dbE), dbE, dbI, AbE, AbI, nE:4, nI, de, Ast, dos:!!p.barEsq && p.barEsq !== p.bar, nomE:p.barEsq || p.bar, nomI:p.bar };
 }
 // Diagrama de interacción alrededor de un eje: dim = peralte en la dirección de flexión, ancho = la otra dimensión
 function diagrama(p, eje){
@@ -175,13 +181,13 @@ function pedestal(p, resistencia){
   const rx = Math.max(2, num(p.ramasX, 2)), ry = Math.max(2, num(p.ramasY, 2));
   const sConf = num(p.sConf), sFuera = num(p.sFuera);
   // Confinamiento C.21.3.5 (DMO)
-  const so = Math.min(8*B.db, 16*de, Math.min(b, h)/3, 150);
+  const so = Math.min(8*B.dbMin, 16*de, Math.min(b, h)/3, 150);     // 8 db de la barra longitudinal más delgada
   const Lo = Math.max(Hp/6, Math.max(b, h), 500);
   const bcX = b - 2*rec, bcY = h - 2*rec, Ach = bcX*bcY;
   const ashS = bc => Math.max(0.2*bc*fc/fy*(Ag/Ach - 1), 0.06*bc*fc/fy);   // Ash/s requerido [mm²/mm]
   const sAshX = rx*Ae/ashS(bcY), sAshY = ry*Ae/ashS(bcX);                    // ramas paralelas a x confinan el núcleo de alto bc_y
   const sConfMax = Math.min(so, sAshX, sAshY);
-  const sFueraMax = Math.min(dX/2, dY/2, 16*B.db, 48*de, Math.min(b, h));
+  const sFueraMax = Math.min(dX/2, dY/2, 16*B.dbMin, 48*de, Math.min(b, h));
   // Anclaje de las barras del pedestal dentro de la zapata (C.15.8 / C.12.5 y C.12.3)
   const hz = num(p.hz), disp = hz > 0 ? hz - num(p.recZ, 75) - 2*barra(p.barZ)[0] : 0;
   const anc = { disp, ldh:ldh(B.db, fy, fc), ldc:ldc(B.db, fy, fc) }; anc.ok = disp > 0 && Math.max(anc.ldh, anc.ldc) <= disp;
