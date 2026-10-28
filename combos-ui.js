@@ -158,7 +158,9 @@ function activarTorsion(K, M){
       toast('Leyendo desplazamientos…', 15000);
       const pega = $('#torPega')?.value.trim();
       const D = AnexoC.desplazamientos(pega || await textoModelo(datosC()));
-      if(!D.n){ T.res = { error:'No se encontraron desplazamientos en el archivo ni en la tabla pegada.' }; guardarMemoria(); return paneCombos(); }
+      if(!D.n){ T.res = { error: D.tablas.length
+          ? `El archivo trae ${D.tablas.length} tablas, pero ninguna de desplazamientos de nudos${D.conResultados.length ? ' (tablas de resultados: ' + D.conResultados.join(', ') + ')' : ' ni de ningún otro resultado del análisis'}. Revisa que al exportar estuviera marcada ANALYSIS RESULTS → Joint Output → Displacements y que el modelo estuviera corrido (candado cerrado).`
+          : 'No se encontraron desplazamientos en el archivo ni en la tabla pegada.' }; guardarMemoria(); return paneCombos(); }
       const dir = (nudos, caso) => { const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) }));
         const falt = n.filter(x => x.U1 === undefined).map(x => x.j); if(falt.length) throw new Error(`No hay desplazamientos del nudo ${falt.join(', ')} en el caso ${caso}.`);
         n.forEach(x => x.D = Math.hypot(x.U1, x.U2)); return { caso, n, t:Combos.torsion(n[0], n[1]) }; };

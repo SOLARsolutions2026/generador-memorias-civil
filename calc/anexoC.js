@@ -159,7 +159,8 @@ function desplazamientos(texto){
     const v = { U1:num(u1), U2:num(u2), U3:num(u3) };
     if(!o) out[k] = v; else for(const q of ['U1','U2','U3']) if(Math.abs(v[q]) > Math.abs(o[q])) o[q] = v[q];   // Max/Min: el mayor en valor absoluto
   };
-  const T = leer(texto), filas = T['JOINT DISPLACEMENTS'] || [];
+  const T = leer(texto), nomT = Object.keys(T).filter(n => /JOINT DISPLACEMENTS/.test(n) && !/ABSOLUTE|GENERALIZED/.test(n));
+  const filas = nomT.flatMap(n => T[n]);
   for(const r of filas) put(r.Joint, r.OutputCase, r.U1, r.U2, r.U3);
   if(!filas.length){   // tabla pegada
     const ls = String(texto).replace(/\r/g, '').split('\n').map(l => l.split('\t').map(x => x.trim()));
@@ -170,7 +171,7 @@ function desplazamientos(texto){
     }
   }
   const casos = [...new Set(Object.keys(out).map(k => k.split('|')[1]))];
-  return { mapa:out, casos, n:Object.keys(out).length };
+  return { mapa:out, casos, n:Object.keys(out).length, tablas:Object.keys(T), conResultados:Object.keys(T).filter(n => /DISPLACEMENT|REACTION|FORCES|MODAL|RESULT/.test(n)) };
 }
 
 // ─── 4. Peso propio del modelo (sin los rieles, que ya están en el Anexo A) ───
