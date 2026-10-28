@@ -37,9 +37,9 @@ function calcMet(el, G){
 
 function paneAnexoD(){
   const D = datosD(), C = S.m.anexos?.C, Fz = C?.modelo?.fuerzas;
-  const tabs = { met:`Elementos metálicos (${D.met.length})`, zap:'Concreto: zapatas', ped:'Concreto: pedestales' };
+  const tabs = { met:`Elementos metálicos (${D.met.length})`, zap:`Concreto: zapatas (${D.zap.length})`, ped:`Concreto: pedestales (${D.ped.length})` };
   let h = `<div class="tabs" role="tablist">${Object.entries(tabs).map(([k, v]) => `<button type="button" role="tab" data-tabd="${k}" class="${tabD === k ? 'on' : ''}">${v}</button>`).join('')}</div>`;
-  if(tabD !== 'met'){ pane(h + `<div class="card"><div class="note blue">Esta pestaña es la siguiente que construimos (método clásico NSR-10 con las reacciones del modelo).</div></div>`); return activarTabsD(); }
+  if(tabD !== 'met') return paneConcreto(tabD, h);
   const sel = D.met.find(e => e.id === selMet) || D.met[0]; selMet = sel?.id || null;
   h += `<div class="d-grid"><div class="d-lista">
       ${D.met.map(e => `<button type="button" class="d-el ${e.id === selMet ? 'on' : ''}" data-sel="${e.id}"><span><b>${esc(e.nom)}</b> ${esc(nomSec(e))}${e.desc ? ' · ' + esc(e.desc) : ''}
@@ -177,24 +177,26 @@ function activarMet(e){
 
 // ═══ Páginas imprimibles del Anexo D (elementos metálicos) ═══
 async function imprimirD(){
-  const D = datosD(); if(!D.met.length) return toast('No hay elementos para imprimir.');
-  let G = null; try{ toast('Calculando todos los elementos…', 20000); G = await filasModelo(); }catch(e){ console.warn(e); }
-  const Rs = D.met.map(e => ({ e, R:calcMet(e, G) })); guardarMemoria();
-  $('#print-area').innerHTML = anexoDPrintHTML(Rs);
+  const D = datosD(); if(!D.met.length && !D.zap.length && !D.ped.length) return toast('No hay elementos para imprimir.');
+  let G = null; toast('Calculando todos los elementos…', 20000);
+  if(D.met.length) try{ G = await filasModelo(); }catch(e){ console.warn(e); }
+  const Rs = D.met.map(e => ({ e, R:calcMet(e, G) }));
+  const conc = await conPrintHTML(D, 'D'); guardarMemoria();
+  $('#print-area').innerHTML = anexoDPrintHTML(Rs, conc);
   await document.fonts.ready; toast('Listo.', 800); imprimirConMargen(`${S.m.consecutivo}_ANEXO_D`);
 }
-function anexoDPrintHTML(Rs){
+function anexoDPrintHTML(Rs, conc=''){
   const m = S.m, f = m.ficha, c = S.cfg, L = 'D';
   const fecha = f.fecha ? new Date(f.fecha + 'T12:00').toLocaleDateString('es-CO', { month:'long', year:'numeric' }) : '';
   const tb = (cab, filas) => `<table class="ax-tb"><thead><tr>${cab.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${filas.map(r => `<tr>${r.map((x,i) => `<td class="${i?'c':''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   const ok = Rs.filter(x => x.R?.ok);
   return `<div class="ax"><section>
-    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - DISEÑO DE ELEMENTOS</div><div class="ax-n">NSR-10 Título F — Estructuras metálicas</div><div class="ax-n2">Diseño de elementos metálicos</div>
+    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - DISEÑO DE ELEMENTOS</div><div class="ax-n">NSR-10 ${Rs.length && conc ? 'Títulos F y C' : Rs.length ? 'Título F' : 'Título C'}</div><div class="ax-n2">${[Rs.length ? 'Elementos metálicos' : '', conc ? 'Elementos de concreto' : ''].filter(Boolean).join(' y ')}</div>
       <table class="ax-id"><tr><td><b>Proyecto:</b></td><td>${esc(f.proyecto||m.titulo||'')}</td><td><b>Ingeniero:</b></td><td>${esc((c.nombre_firma||'').replace(/^ING\.\s*/,''))}</td></tr>
       <tr><td><b>Proyecto No.:</b></td><td>${esc(m.consecutivo)}</td><td><b>Fecha:</b></td><td>${esc(fecha)}</td></tr></table></div>
-    <h3>${L}-1 Elementos metálicos — resumen</h3>
+    ${Rs.length ? `<h3>${L}-1 Elementos metálicos — resumen</h3>
     <p>Los elementos se diseñan por el método de resistencia (NSR-10 F.2) con las fuerzas del modelo estructural en las combinaciones de resistencia. Para cada chequeo se revisan todas las filas de resultados del grupo y se presenta la que controla; la interacción de carga axial y flexión se evalúa con las ecuaciones H1-1 con fuerzas que actúan simultáneamente.</p>
-    ${tb(['Elemento','Sección','Descripción','Acero','Relación D/C','Resultado'], Rs.map(({ e, R }) => [`<b>${esc(e.nom)}</b>`, esc(nomSec(e)), esc(e.desc || ''), esc(e.acero), R?.ok ? fx(R.ratio,3) : '—', R?.ok ? (R.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}
+    ${tb(['Elemento','Sección','Descripción','Acero','Relación D/C','Resultado'], Rs.map(({ e, R }) => [`<b>${esc(e.nom)}</b>`, esc(nomSec(e)), esc(e.desc || ''), esc(e.acero), R?.ok ? fx(R.ratio,3) : '—', R?.ok ? (R.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}` : ''}
   </section>
   ${ok.map(({ e, R }, i) => `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(e.nom)} — ${esc(nomSec(e))}${e.desc ? ' (' + esc(e.desc) + ')' : ''}</h3>
     <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
@@ -204,5 +206,5 @@ function anexoDPrintHTML(Rs){
       return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr,3)} / ${fx(fl.mm,3)}` : `${fx(dem(fl),2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R),2)} ${u}`, fx(ch.r,3), filaTxt(fl)]; }))}
     <div class="ax-box">Relación máxima = ${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>
     ${R.avisos.map(a => `<p class="ax-nota">${esc(a)}</p>`).join('')}
-    ${detalleMetHTML(R, true)}</section>`).join('')}</div>`;
+    ${detalleMetHTML(R, true)}</section>`).join('')}${conc}</div>`;
 }

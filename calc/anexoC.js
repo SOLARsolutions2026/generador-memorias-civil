@@ -130,10 +130,10 @@ function analizar(texto){
     const o = cb[n] = cb[n] || { n, tipo:r.ComboType || '', casos:{} };
     if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF)); }
   const combos = Object.values(cb);
-  const dsp = desplazamientos(texto), fz = fuerzasDe(T, null);
+  const dsp = desplazamientos(texto), fz = fuerzasDe(T, null), rc = reaccionesDe(T);
 
   return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
-    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz,
+    nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz, reac:{ n:rc.n, nudos:rc.nudos, casos:rc.casos, res:rc.res, serv:rc.serv },
     tablas:Object.keys(T) };
 }
 
@@ -319,6 +319,21 @@ function filasGrupos(texto, res){
   return G;
 }
 
-const api = { filasGrupos, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+// ─── Reacciones en los apoyos (JOINT REACTIONS) para zapatas y pedestales ───
+// filas { j, c, step, F1, F2, F3, M1, M2, M3 } (kN, kN·m). F3 + = compresión sobre la cimentación.
+function reaccionesDe(T){
+  const filas = (T['JOINT REACTIONS'] || []).map(r => ({ j:r.Joint, c:r.OutputCase, step:r.StepType || '', F1:num(r.F1), F2:num(r.F2), F3:num(r.F3), M1:num(r.M1), M2:num(r.M2), M3:num(r.M3) }));
+  const casos = [...new Set(filas.map(r => r.c))], nudos = [...new Set(filas.map(r => r.j))];
+  const res = combosResistencia(T).filter(c => casos.includes(c));
+  // servicio por defecto: combinaciones con carga muerta que no son de resistencia (p. ej. 1.0D + 1.0Lr, D + W)
+  const cb = {}; let ult = ''; for(const r of T['COMBINATION DEFINITIONS'] || []){ const n = r.ComboName || ult; ult = n; if(n && r.CaseName) (cb[n] = cb[n] || []).push(r.CaseName); }
+  const pat = Object.fromEntries((T['LOAD PATTERN DEFINITIONS'] || []).map(r => [r.LoadPat, categoria(r.LoadPat, r.DesignType)]));
+  const conD = n => (cb[n] || []).some(c => pat[c] === 'D' || (cb[c] && conD(c)));
+  const serv = casos.filter(c => !res.includes(c) && conD(c));
+  return { n:filas.length, filas, casos, nudos, res, serv };
+}
+const reacciones = texto => reaccionesDe(leer(texto));
+
+const api = { reacciones, filasGrupos, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

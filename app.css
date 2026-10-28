@@ -421,3 +421,8 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .bar-d{display:inline-block;width:90px;height:8px;border-radius:4px;background:#e2e8f0;position:relative;vertical-align:middle;overflow:hidden}.bar-d i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
 .d-opc{margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px}.d-opc summary{cursor:pointer;font-weight:700;font-size:12.5px}
 .ax section.ax-cont{break-before:auto;margin-top:14px;padding-top:8px;border-top:1px solid #cbd5e1}
+/* Anexo D concreto: sección y diagrama P–M */
+.ped-vista{display:grid;grid-template-columns:minmax(140px,190px) minmax(0,420px);gap:16px;align-items:center;margin-top:12px}
+.ped-svg{width:100%;height:auto;display:block}
+@media (max-width:640px){.ped-vista{grid-template-columns:1fr}}
+.ax .ax-mapas figure .ped-svg{max-height:2.6in;width:auto;max-width:100%}

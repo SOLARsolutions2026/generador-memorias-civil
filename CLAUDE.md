@@ -96,7 +96,12 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   NSR-10 F.2 con las 16 correcciones aprobadas por Amo (Cw b³/Iw, rts eje débil, LTB A/B/C ≤ Mp, FLB no compacta, φ eje menor, H1-1a/b (H3-6 en HSS si T > 0.2Tc),
   cortante φv/Aw correctos, torsión I por esfuerzo, L y K por eje, J de tabla; HSS t = 0.93t, Q (f = Fcr con Q=1), torsión (i)(ii)(iii), Aw = 2·h·t;
   tensión L/rmín ≤ 300, pernos 0.75·2.4·d·t·Fu y corte; barra: solo tensión, rotura 0.75, aviso si hay compresión). Verificado contra los Excel: IPE 200 φMn 56.5, IPE 120 13.2 (int 0.57).
-  Concreto (zapatas con método clásico NSR + imágenes del modelo; pedestales; reacciones Joint Reactions del .s2k): PENDIENTE — antes mostrar a Amo cada corrección (lo pidió).
+  Concreto (`calc/concreto.js` = `Concreto`, pantalla `anexoDc-ui.js`): reacciones de «JOINT REACTIONS» del .$2k (`AnexoC.reacciones`, resumen en `modelo.reac` {nudos,casos,res,serv});
+  combinaciones `D.cServ` / `D.cRes` (por defecto serv = con D y no de resistencia). `D.zap[]` {nom Z-n, nudos[], pos centrada|medianera|esquinera (αs 40/30/20), B,L,h,Df [m], ped (enlace → bx,by,Hp),
+  qa, gs, qsup, fc, fy, rec [m], barX, barY, MmX/MmY (kN·m/m del modelo sobre resortes, se usa el mayor), imgs[] (`<id>/zapata-*.jpg`)}; chequeos Z1–Z6 aprobados (presión + núcleo, cortante, punzonamiento,
+  flexión en la cara, Ld/gancho, aplastamiento). `D.ped[]` {nom PD-n, nudos[], b,h,rec [mm], Hp [m], bar, nx, ny, est, ramasX/Y, sConf, sFuera, k, zap (anclaje)}; P1, P3–P7 aprobados
+  (P–M por compatibilidad con SVG, Bresler, esbeltez ≤ 22, cortante, confinamiento DMO, cargas simultáneas, anclaje); la cuantía 1–4 % solo informativa (P2 NO aprobado).
+  Impresión: D-1 metálicos, luego Zapatas y Pedestales (numeración corrida si no hay metálicos).
 
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
@@ -109,7 +114,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: Anexo B (FHE, iteraciones) y Anexo C (modelo SAP2000 desde .$2k).
 - Hecho: paso Combinaciones e irregularidades (solo pantalla).
 - Hecho: Anexo D elementos metálicos.
-- Siguiente: Anexo D concreto (zapatas, pedestales), memoria general (plantilla de Amo), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
+- Hecho: Anexo D concreto (zapatas y pedestales).
+- Siguiente: memoria general (plantilla de Amo), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.
