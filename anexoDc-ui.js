@@ -179,7 +179,7 @@ function resPedHTML(X, imp, sg){
   const filas = [
     [`Flexo-compresión (${g.met})`, `Pu ${fx(g.Pu/1e3,1)} kN · Mux ${fx(g.Mux/1e6,2)} · Muy ${fx(g.Muy/1e6,2)} kN·m`, `φMnx ${fx(g.mx/1e6,1)} · φMny ${fx(g.my/1e6,1)} kN·m`, rel(g.rel), ok(g.rel <= 1) + bb('pm', g.rel > 1), filaReacTxt(g.f)],
     ['Cortante (C.11)', `Vx ${fx(v.Vx/1e3,2)} · Vy ${fx(v.Vy/1e3,2)} kN`, `φVc x ${fx(v.cx.phiVc/1e3,1)} · y ${fx(v.cy.phiVc/1e3,1)} kN`, rel(X.relV), ok(X.relV <= 1) + bb('corte', X.relV > 1), filaReacTxt(v.f)],
-    ['Cuantía mínima (C.10.9.1)', `ρ = ${fx(Math.floor(X.rho*10000)/100,2)} % · Ast = ${fx(X.Ast,0)} mm²`, `≥ 1.00 % · ${fx(X.AstMin,0)} mm²`, '', ok(X.rhoOk) + bb('rho', !X.rhoOk), `${X.bars.length} barras`],
+    ['Cuantía mínima (C.10.9.1)', `ρ = ${fx(X.rho*100, X.rhoOk && X.rho < 0.01 ? 3 : 2)} % · Ast = ${fx(X.Ast,0)} mm²`, `≥ 1.00 % · ${fx(X.AstMin,0)} mm² (tolerancia 0.5 %)`, '', ok(X.rhoOk) + bb('rho', !X.rhoOk), `${X.bars.length} barras`],
     ['Esbeltez k·lu/r (C.10.10.1)', `x ${fx(X.esbX,1)} · y ${fx(X.esbY,1)}`, '≤ 22', '', ok(X.esbOk) + bb('esb', !X.esbOk), ''],
     ['Separación en Lo (C.21.3.5)', `${fx(X.sConf,0)} mm`, `≤ ${fx(X.sConfMax,0)} mm`, '', X.sOk === null ? '—' : ok(X.sOk) + bb('sConf', X.sOk === false), `Lo = ${fx(X.Lo,0)} mm`],
     ['Separación fuera de Lo', `${fx(X.sFuera,0)} mm`, `≤ ${fx(X.sFueraMax,0)} mm`, '', X.sfOk === null ? '—' : ok(X.sfOk) + bb('sFuera', X.sfOk === false), ''],

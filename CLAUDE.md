@@ -112,7 +112,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   combinaciones `D.cServ` / `D.cRes` (por defecto serv = con D y no de resistencia). `D.zap[]` {nom Z-n, nudos[], pos centrada|medianera|esquinera (αs 40/30/20), B,L,h,Df [m], ped (enlace → bx,by,Hp),
   qa, gs, qsup, fc, fy, rec [m], barX, barY, MmX/MmY (kN·m/m del modelo sobre resortes, se usa el mayor), imgs[] (`<id>/zapata-*.jpg`)}; chequeos Z1–Z6 aprobados (presión + núcleo, cortante, punzonamiento,
   flexión en la cara, Ld/gancho, aplastamiento). `D.ped[]` {nom PD-n, nudos[], b,h,rec [mm], Hp [m], bar, nx, ny, est, ramasX/Y, sConf, sFuera, k, zap (anclaje)}; P1, P3–P7 aprobados
-  (P–M por compatibilidad con SVG, Bresler, esbeltez ≤ 22, cortante, confinamiento DMO, cargas simultáneas, anclaje); cuantía mínima 1 % de Ag = chequeo (C.10.9.1, pedido de Amo 28-oct; `rhoOk`, `AstMin`, bombillo 'rho'); la máxima 4 % solo aviso.
+  (P–M por compatibilidad con SVG, Bresler, esbeltez ≤ 22, cortante, confinamiento DMO, cargas simultáneas, anclaje); cuantía mínima 1 % de Ag = chequeo con tolerancia 0.5 % (Ast ≥ 0.995·0.01·Ag; C.10.9.1, pedido de Amo 28-oct; `rhoOk`, `AstMin`, bombillo 'rho'); la máxima 4 % solo aviso.
   Impresión: D-1 metálicos, luego Zapatas y Pedestales (numeración corrida si no hay metálicos).
 
 ## Almacenamiento

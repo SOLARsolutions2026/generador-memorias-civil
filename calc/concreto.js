@@ -167,7 +167,7 @@ function pedestal(p, resistencia){
   if(!(b > 0 && h > 0)) return { ok:false, error:'Faltan las dimensiones del pedestal.' };
   if(!resistencia.length) return { ok:false, error:'Faltan las reacciones de resistencia.' };
   const B = barrasPed(p), dgx = diagrama(p, 'x'), dgy = diagrama(p, 'y'), Ag = b*h, sq = Math.sqrt(fc);
-  const rho = B.Ast/Ag, rhoOk = rho >= 0.01 - 1e-9;      // cuantía mínima 1 % de Ag (C.10.9.1, pedido de Amo 28-oct); la máxima 4 % queda informativa
+  const rho = B.Ast/Ag, rhoOk = B.Ast >= 0.995*0.01*Ag;   // cuantía mínima 1 % de Ag (C.10.9.1, pedido de Amo 28-oct) con tolerancia de 0.5 % (aprobada por Amo); la máxima 4 % queda informativa
   // Esbeltez (C.10.10.1): k·lu/r ≤ 22, r = 0.3·dimensión
   const k = num(p.k, 2), esbX = k*Hp/(0.3*h), esbY = k*Hp/(0.3*b);
   // Cortante (C.11): d = dim − rec − estribo − db/2
