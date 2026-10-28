@@ -60,7 +60,7 @@ function capacidades(el){
   if(!s) return { ok:false, error:'Falta escoger la sección.' };
   const Lx = num(el.Lx)*1000, Ly = num(el.Ly || el.Lx)*1000, Lb = num(el.Lb || el.Lx)*1000, Lz = num(el.Lz || el.Lx)*1000;
   const Kx = num(el.Kx, 1), Ky = num(el.Ky, 1), Kz = num(el.Kz, 1), Cb = num(el.Cb, 1);
-  if(!(Lx > 0)) return { ok:false, error:'Falta la longitud del elemento.' };
+  if(!(Lx > 0)) return { ok:false, error:'Escribe Lx: la longitud entre apoyos del elemento.' };
   const R = { ok:true, s, Fy, Fu, E, G, Lx, Ly, Lb, Lz, Kx, Ky, Kz, Cb, pasos:{} };
 
   // Tensión (F.2.4): fluencia y rotura en área neta efectiva; esbeltez con r mínimo

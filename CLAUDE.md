@@ -91,7 +91,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - `anexos.D` (paso D con pestañas `tabD`: met / zap / ped; cálculo `calc/anexoD.js` = `AnexoD`, pantalla `anexoD-ui.js`, biblioteca `data/perfiles.js` = `PERFILES_LAM`
   111 perfiles IPE/IPN/HEA/HEB/HEM de la hoja PERFILES de Amo, en mm: [nombre, fam, h, b, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy, J, Cw, kg/m]).
   `D.met[]` = {id, nom PF-n, desc, tipo I|HSS|BAR, perfil | H,B,t | d, acero, Lx,Ly,Lb,Lz [m], Kx,Ky,Kz,Cb, tension{U,nAg,dperno,tAg,roscada}, pernos{n,d,tipo,tpl,rosca},
-  fuerzas 'grupo'|'manual', grupo 'sección|función' (de C-7), manual{P,V2,V3,T,M2,M3}, res (resumen guardado)}. «Crear desde el Anexo C» arma uno por grupo (`AnexoD.desdeNombre`).
+  fuerzas 'grupo'|'manual', grupo 'sección|función' (de C-7), manual{P,V2,V3,T,M2,M3}, res (resumen guardado)}. «Crear desde el Anexo C» arma uno por grupo (`AnexoD.desdeNombre`). Lx NO se llena sola (decisión de Amo: la escribe él = longitud entre apoyos; antes se tomaba el elemento más largo del grupo y daba relaciones falsas).
   Fuerzas: todas las filas del grupo (`AnexoC.filasGrupos`, descarga el .s2k una vez por sesión; si falla, usa las filas críticas guardadas). Ejes SAP: M3/V2 fuerte, M2/V3 débil, P− compresión.
   NSR-10 F.2 con las 16 correcciones aprobadas por Amo (Cw b³/Iw, rts eje débil, LTB A/B/C ≤ Mp, FLB no compacta, φ eje menor, H1-1a/b (H3-6 en HSS si T > 0.2Tc),
   cortante φv/Aw correctos, torsión I por esfuerzo, L y K por eje, J de tabla; HSS t = 0.93t, Q (f = Fcr con Q=1), torsión (i)(ii)(iii), Aw = 2·h·t;

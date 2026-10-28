@@ -69,8 +69,7 @@ function paneAnexoD(){
     for(const g of Fz.grupos){
       const key = g.sec + '|' + g.fun; if(usados.has(key)) continue;
       const t = AnexoD.desdeNombre(g.sec); if(!t){ omit.push(g.sec); continue; }
-      const L = G?.[key]?.Lmax ? +G[key].Lmax.toFixed(3) : '';
-      const e = nuevoMet(D.met.length + 1, { ...t, desc:g.fun, grupo:key, Lx:L, acero: t.tipo === 'HSS' ? 'A500 Gr C' : t.tipo === 'BAR' ? 'A36' : 'A572 Gr 50' });
+      const e = nuevoMet(D.met.length + 1, { ...t, desc:g.fun, grupo:key, Lx:'', acero: t.tipo === 'HSS' ? 'A500 Gr C' : t.tipo === 'BAR' ? 'A36' : 'A572 Gr 50' });
       calcMet(e, G); D.met.push(e);
     }
     selMet = D.met[0]?.id; guardarMemoria(); paneAnexoD();
@@ -95,7 +94,7 @@ function detMetHTML(e){
     <div class="fg g4">${e.tipo === 'I' ? perfilSel : e.tipo === 'HSS' ? fIn(e,'H','Alto H [mm]') + fIn(e,'B','Ancho B [mm]') + fIn(e,'t','Espesor t [mm]',{h:'Se usa 0.93·t (F.2.2.4.2)'}) : fIn(e,'d','Diámetro [mm]',{h:'1/2" = 12.7 · 5/8" = 15.9'}) + fChk(e,'tension.roscada','Barra roscada (rotura en la rosca)')}</div>
     <div id="dSec">${seccionHTML(e)}</div>
     <h4 class="sub">Longitudes y coeficientes</h4>
-    <div class="fg g4">${fIn(e,'Lx','Lx [m] (pandeo eje fuerte)')}${e.tipo !== 'BAR' ? fIn(e,'Ly','Ly [m] (eje débil)',{ph:'= Lx'}) + fIn(e,'Lb','Lb [m] (arriostramiento lateral)',{ph:'= Lx'}) + fIn(e,'Lz','Lz [m] (torsión)',{ph:'= Lx'}) : ''}</div>
+    <div class="fg g4">${fIn(e,'Lx','Lx [m] (pandeo eje fuerte)',{h:'Longitud entre apoyos; la escribes tú'})}${e.tipo !== 'BAR' ? fIn(e,'Ly','Ly [m] (eje débil)',{ph:'= Lx'}) + fIn(e,'Lb','Lb [m] (arriostramiento lateral)',{ph:'= Lx'}) + fIn(e,'Lz','Lz [m] (torsión)',{ph:'= Lx'}) : ''}</div>
     ${e.tipo !== 'BAR' ? `<div class="fg g4">${fIn(e,'Kx','Kx')}${fIn(e,'Ky','Ky')}${fIn(e,'Kz','Kz')}${e.tipo === 'I' ? fIn(e,'Cb','Cb',{h:'1.0 = conservador'}) : ''}</div>` : ''}
     <details class="d-opc"><summary>Tensión: área neta y pernos (opcional)</summary>
       <div class="fg g4">${e.tipo !== 'BAR' ? fIn(e,'tension.U','Factor U (Tabla F.2.4.3-1)') + fIn(e,'tension.nAg','Agujeros en la sección crítica') + fIn(e,'tension.dperno','Ø perno de los agujeros',{num:false,ph:'1/2"'}) + fIn(e,'tension.tAg','Espesor donde están [mm]',{ph:e.tipo === 'I' ? 'tf' : 't'}) : ''}</div>
@@ -233,7 +232,6 @@ function activarMet(e){
   $('#dDet [data-a="nom"]')?.addEventListener('change', () => paneAnexoD());
   $$('#dDet [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', debounce(() => {
     setP(e, inp.dataset.a, inp.type === 'checkbox' ? inp.checked : inp.value);
-    if(inp.dataset.a === 'grupo' && !e.Lx && _filas?.G?.[e.grupo]?.Lmax) e.Lx = +_filas.G[e.grupo].Lmax.toFixed(3);
     if(['perfil','grupo','acero'].includes(inp.dataset.a)) paneAnexoD(); else re();
   }, 350)));
   $$('[data-tipo]').forEach(b => b.onclick = () => { e.tipo = b.dataset.tipo; guardarMemoria(); paneAnexoD(); });
