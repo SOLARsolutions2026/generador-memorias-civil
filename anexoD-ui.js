@@ -46,21 +46,22 @@ function calcMet(el, G){
     const ids = [...new Set(filas.map(f => f.F))], lista = [];
     for(const id of ids){
       const fi = filas.filter(f => f.F === id), v = valoresSw(el, id, Dz);
-      const Ri = AnexoD.revisar(sw && v ? { ...el, Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Lz:v.Lb, Kx:v.Kx, Ky:v.Ky, Kz:1, Cb:v.Cb } : el, fi);
-      lista.push({ id, Ri, v });
+      const usar = sw && v ? { ...el, Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Lz:v.Lb, Kx:v.Kx, Ky:v.Ky, Kz:1, Cb:v.Cb } : el;
+      const Ri = AnexoD.revisar(usar, fi);
+      lista.push({ id, Ri, v, usar, fi });
     }
     const okL = lista.filter(x => x.Ri.ok);
     if(!okL.length) R = lista[0].Ri;
     else {
       const g = okL.reduce((a, b) => b.Ri.ratio > a.Ri.ratio ? b : a);
-      R = { ...g.Ri, filas:filas.length, Fc:g.id, avisos:[...g.Ri.avisos] };
+      R = { ...g.Ri, filas:filas.length, Fc:g.id, avisos:[...g.Ri.avisos], _uso:{ el:g.usar, filas:g.fi } };
       const sin = lista.length - okL.length;
       if(sin) R.avisos.push(`${sin} elemento${sin > 1 ? 's' : ''} del grupo no se revisaron: falta Lx${sw ? ' (el software no trae sus longitudes)' : ''}.`);
     }
     porEl = lista.map(({ id, Ri, v }) => ({ F:id, L:v?.L ?? null, r:Ri.ok ? +Ri.ratio.toFixed(3) : null, rp:v?.rp ?? null,
       u:Ri.ok ? { Lx:+(Ri.Lx/1000).toFixed(3), Ly:+(Ri.Ly/1000).toFixed(3), Lb:+(Ri.Lb/1000).toFixed(3), Kx:Ri.Kx, Ky:Ri.Ky, Cb:Ri.Cb } : null,
       sw:v ? { Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Kx:v.Kx, Ky:v.Ky, Cb:v.Cb } : null, ed:v?.ed || {} }));
-  } else R = AnexoD.revisar(el, filas);
+  } else { R = AnexoD.revisar(el, filas); R._uso = { el, filas }; }
   el.res = R.ok ? { ok:true, ratio:+R.ratio.toFixed(3), cumple:R.cumple, n:R.filas, fecha:new Date().toISOString(), Fc:R.Fc || null, fuente:sw ? 'programa' : 'manual',
     rp: porEl && porEl.some(x => x.rp != null) ? Math.max(...porEl.map(x => x.rp ?? 0)) : null, porEl,
     checks:Object.fromEntries(Object.entries(R.checks).map(([k, v]) => [k, { r:+v.r.toFixed(4), f:v.f }])), avisos:R.avisos } : { ok:false, error:R.error, porEl };
@@ -266,6 +267,36 @@ function seccionHTML(e){
   return `<div class="sec-box">${svgSeccion(s)}<div class="sec-props">${propsSeccion(s).map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div></div>`;
 }
 
+// ═══ Bombillo 💡 de sugerencias (chequeos que no cumplen) ═══
+// El recuadro es un solo elemento flotante (position: fixed) para que no lo corten las tablas con desplazamiento.
+function bulbHTML(sg){
+  if(!sg) return '';
+  const cap = t => t ? t[0].toUpperCase() + t.slice(1) : '';
+  const ops = sg.ops.map(o => `<div class="bt-op ${o.mejor ? 'mejor' : ''}">${o.mejor ? '<b>Cambio mínimo:</b> ' : ''}${o.t}${o.r != null ? ` → relación ${fx(o.r, 2)}${o.r <= 1 ? ' ✓' : ''}` : ''}${o.r != null && o.todo === true ? '<span class="bt-ok">cumplen todos los chequeos</span>' : o.r != null && o.todo === false ? '<span class="bt-no">otros chequeos siguen sin cumplir</span>' : ''}</div>`).join('');
+  const html = `<div class="bt-t">💡 ${esc(cap(sg.tit))}: cómo hacer que cumpla</div>${sg.por ? `<div class="bt-por">${sg.por}</div>` : ''}${ops}<div class="bt-nota">Calculado con las mismas fuerzas. Es solo una sugerencia: no cambia tus datos.</div>`;
+  return `<span class="bulb" tabindex="0" role="button" aria-label="Ver sugerencias para que cumpla">💡<template>${html}</template></span>`;
+}
+(function(){
+  let tip = null, cierre = null, desde = 0;
+  const ocultar = () => { if(tip) tip.hidden = true; };
+  const mostrar = b => {
+    clearTimeout(cierre);
+    if(!tip){ tip = document.createElement('div'); tip.className = 'bulb-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip);
+      tip.addEventListener('mouseenter', () => clearTimeout(cierre)); tip.addEventListener('mouseleave', () => { cierre = setTimeout(ocultar, 200); }); }
+    tip.innerHTML = b.querySelector('template').innerHTML; tip.hidden = false; desde = Date.now();
+    const r = b.getBoundingClientRect(), w = Math.min(400, window.innerWidth - 16);
+    tip.style.width = w + 'px';
+    tip.style.left = Math.max(8, Math.min(r.right - w + 14, window.innerWidth - w - 8)) + 'px';
+    const h = tip.offsetHeight, vh = window.innerHeight;
+    tip.style.top = (r.bottom + 8 + h <= vh ? r.bottom + 8 : r.top - h - 8 >= 8 ? r.top - h - 8 : Math.max(8, vh - h - 8)) + 'px';
+  };
+  document.addEventListener('mouseover', e => { const b = e.target.closest?.('.bulb'); if(b) mostrar(b); });
+  document.addEventListener('mouseout', e => { const b = e.target.closest?.('.bulb'); if(b && !b.contains(e.relatedTarget)) cierre = setTimeout(ocultar, 250); });
+  document.addEventListener('focusin', e => { const b = e.target.closest?.('.bulb'); if(b) mostrar(b); });
+  document.addEventListener('click', e => { const b = e.target.closest?.('.bulb'); if(b){ mostrar(b); return; } if(tip && !tip.contains(e.target)) ocultar(); });
+  window.addEventListener('scroll', () => { if(Date.now() - desde > 400) ocultar(); }, true);
+})();
+
 const CHK = {   // nombre, referencia, unidad de la demanda, capacidad desde R
   ten:['Tensión', 'F.2.4', 'kN', R => R.ten.phiPn/1e3, f => Math.max(0, f.P)],
   comp:['Compresión', 'F.2.5', 'kN', R => R.comp.phiPn/1e3, f => -Math.min(0, f.P)],
@@ -289,7 +320,7 @@ async function pintarResMet(e){
   const filas = Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => {
     const c = R.checks[k], f = c.f, col = c.r > 1 ? '#dc2626' : c.r > 0.9 ? '#d97706' : '#10b981';
     return [`<b>${n}</b> <span class="hint">${k === 'int' ? (f.ec || ref) : ref}</span>`, k === 'int' ? `P/φPn = ${fx(f.pr,3)} · ΣM/φMn = ${fx(f.mm,3)}` : `${fx(dem(f),2)} ${u}`, k === 'int' ? '1.00' : `${fx(cap(R),2)} ${u}`,
-      `<span class="bar-d"><i style="width:${Math.min(100, c.r*100)}%;background:${col}"></i></span> <b>${fx(c.r,3)}</b>`, pill(c.r <= 1 ? 'ok' : 'no', c.r <= 1 ? 'Cumple' : 'No cumple'), `<span class="ids">${filaTxt(f)}</span>`]; });
+      `<span class="bar-d"><i style="width:${Math.min(100, c.r*100)}%;background:${col}"></i></span> <b>${fx(c.r,3)}</b>`, pill(c.r <= 1 ? 'ok' : 'no', c.r <= 1 ? 'Cumple' : 'No cumple') + (c.r > 1 && esIng() && R._uso && typeof Sugerir !== 'undefined' ? bulbHTML(Sugerir.metal(R._uso.el, R._uso.filas, k)) : ''), `<span class="ids">${filaTxt(f)}</span>`]; });
   b.innerHTML = `${tabla(['Chequeo','Demanda','Capacidad (φRn)','Relación','','Fila que controla'], filas)}
     <div class="wtot" style="background:${R.cumple ? '' : '#b91c1c'}"><span>Relación demanda / capacidad máxima (${R.filas} filas revisadas${R.Fc ? ` · controla el elemento E${esc(R.Fc)}` : ''})</span><span>${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
     ${R.avisos.map(a => `<div class="note amber" style="margin-top:8px">${esc(a)}</div>`).join('')}

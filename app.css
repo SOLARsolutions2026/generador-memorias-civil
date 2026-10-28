@@ -450,3 +450,14 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .hd-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(15,45,94,.16);padding:12px 14px;width:min(340px,90vw);font-size:12.5px}
 .hd-ul{margin:6px 0 0 18px;line-height:1.6;color:#475569}
 @media print{.hd-r{display:none}}
+/* Bombillo de sugerencias (Anexo D) */
+.bulb{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fef3c7;border:1px solid #fcd34d;font-size:13px;cursor:help;vertical-align:middle;margin-left:6px;box-shadow:0 0 0 3px rgba(251,191,36,.22);user-select:none}
+.bulb:focus-visible{outline:2px solid #d97706;outline-offset:2px}
+.bulb-tip{position:fixed;z-index:60;max-height:calc(100vh - 16px);overflow:auto;background:#fff;border:1px solid #fcd34d;border-radius:10px;box-shadow:0 14px 34px rgba(15,45,94,.2);padding:12px 14px;font-size:12.5px;line-height:1.45;color:var(--text);text-align:left}
+.bulb-tip .bt-t{font-weight:800;color:#92400e;margin-bottom:6px}
+.bulb-tip .bt-por{color:var(--muted);font-size:11.5px;margin-bottom:8px}
+.bulb-tip .bt-op{padding:5px 0 5px 14px;position:relative}.bulb-tip .bt-op:before{content:'•';position:absolute;left:3px;color:#d97706}
+.bulb-tip .bt-op.mejor{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:7px 9px;margin:2px 0 6px;color:#065f46}.bulb-tip .bt-op.mejor:before{content:none}
+.bulb-tip .bt-ok,.bulb-tip .bt-no{display:block;font-size:11px;font-style:italic}.bulb-tip .bt-ok{color:#057a55}.bulb-tip .bt-no{color:#b45309}
+.bulb-tip .bt-nota{color:var(--muted);font-size:11px;margin-top:6px;border-top:1px dotted #e2e8f0;padding-top:6px}
+@media print{.bulb,.bulb-tip{display:none!important}}

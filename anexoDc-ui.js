@@ -105,7 +105,9 @@ const num0 = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); ret
 function calcCim(el, tipo, D, R){
   const M = S.m.anexos?.C?.modelo, c = combosD(D, M);
   const fr = filasReac(R, el.nudos, c.res), fs = filasReac(R, el.nudos, c.serv);
-  const X = tipo === 'zap' ? Concreto.zapata(zapEf(el, D), fs, fr) : Concreto.pedestal(pedEf(el, D), fr);
+  const obj = tipo === 'zap' ? zapEf(el, D) : pedEf(el, D);
+  const X = tipo === 'zap' ? Concreto.zapata(obj, fs, fr) : Concreto.pedestal(obj, fr);
+  if(X.ok) X._in = { obj, fs, fr };
   el.res = X.ok ? { ok:true, ratio:+X.ratio.toFixed(3), cumple:X.cumple, fecha:new Date().toISOString() } : { ok:false, error:X.error };
   return X;
 }
@@ -116,7 +118,8 @@ async function pintarResCim(el, tipo, D){
   if(!el.nudos.length){ box.innerHTML = '<div class="note amber">Escoge los nudos de apoyo.</div>'; el.res = { ok:false, error:'sin nudos' }; return; }
   const X = calcCim(el, tipo, D, R);
   if(!X.ok){ box.innerHTML = `<div class="note amber">${esc(X.error)}</div>`; return; }
-  box.innerHTML = tipo === 'zap' ? resZapHTML(X) : resPedHTML(X);
+  const sg = esIng() && typeof Sugerir !== 'undefined' ? (k => bulbHTML(tipo === 'zap' ? Sugerir.zapata(X._in.obj, X._in.fs, X._in.fr, k) : Sugerir.pedestal(X._in.obj, X._in.fr, k))) : null;
+  box.innerHTML = tipo === 'zap' ? resZapHTML(X, false, sg) : resPedHTML(X, false, sg);
   if(tipo === 'ped' && $('#pVista')) $('#pVista').innerHTML = svgPedestal(X) + svgDiagrama(X);
   const lista = document.querySelector(`[data-selc="${el.id}"] .pill`); if(lista) lista.outerHTML = pillRes(el.res);
   pintarListo();
@@ -124,25 +127,26 @@ async function pintarResCim(el, tipo, D){
 const barra3 = (r, col) => `<span class="bar-d"><i style="width:${Math.min(100, r*100)}%;background:${r > 1 ? '#dc2626' : r > 0.9 ? '#d97706' : '#10b981'}"></i></span> <b>${fx(r,3)}</b>`;
 const okP = r => pill(r <= 1 ? 'ok' : 'no', r <= 1 ? 'Cumple' : 'No cumple');
 
-function resZapHTML(X, imp){
+function resZapHTML(X, imp, sg){
+  const bb = (k, falla) => !imp && sg && falla ? sg(k) : '';
   const k3 = v => fx(v/1e3, 2), m6 = v => fx(v/1e6, 2), s = X.serv, u = X.ult;
   const T = imp ? (cab, filas) => `<table class="ax-tb"><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.map(r => `<tr>${r.map((c,i) => `<td class="${i?'c':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>` : tabla;
   const rel = r => imp ? fx(r,3) : barra3(r), ok = r => imp ? (r <= 1 ? 'Cumple' : '<b>No cumple</b>') : okP(r);
   const filas = [
-    ['Presión del suelo (servicio)', `q máx = ${fx(s.qmax,1)} kN/m²`, `qa = ${fx(X.qa,1)} kN/m²`, rel(s.rel), ok(s.rel), filaReacTxt(s.f)],
-    ['Excentricidad dentro del núcleo', `6ex/B + 6ey/L = ${fx(6*s.ex/(X.B/1000) + 6*s.ey/(X.L/1000),3)}`, '≤ 1.00', '', s.nucleo ? (imp ? 'Cumple' : okP(0)) : (imp ? '<b>No cumple</b>' : okP(9)), ''],
-    ['Cortante en una dirección, x (C.11.2)', `${k3(X.cx.Vu)} kN`, `${k3(X.cx.phiVc)} kN`, rel(X.cx.rel), ok(X.cx.rel), filaReacTxt(u.f)],
-    ['Cortante en una dirección, y', `${k3(X.cy.Vu)} kN`, `${k3(X.cy.phiVc)} kN`, rel(X.cy.rel), ok(X.cy.rel), ''],
-    [`Punzonamiento (C.11.11.2.1, αs = ${X.punz.alfa})`, `${k3(X.punz.Vu)} kN`, `${k3(X.punz.phiVc)} kN`, rel(X.punz.rel), ok(X.punz.rel), ''],
-    ['Flexión barras en x (C.15.4)', `${m6(X.fx.Mu)} kN·m`, `${m6(X.fx.phiMn)} kN·m`, rel(X.fx.rel), ok(X.fx.rel), `rige ${X.fx.rigeM}`],
-    ['Flexión barras en y', `${m6(X.fy.Mu)} kN·m`, `${m6(X.fy.phiMn)} kN·m`, rel(X.fy.rel), ok(X.fy.rel), `rige ${X.fy.rigeM}`],
-    ['Aplastamiento (C.10.14)', `${k3(X.apl.Pu)} kN`, `${k3(X.apl.phiBn)} kN`, rel(X.apl.rel), ok(X.apl.rel), ''],
+    ['Presión del suelo (servicio)', `q máx = ${fx(s.qmax,1)} kN/m²`, `qa = ${fx(X.qa,1)} kN/m²`, rel(s.rel), ok(s.rel) + bb('suelo', s.rel > 1), filaReacTxt(s.f)],
+    ['Excentricidad dentro del núcleo', `6ex/B + 6ey/L = ${fx(6*s.ex/(X.B/1000) + 6*s.ey/(X.L/1000),3)}`, '≤ 1.00', '', s.nucleo ? (imp ? 'Cumple' : okP(0)) : (imp ? '<b>No cumple</b>' : okP(9) + bb('nucleo', true)), ''],
+    ['Cortante en una dirección, x (C.11.2)', `${k3(X.cx.Vu)} kN`, `${k3(X.cx.phiVc)} kN`, rel(X.cx.rel), ok(X.cx.rel) + bb('corteX', X.cx.rel > 1), filaReacTxt(u.f)],
+    ['Cortante en una dirección, y', `${k3(X.cy.Vu)} kN`, `${k3(X.cy.phiVc)} kN`, rel(X.cy.rel), ok(X.cy.rel) + bb('corteY', X.cy.rel > 1), ''],
+    [`Punzonamiento (C.11.11.2.1, αs = ${X.punz.alfa})`, `${k3(X.punz.Vu)} kN`, `${k3(X.punz.phiVc)} kN`, rel(X.punz.rel), ok(X.punz.rel) + bb('punz', X.punz.rel > 1), ''],
+    ['Flexión barras en x (C.15.4)', `${m6(X.fx.Mu)} kN·m`, `${m6(X.fx.phiMn)} kN·m`, rel(X.fx.rel), ok(X.fx.rel) + bb('flexX', X.fx.rel > 1), `rige ${X.fx.rigeM}`],
+    ['Flexión barras en y', `${m6(X.fy.Mu)} kN·m`, `${m6(X.fy.phiMn)} kN·m`, rel(X.fy.rel), ok(X.fy.rel) + bb('flexY', X.fy.rel > 1), `rige ${X.fy.rigeM}`],
+    ['Aplastamiento (C.10.14)', `${k3(X.apl.Pu)} kN`, `${k3(X.apl.phiBn)} kN`, rel(X.apl.rel), ok(X.apl.rel) + bb('apl', X.apl.rel > 1), ''],
   ];
   const ref = f => `${f.n} barras Ø ${fx(f.db,1)} mm c/ ${fx(f.s,0)} mm (As = ${fx(f.As,0)} mm², rige ${f.rige}) · anclaje: ${f.anclaje} (Ld ${fx(f.ld,0)}, gancho ${fx(f.ldh,0)}, disponible ${fx(f.disp,0)} mm)`;
   return `${T(['Chequeo','Demanda','Capacidad','Relación','','Combinación que controla'], filas)}
     ${imp ? `<div class="ax-box">Relación máxima = ${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>` : `<div class="wtot" style="background:${X.cumple ? '' : '#b91c1c'}"><span>Relación máxima</span><span>${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>`}
     <h4 class="sub">Refuerzo</h4><p style="margin:4px 0">Barras en x: ${ref(X.fx)}<br/>Barras en y: ${ref(X.fy)}</p>
-    ${!X.fx.anclOk || !X.fy.anclOk ? `<div class="${imp ? 'ax-nota' : 'note amber'}">El gancho no cabe en el voladizo disponible: aumenta la zapata o usa una barra menor.</div>` : ''}
+    ${!X.fx.anclOk || !X.fy.anclOk ? `<div class="${imp ? 'ax-nota' : 'note amber'}">El gancho no cabe en el voladizo disponible: aumenta la zapata o usa una barra menor. ${bb(X.fx.anclOk ? 'anclY' : 'anclX', true)}</div>` : ''}
     ${imp ? '' : '<details class="d-opc" style="margin-top:10px"><summary>Ver cálculo detallado</summary>'}${detZapCalc(X, imp)}${imp ? '' : '</details>'}`;
 }
 function detZapCalc(X, imp){
@@ -167,17 +171,18 @@ function detZapCalc(X, imp){
     ['Aplastamiento: A1 · √(A2/A1) ≤ 2 · φBn = 0.65·0.85·f\'c·A1·√(A2/A1)', `${fx(X.apl.A1,0)} mm² · ${fx(X.apl.fac,2)} · ${fx(X.apl.phiBn/1e3,1)} kN`]])}`;
 }
 
-function resPedHTML(X, imp){
+function resPedHTML(X, imp, sg){
+  const bb = (k, falla) => !imp && sg && falla ? sg(k) : '';
   const g = X.gob, v = X.gobV;
   const T = imp ? (cab, filas) => `<table class="ax-tb"><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.map(r => `<tr>${r.map((c,i) => `<td class="${i?'c':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>` : tabla;
   const rel = r => imp ? fx(r,3) : barra3(r), ok = b => imp ? (b ? 'Cumple' : '<b>No cumple</b>') : pill(b ? 'ok' : 'no', b ? 'Cumple' : 'No cumple');
   const filas = [
-    [`Flexo-compresión (${g.met})`, `Pu ${fx(g.Pu/1e3,1)} kN · Mux ${fx(g.Mux/1e6,2)} · Muy ${fx(g.Muy/1e6,2)} kN·m`, `φMnx ${fx(g.mx/1e6,1)} · φMny ${fx(g.my/1e6,1)} kN·m`, rel(g.rel), ok(g.rel <= 1), filaReacTxt(g.f)],
-    ['Cortante (C.11)', `Vx ${fx(v.Vx/1e3,2)} · Vy ${fx(v.Vy/1e3,2)} kN`, `φVc x ${fx(v.cx.phiVc/1e3,1)} · y ${fx(v.cy.phiVc/1e3,1)} kN`, rel(X.relV), ok(X.relV <= 1), filaReacTxt(v.f)],
-    ['Esbeltez k·lu/r (C.10.10.1)', `x ${fx(X.esbX,1)} · y ${fx(X.esbY,1)}`, '≤ 22', '', ok(X.esbOk), ''],
-    ['Separación en Lo (C.21.3.5)', `${fx(X.sConf,0)} mm`, `≤ ${fx(X.sConfMax,0)} mm`, '', X.sOk === null ? '—' : ok(X.sOk), `Lo = ${fx(X.Lo,0)} mm`],
-    ['Separación fuera de Lo', `${fx(X.sFuera,0)} mm`, `≤ ${fx(X.sFueraMax,0)} mm`, '', X.sfOk === null ? '—' : ok(X.sfOk), ''],
-    ['Anclaje en la zapata (C.15.8)', X.anc.disp > 0 ? `disponible ${fx(X.anc.disp,0)} mm` : 'sin zapata enlazada', `gancho ${fx(X.anc.ldh,0)} · compresión ${fx(X.anc.ldc,0)} mm`, '', X.anc.disp > 0 ? ok(X.anc.ok) : '—', ''],
+    [`Flexo-compresión (${g.met})`, `Pu ${fx(g.Pu/1e3,1)} kN · Mux ${fx(g.Mux/1e6,2)} · Muy ${fx(g.Muy/1e6,2)} kN·m`, `φMnx ${fx(g.mx/1e6,1)} · φMny ${fx(g.my/1e6,1)} kN·m`, rel(g.rel), ok(g.rel <= 1) + bb('pm', g.rel > 1), filaReacTxt(g.f)],
+    ['Cortante (C.11)', `Vx ${fx(v.Vx/1e3,2)} · Vy ${fx(v.Vy/1e3,2)} kN`, `φVc x ${fx(v.cx.phiVc/1e3,1)} · y ${fx(v.cy.phiVc/1e3,1)} kN`, rel(X.relV), ok(X.relV <= 1) + bb('corte', X.relV > 1), filaReacTxt(v.f)],
+    ['Esbeltez k·lu/r (C.10.10.1)', `x ${fx(X.esbX,1)} · y ${fx(X.esbY,1)}`, '≤ 22', '', ok(X.esbOk) + bb('esb', !X.esbOk), ''],
+    ['Separación en Lo (C.21.3.5)', `${fx(X.sConf,0)} mm`, `≤ ${fx(X.sConfMax,0)} mm`, '', X.sOk === null ? '—' : ok(X.sOk) + bb('sConf', X.sOk === false), `Lo = ${fx(X.Lo,0)} mm`],
+    ['Separación fuera de Lo', `${fx(X.sFuera,0)} mm`, `≤ ${fx(X.sFueraMax,0)} mm`, '', X.sfOk === null ? '—' : ok(X.sfOk) + bb('sFuera', X.sfOk === false), ''],
+    ['Anclaje en la zapata (C.15.8)', X.anc.disp > 0 ? `disponible ${fx(X.anc.disp,0)} mm` : 'sin zapata enlazada', `gancho ${fx(X.anc.ldh,0)} · compresión ${fx(X.anc.ldc,0)} mm`, '', X.anc.disp > 0 ? ok(X.anc.ok) + bb('anc', !X.anc.ok) : '—', ''],
   ];
   return `${T(['Chequeo','Demanda','Capacidad','Relación','','Combinación que controla'], filas)}
     ${imp ? `<div class="ax-box">Relación máxima = ${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>` : `<div class="wtot" style="background:${X.cumple ? '' : '#b91c1c'}"><span>Relación máxima (${X.filas.length} combinaciones revisadas)</span><span>${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>`}

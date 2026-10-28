@@ -104,6 +104,9 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Anexo C revisión: aviso de diseño, relaciones > 1, norma ≠ 360-10, pórtico vs `K.sisR` (DES→SMF, DMO→IMF, DMI→OMF).
   Anexo D: `calcMet` revisa cada elemento del grupo con sus filas (`res.porEl`, `res.Fc` = el que controla, `res.rp` = máx. del software); `el.fuente` 'programa' (L, K, Cb del software por elemento, `el.ov{F:{Lx,Ly,Lb,Cb}}` = ✎) | 'manual';
   nuevos desde el Anexo C = 'programa' si hay diseño con longitudes. Bloque `progHTML` en cada elemento, resumen `pintarCompSw` (#dComp, «Revisar» si |dif| > 15 %), tabla en el PDF `swPrintHTML` (10 mayores).
+  Bombillo 💡 (opción A de Amo, 28-oct): en cada chequeo que no cumple (metálicos, zapatas, pedestales; solo pantalla, rol ingeniero) `bulbHTML(sg)` con recuadro flotante fijo
+  (por qué falla + cambio mínimo + alternativas). `calc/sugerencias.js` = `Sugerir.metal(el, filas, k)` (Lb/Ly por bisección, Cb, pernos, perfil siguiente de la familia, el más liviano de otra familia, tubos/barras),
+  `Sugerir.zapata(z, serv, res, k)` (B=L, alargar, h, f'c, barra, pedestal, gancho) y `Sugerir.pedestal(p, res, k)`; cada opción se recalcula con las mismas fuerzas. Usa `R._uso` (elemento y filas del que controla).
   Botón «Ordenar por nombre» (orden natural) en las tres pestañas; el orden guardado es el del PDF.
   Concreto (`calc/concreto.js` = `Concreto`, pantalla `anexoDc-ui.js`): reacciones de «JOINT REACTIONS» del .$2k (`AnexoC.reacciones`, resumen en `modelo.reac` {nudos,casos,res,serv});
   combinaciones `D.cServ` / `D.cRes` (por defecto serv = con D y no de resistencia). `D.zap[]` {nom Z-n, nudos[], pos centrada|medianera|esquinera (αs 40/30/20), B,L,h,Df [m], ped (enlace → bx,by,Hp),
