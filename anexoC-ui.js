@@ -26,11 +26,15 @@ async function cargarModeloC(f){
   try{
     toast('Leyendo el modelo…', 15000);
     const t = await f.text(), M = AnexoC.analizar(t);
+    // huella del contenido: avisa si se vuelve a subir el mismo archivo (pasa cuando SAP lo guardó en otra carpeta)
+    let hh = 5381; for(let i = 0; i < t.length; i++) hh = ((hh << 5) + hh + t.charCodeAt(i)) | 0;
+    const firma = (hh >>> 0).toString(36) + '-' + t.length;
+    if(C.archivo?.firma === firma && !confirm('Este archivo es idéntico al que ya está cargado.\n\n¿Seguro que es el archivo nuevo? Si exportaste de nuevo desde SAP, revisa la carpeta donde se guardó.\n\nAceptar = subirlo igual · Cancelar = escoger otro')) return toast('No se cambió el modelo.');
     if(!M.ok) return toast(M.error, 6000);
     const path = `${S.m.id}/modelo-sap.s2k`;
     toast('Guardando el archivo…', 15000);
     await subir(path, new Blob([t], { type:'text/plain' }), 'text/plain');
-    C.archivo = { nombre:f.name, path, fecha:new Date().toISOString(), kb:Math.round(f.size / 1024) };
+    C.archivo = { nombre:f.name, path, fecha:new Date().toISOString(), kb:Math.round(f.size / 1024), firma };
     delete M.tablas; C.modelo = M; C.sinPeso = null; _txtSap = { path, fecha:C.archivo.fecha, t };
     guardarMemoria(); toast(`Modelo leído: ${M.nudos.n} nudos, ${M.frames} elementos.`); renderWS('C');
   }catch(e){ err(e, 'No se pudo cargar el modelo'); }
