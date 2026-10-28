@@ -156,6 +156,12 @@ function pedestal(p, res, k){
     const rel = x => x.relV;
     for(let s = pisoA(num(p.sFuera, 150) - 10, 10); s >= 50; s -= 10){ const x = run({ sFuera:s }); if(x.ok && rel(x) <= 1){ add(`Estribos fuera de Lo cada <b>${s} mm</b>`, x, rel, true); break; } }
     { const x = run({ ramasX:num(p.ramasX, 2) + 1, ramasY:num(p.ramasY, 2) + 1 }); if(x.ok && rel(x) <= 1) add('Una rama más en cada dirección (gancho suplementario)', x, rel); }
+  } else if(k === 'rho'){
+    tit = 'cuantía mínima'; por = `La cuantía es ${(Math.floor(X.rho*10000)/100).toFixed(2)} % (Ast = ${X.Ast.toFixed(0)} mm²): el refuerzo longitudinal debe ser al menos el 1 % de la sección bruta (Ast ≥ ${X.AstMin.toFixed(0)} mm², C.10.9.1).`;
+    const okR = x => x.ok && x.rhoOk;
+    for(let i = 1; i <= 8; i++){ const nx = num(p.nx, 3) + Math.ceil(i/2), ny = num(p.ny, 3) + Math.floor(i/2), x = run({ nx, ny }); if(okR(x)){ ops.push({ t:`Más barras: <b>${nx} por cara en x y ${ny} en y</b> (${2*nx + 2*ny - 4} barras, ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple, mejor:true }); break; } }
+    for(const bb of BAR_ORDEN.slice(BAR_ORDEN.indexOf(p.bar) + 1)){ const x = run({ bar:bb }); if(okR(x)){ ops.push({ t:`Barras de <b>${bb}</b> con la misma cantidad (ρ = ${(x.rho*100).toFixed(2)} %)`, r:null, todo:x.cumple }); break; } }
+    ops.push({ t:'Si la sección es más grande de lo necesario por resistencia, reducirla también baja el acero mínimo.', r:null });
   } else if(k === 'esb'){
     tit = 'esbeltez'; const need = techoA(num(p.k, 2)*X.Hp/(0.3*22), 50);
     por = `k·lu/r = ${Math.max(X.esbX, X.esbY).toFixed(1)} > 22: el pedestal es esbelto para su altura.`;

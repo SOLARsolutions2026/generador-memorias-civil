@@ -7,7 +7,7 @@
    Pedestales — diagrama P–M por compatibilidad (φ variable, Pn,máx = 0.80·φ·Po, concreto desplazado, β1 según f'c),
    relación por carga, biaxial (Bresler), esbeltez klu/r ≤ 22, cortante (d correcto, Vc con Nu, Vs, s, Av,mín),
    confinamiento C.21.3.5 (Lo ≥ 500, Ash con Ach y bc correctos, ÷ s), cargas simultáneas por combinación y anclaje en la zapata.
-   La cuantía 1 %–4 % se informa pero no se marca (Amo no la aprobó como chequeo). */
+   Cuantía mínima 1 % de Ag (C.10.9.1) es chequeo (Amo, 28-oct-2026); la máxima 4 % solo se informa. */
 (function(root){
 'use strict';
 const num = (v, d=0) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : d; };
@@ -167,7 +167,7 @@ function pedestal(p, resistencia){
   if(!(b > 0 && h > 0)) return { ok:false, error:'Faltan las dimensiones del pedestal.' };
   if(!resistencia.length) return { ok:false, error:'Faltan las reacciones de resistencia.' };
   const B = barrasPed(p), dgx = diagrama(p, 'x'), dgy = diagrama(p, 'y'), Ag = b*h, sq = Math.sqrt(fc);
-  const rho = B.Ast/Ag;
+  const rho = B.Ast/Ag, rhoOk = rho >= 0.01 - 1e-9;      // cuantía mínima 1 % de Ag (C.10.9.1, pedido de Amo 28-oct); la máxima 4 % queda informativa
   // Esbeltez (C.10.10.1): k·lu/r ≤ 22, r = 0.3·dimensión
   const k = num(p.k, 2), esbX = k*Hp/(0.3*h), esbY = k*Hp/(0.3*b);
   // Cortante (C.11): d = dim − rec − estribo − db/2
@@ -209,8 +209,8 @@ function pedestal(p, resistencia){
   const sOk = sConf > 0 ? sConf <= sConfMax + 0.5 : null, sfOk = sFuera > 0 ? sFuera <= sFueraMax + 0.5 : null;
   const ratio = Math.max(gob.rel, relV);
   return { ok:true, b, h, Hp, rec, fc, fy, Ag, ...B, rho, dgx, dgy, esbX, esbY, esbOk:Math.max(esbX, esbY) <= 22, dX, dY, so, Lo, bcX, bcY, Ach, ashX:ashS(bcY), ashY:ashS(bcX),
-    sAshX, sAshY, sConfMax, sFueraMax, sConf, sFuera, sOk, sfOk, anc, filas, gob, gobV, relV, ratio,
-    cumple: ratio <= 1 && Math.max(esbX, esbY) <= 22 && sOk !== false && sfOk !== false && (hz > 0 ? anc.ok : true) };
+    sAshX, sAshY, sConfMax, sFueraMax, sConf, sFuera, sOk, sfOk, anc, filas, gob, gobV, relV, ratio, rhoOk, AstMin:0.01*Ag,
+    cumple: ratio <= 1 && rhoOk && Math.max(esbX, esbY) <= 22 && sOk !== false && sfOk !== false && (hz > 0 ? anc.ok : true) };
 }
 
 const api = { BARRAS, ALFA_S, beta1, ld, ldh, ldc, zapata, pedestal, diagrama, barrasPed, phiMnEn, pnEn };
