@@ -215,7 +215,7 @@ function fuerzasCardHTML(C, M){
       <div class="hint">Elementos: ${esc(g.ids)}</div>
       <h4 class="sub">① Envolvente</h4>${tabla(['', ...Object.keys(FZ_U).map(k => `${k} [${FZ_U[k]}]`)], ['max','min'].map(m => [`<b>${m === 'max' ? 'Máx' : 'Mín'}</b>`,
         ...Object.keys(FZ_U).map(k => { const f = g.env[k][m]; return f ? `${fx(f[k],2)}<div class="ids">E${esc(f.F)} · ${esc(f.c)}</div>` : '—'; })]), 'fz-tb')}
-      <h4 class="sub">② Filas críticas (fuerzas concomitantes)</h4>${tabla(['Caso','Elemento · combinación', ...Object.keys(FZ_U)], critUnicos(g).map(({ f, k }) => [
+      <h4 class="sub">② Filas críticas (fuerzas que actúan al mismo tiempo)</h4>${tabla(['Caso','Elemento · combinación', ...Object.keys(FZ_U)], critUnicos(g).map(({ f, k }) => [
         `<b>${k.map(x => CRIT_N[x]).join('<br/>')}</b>`, `${filaCrit(f)}<div class="ids">estación ${fx(f.st,2)} m</div>`,
         ...Object.keys(FZ_U).map(q => `<span class="${k.some(x => CRIT_K[x] === q) ? 'fz-hl' : ''}">${fx(f[q],2)}</span>`)]), 'fz-tb')}</details>`).join('')}</div>`;
 }
@@ -229,7 +229,7 @@ function activarFuerzas(C, M){
 }
 function fuerzasPrintHTML(Fz, tb){
   return `<p>Fuerzas obtenidas del análisis en ${esc(String(Fz.n))} filas de resultados, condensadas por grupo de elementos (sección y función). Combinaciones de resistencia usadas: ${Fz.res.map(esc).join('; ')}.
-    Para cada grupo se presenta la envolvente (valor máximo y mínimo de cada fuerza, con el elemento y la combinación donde ocurre) y las filas críticas con las fuerzas concomitantes, que son las que se emplean en el diseño de los elementos.</p>
+    Para cada grupo se presenta la envolvente (valor máximo y mínimo de cada fuerza, con el elemento y la combinación donde ocurre) y las filas críticas con las fuerzas que actúan simultáneamente, que son las que se emplean en el diseño de los elementos.</p>
     ${Fz.grupos.map(g => `<h4>${esc(g.sec)} — ${esc(g.fun)} (${g.n} elemento${g.n > 1 ? 's' : ''})</h4>
       ${tb(['', ...Object.keys(FZ_U).map(k => `${k} [${FZ_U[k]}]`)], ['max','min'].map(m => [m === 'max' ? 'Máx' : 'Mín',
         ...Object.keys(FZ_U).map(k => { const f = g.env[k][m]; return f ? `${fx(f[k],2)}<br/><span style="font-size:7pt">E${esc(f.F)} · ${esc(f.c)}</span>` : '—'; })]), null, 'fz-p')}
