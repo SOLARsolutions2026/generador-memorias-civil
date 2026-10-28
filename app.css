@@ -412,3 +412,12 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .tab-n.vacio{background:var(--gray-bg);color:var(--muted);font-weight:600}
 .tabs button.on .tab-n{background:#fff}
 .chip-c input{width:auto;margin:0;min-height:0}
+/* Anexo D */
+.d-grid{display:grid;grid-template-columns:270px minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:900px){.d-grid{grid-template-columns:minmax(0,1fr)}}
+.d-lista{position:sticky;top:10px}
+.d-el{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:12.5px}
+.d-el.on{outline:2px solid var(--blue);background:#f8fbff}.d-el small{display:block;color:var(--muted);font-size:11px}
+.bar-d{display:inline-block;width:90px;height:8px;border-radius:4px;background:#e2e8f0;position:relative;vertical-align:middle;overflow:hidden}.bar-d i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.d-opc{margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px}.d-opc summary{cursor:pointer;font-weight:700;font-size:12.5px}
+.ax section.ax-cont{break-before:auto;margin-top:14px;padding-top:8px;border-top:1px solid #cbd5e1}

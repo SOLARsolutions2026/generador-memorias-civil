@@ -88,6 +88,16 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Términos que usan otra combinación: `T('@Nombre', f, lbl)`. Tabla para SAP con CaseType (Combination / Linear Static).
   Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
 
+- `anexos.D` (paso D con pestañas `tabD`: met / zap / ped; cálculo `calc/anexoD.js` = `AnexoD`, pantalla `anexoD-ui.js`, biblioteca `data/perfiles.js` = `PERFILES_LAM`
+  111 perfiles IPE/IPN/HEA/HEB/HEM de la hoja PERFILES de Amo, en mm: [nombre, fam, h, b, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy, J, Cw, kg/m]).
+  `D.met[]` = {id, nom PF-n, desc, tipo I|HSS|BAR, perfil | H,B,t | d, acero, Lx,Ly,Lb,Lz [m], Kx,Ky,Kz,Cb, tension{U,nAg,dperno,tAg,roscada}, pernos{n,d,tipo,tpl,rosca},
+  fuerzas 'grupo'|'manual', grupo 'sección|función' (de C-7), manual{P,V2,V3,T,M2,M3}, res (resumen guardado)}. «Crear desde el Anexo C» arma uno por grupo (`AnexoD.desdeNombre`).
+  Fuerzas: todas las filas del grupo (`AnexoC.filasGrupos`, descarga el .s2k una vez por sesión; si falla, usa las filas críticas guardadas). Ejes SAP: M3/V2 fuerte, M2/V3 débil, P− compresión.
+  NSR-10 F.2 con las 16 correcciones aprobadas por Amo (Cw b³/Iw, rts eje débil, LTB A/B/C ≤ Mp, FLB no compacta, φ eje menor, H1-1a/b (H3-6 en HSS si T > 0.2Tc),
+  cortante φv/Aw correctos, torsión I por esfuerzo, L y K por eje, J de tabla; HSS t = 0.93t, Q (f = Fcr con Q=1), torsión (i)(ii)(iii), Aw = 2·h·t;
+  tensión L/rmín ≤ 300, pernos 0.75·2.4·d·t·Fu y corte; barra: solo tensión, rotura 0.75, aviso si hay compresión). Verificado contra los Excel: IPE 200 φMn 56.5, IPE 120 13.2 (int 0.57).
+  Concreto (zapatas con método clásico NSR + imágenes del modelo; pedestales; reacciones Joint Reactions del .s2k): PENDIENTE — antes mostrar a Amo cada corrección (lo pidió).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -98,8 +108,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho también: Anexo A (cargas muerta, viva y viento B.6.5 para cubierta libre a un agua), con páginas imprimibles.
 - Hecho: Anexo B (FHE, iteraciones) y Anexo C (modelo SAP2000 desde .$2k).
 - Hecho: paso Combinaciones e irregularidades (solo pantalla).
-- Siguiente: memoria general (plantilla de Amo), D (IPE/HEA/tubulares, zapatas,
-  pedestales), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
+- Hecho: Anexo D elementos metálicos.
+- Siguiente: Anexo D concreto (zapatas, pedestales), memoria general (plantilla de Amo), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.

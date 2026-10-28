@@ -247,7 +247,7 @@ const STEPS = [
   { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Análisis sísmico' },
   { id:'K',  ph:'Cálculos',   n:'∑', t:'Combinaciones',           s:'Irregularidades y NSR-10 B.2' },
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — Modelo',        s:'Datos y resultados' },
-  { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Próximamente', off:1 },
+  { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Metálicos y concreto' },
   { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Próximamente', off:1 },
   { id:'FG', ph:'Documentos', n:'F', t:'Planos y suelos',         s:'Próximamente', off:1 },
   { id:'gen',ph:'Documentos', n:'✓', t:'Generar PDF final',       s:'Próximamente', off:1 },
@@ -401,6 +401,11 @@ const ANEXOS_LISTO = {
     if(an.B?.aplica !== false && !(R.R.R > 0)) f.push('R0 del sistema estructural');
     if(R.faltaPat.length) f.push('nombre del patrón en el modelo para ' + R.faltaPat.join(', '));
     return f; } },
+  D: { n:'Anexo D', huella: an => huella(an.D?.met?.map(e => ({ ...e, res:undefined })), an.D?.zap, an.D?.ped, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res), faltan(an){
+    const met = an.D?.met || [], f = [];
+    if(!met.length) f.push('elementos metálicos');
+    for(const e of met){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple) f.push(`${e.nom} no cumple (relación ${e.res.ratio})`); }
+    return f; } },
   C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
     const C = an.C, f = [];
     if(!C?.modelo) f.push('archivo del modelo (.$2k)');
@@ -482,6 +487,7 @@ A(){ paneAnexoA(); },
 B(){ paneAnexoB(); },
 K(){ paneCombos(); },
 C(){ paneAnexoC(); },
+D(){ paneAnexoD(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;

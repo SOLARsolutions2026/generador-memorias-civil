@@ -302,7 +302,23 @@ function fuerzasDe(T, res){
   return { n:filas.length, casos, res:[...usar], defRes, grupos, envMaxMin: filas.some(r => r.StepType === 'Max' || r.StepType === 'Min') };
 }
 const fuerzas = (texto, res) => fuerzasDe(leer(texto), res);
+// Todas las filas por grupo (para el diseño del Anexo D) y la longitud de cada grupo (estación máxima de sus elementos)
+function filasGrupos(texto, res){
+  const T = leer(texto), filas = T['ELEMENT FORCES - FRAMES'] || [], usar = res ? new Set(res) : null;
+  const J = {}; for(const r of T['JOINT COORDINATES'] || []) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const fun = {}, lon = {}; for(const r of T['CONNECTIVITY - FRAME'] || []){ fun[r.Frame] = funcionElem(J[r.JointI], J[r.JointJ]); const a = J[r.JointI], b = J[r.JointJ]; if(a && b) lon[r.Frame] = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]); }
+  const sec = {}; for(const r of T['FRAME SECTION ASSIGNMENTS'] || []) sec[r.Frame] = r.AnalSect || r.DesignSect || '?';
+  const G = {};
+  for(const r of filas){
+    if(usar && !usar.has(r.OutputCase)) continue;
+    const key = (sec[r.Frame] || '?') + '|' + (fun[r.Frame] || 'Elemento');
+    const g = G[key] = G[key] || { filas:[], Lmax:0 };
+    const f = { F:r.Frame, c:r.OutputCase, st:num(r.Station), step:r.StepType || '' }; for(const k of FZ) f[k] = num(r[k]);
+    g.filas.push(f); g.Lmax = Math.max(g.Lmax, lon[r.Frame] || f.st);
+  }
+  return G;
+}
 
-const api = { fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+const api = { filasGrupos, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);
