@@ -84,10 +84,6 @@ function paneAnexoC(){
         ${M.punt.length ? `<h4 class="sub">Puntuales en elementos</h4>${cg(M.punt.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.P,3)} kN a ${fx(d.rel,2)} L`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`]))}` : ''}
         ${M.nudosF.length ? `<h4 class="sub">En nudos (sumas por patrón)</h4>${tabla(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), `<span class="ids">${esc(o.ids)}</span>`]))}` : ''}</div>`;
     h += `</div><div data-tc="res" ${tabC === 'res' ? '' : 'hidden'}>` + fuerzasCardHTML(C, M) + '</div>';
-    h += `<div class="card"><div class="ct">Páginas del Anexo C</div>
-        <p class="lead" style="margin-bottom:10px">En la memoria salen los resúmenes. Las tablas completas (cada nudo, cada elemento y cada carga) son opcionales y ocupan varias páginas.</p>
-        <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="compC" ${C.completas ? 'checked' : ''} ${ro_}/> Incluir también las tablas completas</label><br/>
-        <button class="btn grn" type="button" id="printC">🖨 Imprimir / Guardar PDF del Anexo C</button></div>`;
   }
   pane(h);
   if(M) pintarRevC();
@@ -96,7 +92,6 @@ function paneAnexoC(){
   if(C.img) urlDe(C.img).then(u => { const b = $('#imgC'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Imagen del modelo" style="max-width:100%;max-height:340px"/>` : '<span class="muted">No se encontró la imagen.</span>'; });
   if($('#bajaS2k')) $('#bajaS2k').onclick = async () => { const u = await urlDe(C.archivo.path); if(!u) return toast('No se encontró el archivo.');
     const a = document.createElement('a'); a.href = u; a.download = C.archivo.nombre; a.click(); };
-  if($('#printC')) $('#printC').onclick = () => imprimirC(C);
   if(!esIng()) return;
   const zona = (el, accept, fn) => { if(!el) return;
     el.onclick = async () => { const f = await elegirArchivo(accept); if(f) fn(f); };
@@ -112,7 +107,6 @@ function paneAnexoC(){
   if($('#delImgC')) $('#delImgC').onclick = async () => { await sb.storage.from(BUCKET).remove([C.img]); C.img = ''; guardarMemoria(); renderWS('C'); };
   $('#descC').oninput = e => { C.descripcion = e.target.value.trim() === descDefC(M) ? '' : e.target.value; guardarMemoria(); };
   $('#notaImgC').oninput = e => { C.notaImg = e.target.value; guardarMemoria(); };
-  $('#compC').onchange = e => { C.completas = e.target.checked; guardarMemoria(); };
   activarFuerzas(C, M);
   $$('[data-sp]').forEach(i => i.onchange = () => { const ex = new Set(sinPesoC(C)); i.checked ? ex.delete(i.dataset.sp) : ex.add(i.dataset.sp); C.sinPeso = [...ex]; guardarMemoria(); paneAnexoC(); });
   if($('#aB')) $('#aB').onclick = () => {

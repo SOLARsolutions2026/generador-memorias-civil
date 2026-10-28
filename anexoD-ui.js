@@ -152,13 +152,11 @@ function paneAnexoD(){
         <button class="btn sm" type="button" id="dNuevo" style="width:100%;margin-top:6px">＋ Agregar elemento</button>
         ${D.met.length > 1 ? '<button class="btn sm" type="button" data-ordenar="met" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>' : ''}` : ''}
     </div><div id="dDet">${sel ? detMetHTML(sel) : '<div class="card"><p class="muted">Crea o escoge un elemento.</p></div>'}</div></div>
-    <div id="dComp"></div>
-    <div class="card"><div class="ct">Páginas del Anexo D</div><button class="btn grn" type="button" id="printD">🖨 Imprimir / Guardar PDF del Anexo D</button></div>`;
+    <div id="dComp"></div>`;
   pane(h);
   activarTabsD();
   pintarCompSw(D);
   $$('[data-sel]').forEach(b => b.onclick = () => { selMet = b.dataset.sel; paneAnexoD(); });
-  if($('#printD')) $('#printD').onclick = () => imprimirD();
   if(!esIng()){ if(sel) pintarResMet(sel); return; }
   activarOrdenar(D);
   if($('#dNuevo')) $('#dNuevo').onclick = () => { const e = nuevoMet(D.met.length + 1); D.met.push(e); selMet = e.id; guardarMemoria(); paneAnexoD(); };

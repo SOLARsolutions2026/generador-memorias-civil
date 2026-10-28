@@ -93,9 +93,7 @@ function paneAnexoB(){
             <button class="btn sm" type="button" id="guardarIter">📌 Guardar iteración y empezar otra</button></div>
           <div class="hint">Cada vez que cambies la estructura o el factor de escala en el modelo, guarda la iteración antes de escribir los nuevos valores. La fila <b>Actual</b> es la que sale completa en la memoria.</div>` : ''}
           <div id="iterB" style="margin-top:8px"></div></div></div>
-      <div class="card"><div class="ct">Páginas del Anexo B</div>
-        <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo B con el formato de la memoria (carta).</p>
-        <button class="btn grn" type="button" id="printB">🖨 Imprimir / Guardar PDF del Anexo B</button></div>`;
+`;
   }
   pane(h);
   if(!esIng()) { if(B.aplica) pintarResB(); return; }
@@ -137,14 +135,16 @@ function paneAnexoB(){
     const b = e.target.closest('[data-deli]'); if(!b) return;
     B.iter.splice(+b.dataset.deli, 1); B.iter.forEach((x,i) => x.n = i + 1); guardarMemoria(); pintarResB();
   };
-  if($('#printB')) $('#printB').onclick = async () => {
-    const R = calcB(); if(!R.ok) return toast('Faltan datos: ' + R.faltan.join(', '));
-    B.estructura._url = B.estructura.modo === 'sap' && B.estructura.sapImg ? await urlDe(B.estructura.sapImg) : null;
-    const pa = $('#print-area'); pa.innerHTML = anexoBPrintHTML(B, R); delete B.estructura._url;
-    await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
-    await document.fonts.ready; imprimirConMargen(`${S.m.consecutivo}_ANEXO_B`);
-  };
   if(B.aplica) pintarResB();
+}
+
+// Imprimir el Anexo B (botón «Imprimir anexo» de la cabecera)
+async function imprimirB(){
+  const B = datosB(), R = calcB(); if(!R.ok) return toast('Faltan datos: ' + R.faltan.join(', '));
+  B.estructura._url = B.estructura.modo === 'sap' && B.estructura.sapImg ? await urlDe(B.estructura.sapImg) : null;
+  const pa = $('#print-area'); pa.innerHTML = anexoBPrintHTML(B, R); delete B.estructura._url;
+  await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  await document.fonts.ready; imprimirConMargen(`${S.m.consecutivo}_ANEXO_B`);
 }
 
 // Historial de iteraciones (pantalla e impresión). La fila "Actual" son los datos de hoy, que salen completos en la memoria.

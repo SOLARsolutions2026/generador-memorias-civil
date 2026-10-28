@@ -280,8 +280,9 @@ function renderWS(cur){
   <div class="scrim" id="scrim" hidden></div>
   <div class="ws"><nav class="steps" id="stepsNav" aria-label="Pasos"><div class="drawer-hd"><b>Pasos de la memoria</b><button type="button" id="closeSteps" aria-label="Cerrar">✕</button></div>${side}</nav>
   <section><div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">Paso ${s.n} · ${pill(...(ESTADOS[m.estado]||ESTADOS.wip))}</div><h2>${s.t}</h2></div>
-    <div class="nav-btns">${activos.length>1?`<button class="btn" type="button" id="prev" ${i<=0?'disabled':''}>← Anterior</button><button class="btn pri" type="button" id="next" ${i>=activos.length-1?'disabled':''}>Siguiente →</button>`:''}</div></div>
-    <div id="pane"></div><div id="listoBar"></div></section></div>
+    <div class="hd-r"><div class="nav-btns" id="hdActs"></div><div class="nav-btns">${activos.length>1?`<button class="btn" type="button" id="prev" ${i<=0?'disabled':''}>← Anterior</button><button class="btn pri" type="button" id="next" ${i>=activos.length-1?'disabled':''}>Siguiente →</button>`:''}</div>
+      <div class="hd-pop" id="hdPop" hidden></div></div></div>
+    <div id="pane"></div></section></div>
   ${esIng() ? `<button type="button" class="notas-tab" id="notasTab" aria-label="Observaciones"><span>📝 Observaciones</span><b id="notasN"></b></button>
   <aside class="notas-dr" id="notasDr" aria-label="Observaciones" hidden></aside>` : ''}`;
   $('#back').onclick = () => ir('#/');
@@ -424,29 +425,50 @@ function estadoPaso(s){
   if(s.id === 'revisiones') return S.revs.length ? 'ok' : 'wip';
   return ANEXOS_LISTO[s.id] ? estadoAnexo(s.id) : '';
 }
+// Botones de la cabecera de cada anexo: «Imprimir anexo» y «Marcar terminado» (siempre arriba, en el mismo sitio)
+const IMPRIME = { A:() => imprimirA(), B:() => imprimirB(), C:() => imprimirC(datosC()), D:() => imprimirD() };
+function puedeImprimir(id){ const an = S.m?.anexos || {};
+  return id === 'A' ? true : id === 'B' ? an.B?.aplica !== false : id === 'C' ? !!an.C?.modelo : id === 'D' ? ['met','zap','ped'].some(k => an.D?.[k]?.length) : false; }
 function pintarListo(){
-  const bar = $('#listoBar'); if(!bar || !S.m) return;
+  const box = $('#hdActs'); if(!box || !S.m) return;
   // puntos de la barra lateral
   $$('[data-step]').forEach(b => { const s = STEPS.find(x => x.id === b.dataset.step), d = b.querySelector('.dot'); if(!s || !d) return;
     const e = estadoPaso(s); d.className = 'dot ' + e; d.textContent = e === 'ok' ? '✓' : s.n; });
-  const id = S.paso, D = ANEXOS_LISTO[id];
-  if(!D || !esIng() || (id === 'B' && S.m.anexos?.B?.aplica === false)){ bar.innerHTML = ''; return; }
-  const an = S.m.anexos || {}, X = an[id] || {}, f = D.faltan(an), est = estadoAnexo(id);
+  const id = S.paso, D = ANEXOS_LISTO[id], pop = $('#hdPop');
+  let h = '';
+  if(IMPRIME[id] && puedeImprimir(id)) h += `<button class="btn" type="button" id="hdPrint">🖨 Imprimir anexo${id === 'C' ? ' ▾' : ''}</button>`;
+  let est = null, f = [], X = {};
+  if(D && esIng() && !(id === 'B' && S.m.anexos?.B?.aplica === false)){
+    const an = S.m.anexos || {}; X = an[id] || {}; f = D.faltan(an); est = estadoAnexo(id);
+    h += est === 'ok' ? `<button class="btn grn" type="button" id="hdListo" title="Terminado">✓ Terminado</button>`
+      : f.length ? `<button class="btn hd-falta" type="button" id="hdListo" title="Faltan datos">✓ Marcar terminado <span class="hd-n">${f.length}</span></button>`
+      : `<button class="btn grn-o" type="button" id="hdListo">✓ Marcar terminado</button>`;
+  }
+  box.innerHTML = h;
+  if(pop && !pop.hidden && pop.dataset.para && !$('#' + pop.dataset.para)) pop.hidden = true;
+  const abrir = (para, html) => { if(!pop.hidden && pop.dataset.para === para){ pop.hidden = true; return; } pop.dataset.para = para; pop.innerHTML = html; pop.hidden = false; };
+  const pr = $('#hdPrint');
+  if(pr) pr.onclick = () => {
+    if(id !== 'C') return IMPRIME[id]();
+    const C = datosC();
+    abrir('hdPrint', `<b>Opciones de impresión</b><p class="hint" style="margin:4px 0 8px">En la memoria salen los resúmenes. Las tablas completas (cada nudo, cada elemento y cada carga) son opcionales y ocupan varias páginas.</p>
+      <label class="chk"><input type="checkbox" id="compC" ${C.completas ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Incluir también las tablas completas</label>
+      <div style="margin-top:10px"><button class="btn grn sm" type="button" id="hdPrintGo">🖨 Imprimir / Guardar PDF</button></div>`);
+    const cc = $('#compC'); if(cc) cc.onchange = e => { C.completas = e.target.checked; guardarMemoria(); };
+    const go = $('#hdPrintGo'); if(go) go.onclick = () => { pop.hidden = true; IMPRIME.C(); };
+  };
+  const bl = $('#hdListo'); if(!bl) return;
   const fecha = X.listoFecha ? new Date(X.listoFecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }) : '';
-  bar.innerHTML = `<div class="card listo ${est === 'ok' ? 'ok' : ''}">` + (
-    est === 'ok' ? `<div class="listo-t"><span class="listo-i">✓</span><div><b>${D.n[0].toUpperCase() + D.n.slice(1)} terminado</b><div class="hint">Marcado el ${esc(fecha)}. Si cambias un dato, vuelve a «en proceso».</div></div></div>
-      <button class="btn sm" type="button" id="btnListo" data-v="0">Volver a abrir</button>`
-    : f.length ? `<div class="listo-t"><span class="listo-i no">!</span><div><b>Para marcar el ${D.n} como terminado falta:</b><div class="hint">${f.map(esc).join(' · ')}</div></div></div>
-      <button class="btn sm" type="button" disabled>✓ Marcar como terminado</button>`
-    : `<div class="listo-t"><span class="listo-i wip">✓</span><div><b>${X.listo ? 'Cambiaste datos después de marcarlo.' : 'Ya están todos los datos.'}</b><div class="hint">Revisa los resultados y márcalo como terminado.</div></div></div>
-      <button class="btn grn" type="button" id="btnListo" data-v="1">✓ Marcar ${D.n} como terminado</button>`) + '</div>';
-  const b = $('#btnListo'); if(b) b.onclick = () => {
-    const an2 = S.m.anexos, Y = an2[id];
-    if(b.dataset.v === '1'){ Y.listo = D.huella(an2); Y.listoFecha = new Date().toISOString(); toast(`${D.n} marcado como terminado.`); }
-    else { delete Y.listo; delete Y.listoFecha; }
-    guardarMemoria(); pintarListo();
+  bl.onclick = () => {
+    const an2 = S.m.anexos, Y = an2[id] = an2[id] || {};
+    if(est === 'ok') return abrir('hdListo', `<b>${D.n[0].toUpperCase() + D.n.slice(1)} terminado</b><p class="hint" style="margin:4px 0 8px">Marcado el ${esc(fecha)} · si cambias un dato, vuelve solo a «en proceso».</p>
+        <button class="btn sm" type="button" id="hdReabrir">Volver a abrir</button>`) || (($('#hdReabrir') || {}).onclick = () => { delete Y.listo; delete Y.listoFecha; pop.hidden = true; guardarMemoria(); pintarListo(); });
+    if(f.length) return abrir('hdListo', `<b>Para marcar el ${D.n} como terminado falta:</b><ul class="hd-ul">${f.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+    Y.listo = D.huella(an2); Y.listoFecha = new Date().toISOString(); pop.hidden = true; toast(`${D.n[0].toUpperCase() + D.n.slice(1)} marcado como terminado.`); guardarMemoria(); pintarListo();
   };
 }
+// Cierra el recuadro de la cabecera al tocar fuera
+document.addEventListener('click', e => { const pop = $('#hdPop'); if(pop && !pop.hidden && !e.target.closest('#hdPop, #hdActs')) pop.hidden = true; });
 
 // ═══ Observaciones internas por paso (no salen en la memoria) ═══
 // anexos.notas = { paso: [{ id, t, fecha, autor, hecha }] }

@@ -63,7 +63,9 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Pantalla con pestañas (`tabC`): archivo fijo arriba; «Información del modelo» (revisión + C-1…C-6) y «Resultados» (C-7). Impresión fuera de las pestañas.
   Ya probado con un .s2k real de Amo (v24.2.0).
 
-- Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` en `#listoBar` debajo del panel): la app revisa datos faltantes y habilita «✓ Marcar como terminado»;
+- Cabecera de cada paso (28-oct, pedido de Amo; lo demás de la interfaz NO se reorganiza): `#hdActs` junto a Anterior/Siguiente con «🖨 Imprimir anexo» (`IMPRIME` → imprimirA/B/C/D; C abre `#hdPop` con «tablas completas»)
+  y «✓ Marcar terminado» (con número de faltantes; al tocarlo muestra la lista; terminado → «Volver a abrir»). Ya no hay tarjetas «Páginas del Anexo X» ni barra `#listoBar` abajo.
+- Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` llena `#hdActs`): la app revisa datos faltantes y habilita «✓ Marcar terminado»;
   guarda `X.listo` = huella de los datos (B incluye los del A) y `X.listoFecha`. Si los datos cambian, la huella ya no coincide y el paso vuelve a «en proceso» solo. B sin sismo = ✓ directo.
   Pendiente: agregar D y E a `ANEXOS_LISTO` cuando existan.
 

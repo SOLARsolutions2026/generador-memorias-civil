@@ -442,3 +442,11 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .sw-row{cursor:pointer}.sw-row:hover td{background:var(--gray-bg)}
 .sw-box .sw-t{font-size:12px}.sw-box .sw-t th,.sw-box .sw-t td{padding:5px 6px}
 .sw-t .ov-in{width:54px}
+/* Cabecera de cada paso: Imprimir anexo y Marcar terminado */
+.hd-r{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;position:relative}
+.btn.grn-o{border:1.5px solid var(--green);color:var(--green);background:#fff}
+.btn.hd-falta{color:var(--muted)}
+.hd-n{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--amber-bg);color:var(--amber);font-size:10.5px;font-weight:800;margin-left:4px;padding:0 5px}
+.hd-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(15,45,94,.16);padding:12px 14px;width:min(340px,90vw);font-size:12.5px}
+.hd-ul{margin:6px 0 0 18px;line-height:1.6;color:#475569}
+@media print{.hd-r{display:none}}

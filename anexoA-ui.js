@@ -153,9 +153,7 @@ resumen(A, R){
     <div class="hint" style="margin-top:8px">Valores redondeados hacia arriba a 3 decimales. W↓ = presión hacia la cubierta, W↑ = succión. Presión mínima de diseño 0.40 kN/m².</div></div>
     <div class="card"><div class="ct">Fichas técnicas del Anexo A</div>${(() => { const f = [A.tipo.paneles && ['Panel', A.panel], A.tipo.paneles && ['Riel', A.riel]].filter(Boolean);
       return f.length ? f.map(([t,o]) => `<div class="file"><div class="ic p">PDF</div><div class="nm">${t}: ${esc(o.nombre||'—')}<small>${o.ficha ? 'Adjunta' : 'Falta adjuntar en Carga muerta'}</small></div>${o.ficha ? `<button class="btn sm" type="button" data-verficha2="${t==='Panel'?'panel':'riel'}">Ver</button>` : pill('pend','Falta')}</div>`).join('') + '<div class="hint" style="margin-top:6px">Se unirán al PDF final de la memoria, después de las páginas del Anexo A.</div>' : '<div class="hint">Sin fichas técnicas.</div>'; })()}</div>
-    <div class="card"><div class="ct">Páginas del Anexo A</div>
-      <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo A con el formato de la memoria (carta).</p>
-      <button class="btn grn" type="button" id="printA">🖨 Imprimir / Guardar PDF del Anexo A</button></div>`;
+`;
 },
 };
 
@@ -297,16 +295,18 @@ resumen(A){
     const t = [...document.querySelectorAll('table.sapres tr')].map(tr => [...tr.children].map(td => td.textContent).join('\t')).join('\n');
     navigator.clipboard.writeText(t).then(() => toast('Tabla copiada: pégala en Excel o en tus notas del modelo.'));
   };
-  $('#printA').onclick = async () => {
-    for(const im of (A.viento.imgsExpo||[])) im._url = await urlDe(im.path);
-    const pa = $('#print-area'); pa.innerHTML = anexoAPrintHTML(A, R);
-    for(const im of (A.viento.imgsExpo||[])) delete im._url;
-    await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
-    await document.fonts.ready;
-    imprimirConMargen(`${S.m.consecutivo}_ANEXO_A`);
-  };
 },
 };
+// Imprimir el Anexo A (botón «Imprimir anexo» de la cabecera)
+async function imprimirA(){
+  const A = datosA(), R = AnexoA.calcular(A);
+  for(const im of (A.viento.imgsExpo||[])) im._url = await urlDe(im.path);
+  const pa = $('#print-area'); pa.innerHTML = anexoAPrintHTML(A, R);
+  for(const im of (A.viento.imgsExpo||[])) delete im._url;
+  await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  await document.fonts.ready;
+  imprimirConMargen(`${S.m.consecutivo}_ANEXO_A`);
+}
 
 // ═══ Páginas imprimibles del Anexo A ═══
 function anexoAPrintHTML(A, R){
