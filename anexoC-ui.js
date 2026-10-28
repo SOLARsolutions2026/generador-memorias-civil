@@ -167,10 +167,10 @@ function anexoCPrintHTML(C, M, K, url){
     ${tb(['Material','Tipo','γ [kN/m³]','E [MPa]','ν','Fy [MPa]','Fu [MPa]'], M.materiales.map(x => [esc(x.n), esc(x.tipo), fx(x.gamma,2), fx(x.E,0), x.nu == null ? '—' : fx(x.nu,2), x.Fy ? fx(x.Fy,0) : '—', x.Fu ? fx(x.Fu,0) : '—']))}
     <h3>${L}-2 Modelación estructural ${esc(M.prog)} v${esc(M.ver)}</h3>
     <p>${esc(C.descripcion || descDefC(M))}</p>
-    ${url ? `<figure class="ax-fig"><img src="${esc(url)}" style="max-width:100%;max-height:4in" alt=""/><figcaption>${esc(C.notaImg || `Modelo estructural en ${M.prog}.`)}</figcaption></figure>` : ''}
+    ${url ? `<figure class="ax-fig"><img src="${esc(url)}" style="max-width:100%;max-height:2.7in" alt=""/><figcaption>${esc(C.notaImg || `Modelo estructural en ${M.prog}.`)}</figcaption></figure>` : ''}
     <h3>${L}-3 Consideraciones de cargas utilizadas</h3>
-    ${tb(['Patrón de carga','Tipo','Multiplicador de peso propio','Carga automática'], M.patrones.map(p => [esc(p.n), esc(p.tipo), fx(p.swm,0), esc(p.auto || '—')]))}
     <p>El peso propio de los elementos lo calcula el programa en el patrón con multiplicador 1. Las demás cargas corresponden a los Anexos A${S.m.anexos?.B?.aplica !== false ? ' y B' : ''}.</p>
+    ${tb(['Patrón de carga','Tipo','Multiplicador de peso propio','Carga automática'], M.patrones.map(p => [esc(p.n), esc(p.tipo), fx(p.swm,0), esc(p.auto || '—')]))}
   </section><section>
     <h3>${L}-4 Coordenadas de los nudos del sistema aporticado</h3>
     ${tb(['Total de nudos','X [m]','Y [m]','Z [m]'], [[M.nudos.n, `${fx(M.nudos.x[0],2)} a ${fx(M.nudos.x[1],2)}`, `${fx(M.nudos.y[0],2)} a ${fx(M.nudos.y[1],2)}`, `${fx(M.nudos.z[0],2)} a ${fx(M.nudos.z[1],2)}`]])}
