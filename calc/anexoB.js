@@ -43,7 +43,7 @@ function defaults(){
   return { aplica:true, texto:'', metodo:'tabla', depto:'', munCode:'', lat:'', lon:'', mapa:'aa', Aa:'', Av:'', suelo:'D', FaManual:'', FvManual:'', grupo:'I', sistema:0, h:'', Tx:'', Ty:'',
     area:'', dimX:'', dimY:'', excent:0.05, Vtx:'', Vty:'', irregular:false,
     items:{},                                                   // ① { clave: { on, area } } de las cargas del Anexo A
-    estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'SAP2000 — Material List by Section', sapImg:'' },   // ②
+    estructura:{ modo:'lista', perfiles:[], sapKN:'', sapFuente:'Material List by Section', sapImg:'' },   // ②
     otras:[],                                                   // ③ [{ n, cant, unidad, pu, ubic }]
     iter:[], notaIter:'' };                                     // historial de iteraciones con SAP2000 [{ n, fecha, nota, W, Tx, Ty, VsX, VsY, Vtx, Vty, fX, fY, pct, ok }]
 }

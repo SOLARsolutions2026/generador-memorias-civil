@@ -1,4 +1,4 @@
-/* ═══ Pantalla del Anexo C — Modelo SAP2000 (usa calc/anexoC.js) ═══ */
+/* ═══ Pantalla del Anexo C — Modelo estructural (usa calc/anexoC.js) ═══ */
 'use strict';
 function datosC(){
   const m = S.m; m.anexos = m.anexos || {};
@@ -22,14 +22,14 @@ async function textoModelo(C){
 async function cargarModeloC(f){
   const C = datosC();
   if(!f) return;
-  if(!/\.(\$2k|s2k|txt)$/i.test(f.name)) return toast('Ese archivo no es un modelo de SAP2000 en texto (.$2k).', 4500);
+  if(!/\.(\$2k|s2k|txt)$/i.test(f.name)) return toast('Ese archivo no es un modelo en texto (.s2k / .$2k).', 4500);
   try{
     toast('Leyendo el modelo…', 15000);
     const t = await f.text(), M = AnexoC.analizar(t);
     // huella del contenido: avisa si se vuelve a subir el mismo archivo (pasa cuando SAP lo guardó en otra carpeta)
     let hh = 5381; for(let i = 0; i < t.length; i++) hh = ((hh << 5) + hh + t.charCodeAt(i)) | 0;
     const firma = (hh >>> 0).toString(36) + '-' + t.length;
-    if(C.archivo?.firma === firma && !confirm('Este archivo es idéntico al que ya está cargado.\n\n¿Seguro que es el archivo nuevo? Si exportaste de nuevo desde SAP, revisa la carpeta donde se guardó.\n\nAceptar = subirlo igual · Cancelar = escoger otro')) return toast('No se cambió el modelo.');
+    if(C.archivo?.firma === firma && !confirm('Este archivo es idéntico al que ya está cargado.\n\n¿Seguro que es el archivo nuevo? Si exportaste de nuevo desde el software, revisa la carpeta donde se guardó.\n\nAceptar = subirlo igual · Cancelar = escoger otro')) return toast('No se cambió el modelo.');
     if(!M.ok) return toast(M.error, 6000);
     const path = `${S.m.id}/modelo-sap.s2k`;
     toast('Guardando el archivo…', 15000);
@@ -43,16 +43,16 @@ async function cargarModeloC(f){
 let tabC = 'modelo';   // pestaña del Anexo C: información del modelo | resultados
 function paneAnexoC(){
   const C = datosC(), M = C.modelo, ro_ = esIng() ? '' : 'disabled';
-  const pasos = `<ol class="pasos-sap"><li>En SAP2000: <b>File → Export → SAP2000 .s2k Text File…</b></li><li>Deja marcadas todas las tablas y unidades <b>KN, m, C</b>.</li><li>Guarda el archivo y súbelo aquí.</li></ol>`;
-  let h = `<div class="card"><div class="ct">Archivo del modelo SAP2000</div>`;
+  const pasos = `<ol class="pasos-sap"><li>En el software de análisis: <b>File → Export → .s2k Text File…</b></li><li>Deja marcadas todas las tablas y unidades <b>KN, m, C</b>.</li><li>Guarda el archivo y súbelo aquí.</li></ol>`;
+  let h = `<div class="card"><div class="ct">Archivo del modelo estructural</div>`;
   if(!M) h += `<p class="lead" style="margin-bottom:10px">La app lee el archivo de texto del modelo y arma sola las tablas del Anexo C.</p>${pasos}
       ${esIng() ? `<button class="drop-img" type="button" id="subeS2k" style="max-width:none;min-height:110px;margin-top:10px"><div class="ph-in"><div style="font-size:22px">📂</div><b>Subir archivo .$2k</b><br/>toca o arrastra aquí</div></button>` : '<p class="muted">Aún no se ha cargado el modelo.</p>'}</div>`;
   else {
     const fecha = new Date(C.archivo.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' });
     h += `<div class="sap-file"><div class="sap-ico">📄</div><div><b>${esc(C.archivo.nombre)}</b> <span class="hint">(${C.archivo.kb} KB · cargado ${esc(fecha)})</span>
-        <div class="hint">${esc(M.prog)} v${esc(M.ver)} · unidades ${esc(M.unidades || '—')} · ${M.nudos.n} nudos · ${M.frames} elementos · ${M.patrones.length} patrones de carga</div></div>
+        <div class="hint">Unidades ${esc(M.unidades || '—')} · ${M.nudos.n} nudos · ${M.frames} elementos · ${M.patrones.length} patrones de carga</div></div>
         <div class="sap-acc">${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
-      <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde SAP2000?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
+      <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde el software?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
     const nRes = M.fuerzas?.n ? `<span class="tab-n">${M.fuerzas.grupos.length}</span>` : '<span class="tab-n vacio">sin datos</span>';
     h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}</button></div>
       <div data-tc="modelo" ${tabC === 'modelo' ? '' : 'hidden'}>`;
@@ -60,13 +60,13 @@ function paneAnexoC(){
     const mat = M.materiales;
     h += `<div class="card"><div class="ct">C-1 Propiedades de materiales</div>${tabla(['Material','Tipo','γ [kN/m³]','E [MPa]','ν','Fy [MPa]','Fu [MPa]'],
         mat.map(m => [esc(m.n), esc(m.tipo), fx(m.gamma,2), fx(m.E,0), m.nu == null ? '—' : fx(m.nu,2), m.Fy ? fx(m.Fy,0) : '—', m.Fu ? fx(m.Fu,0) : '—']))}</div>`;
-    h += `<div class="card"><div class="ct">C-2 Modelación estructural ${esc(M.prog)} v${esc(M.ver)}</div>
+    h += `<div class="card"><div class="ct">C-2 Modelación estructural</div>
         <div class="f"><label for="descC">Descripción (sale en la memoria)</label><textarea id="descC" rows="3" ${ro_}>${esc(C.descripcion || descDefC(M))}</textarea><div class="hint">Vacío = texto predeterminado.</div></div>
         <div class="img-c">${C.img ? `<div class="drop-img has" id="imgC" style="max-width:none"><span class="muted">Cargando imagen…</span></div>` :
           esIng() ? `<button class="drop-img" type="button" id="imgC" style="max-width:none;min-height:110px"><div class="ph-in"><div style="font-size:20px">🖼️</div><b>Agregar imagen del modelo</b><br/>toca o arrastra aquí</div></button>` : '<p class="muted">Sin imagen.</p>'}
           ${C.img && esIng() ? '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm" type="button" id="camImgC">🔄 Cambiar imagen</button><button class="btn sm danger" type="button" id="delImgC">Quitar</button></div>' : ''}</div>
         <div class="f" style="margin-top:8px"><label for="notaImgC">Pie de la imagen</label><input id="notaImgC" value="${esc(C.notaImg)}" placeholder="Vista 3D del modelo estructural" ${ro_}/></div></div>`;
-    h += `<div class="card"><div class="ct">C-3 Patrones de carga</div>${tabla(['Patrón','Tipo en SAP2000','Se interpreta como','Multiplicador peso propio','Carga automática'],
+    h += `<div class="card"><div class="ct">C-3 Patrones de carga</div>${tabla(['Patrón','Tipo en el modelo','Se interpreta como','Multiplicador peso propio','Carga automática'],
         M.patrones.map(p => [esc(p.n), esc(p.tipo), 'Carga ' + AnexoC.NOM_CAT[p.cat], fx(p.swm,0), esc(p.auto || '—')]))}</div>`;
     h += `<div class="card"><div class="ct">C-4 Nudos del sistema aporticado</div>
         ${tabla(['Nudos','X [m]','Y [m]','Z [m]','Apoyos'], [[String(M.nudos.n), `${fx(M.nudos.x[0],2)} a ${fx(M.nudos.x[1],2)}`, `${fx(M.nudos.y[0],2)} a ${fx(M.nudos.y[1],2)}`, `${fx(M.nudos.z[0],2)} a ${fx(M.nudos.z[1],2)}`, String(M.nudos.apoyos.length)]])}
@@ -208,10 +208,10 @@ function critUnicos(g){ // quita filas repetidas (la misma fila puede ser críti
 }
 function fuerzasCardHTML(C, M){
   const Fz = M.fuerzas;
-  if(!Fz?.n) return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados SAP2000)</div>
+  if(!Fz?.n) return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados del análisis)</div>
     <div class="note blue">Para traer las fuerzas, al exportar el .s2k marca también <b>Analysis Results → Element Output → Frame Output → Element Forces – Frames</b> y, en <b>Select Load Cases</b>, las combinaciones de diseño. Luego usa «Reemplazar». La app condensa las miles de filas por grupo de elementos.</div></div>`;
   const ro_ = esIng() ? '' : 'disabled', res = new Set(Fz.res);
-  return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados SAP2000) <span class="pill gray">${Fz.n.toLocaleString('es-CO')} filas → ${Fz.grupos.length} grupos</span></div>
+  return `<div class="card"><div class="ct">C-7 Fuerzas en los elementos (resultados del análisis) <span class="pill gray">${Fz.n.toLocaleString('es-CO')} filas → ${Fz.grupos.length} grupos</span></div>
     <div class="f"><label>Combinaciones que se usan para diseñar (resistencia)</label>
       <div class="chips-c">${Fz.casos.map(c => `<label class="chip-c ${res.has(c) ? 'on' : ''}"><input type="checkbox" data-fres="${esc(c)}" ${res.has(c) ? 'checked' : ''} ${ro_}/> ${esc(c)}</label>`).join('')}</div>
       <div class="hint">La app deja fuera, por defecto, las de servicio (p. ej. 1.0D + 1.0Lr) y las envolventes sin carga muerta (derivas). Puedes cambiarlo.</div></div>

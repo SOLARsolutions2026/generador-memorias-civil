@@ -6,6 +6,8 @@ function datosB(){
   const m = S.m; m.anexos = m.anexos || {};
   const B = m.anexos.B = m.anexos.B || {};
   const d = AnexoB.defaults(); for(const k in d) if(B[k] === undefined) B[k] = d[k];
+  // textos guardados antes de quitar el nombre del programa
+  if(/SAP2000/.test(B.estructura?.sapFuente || '')) B.estructura.sapFuente = B.estructura.sapFuente.replace(/SAP2000( v[\d.]+)?\s*—\s*/,'').replace(/SAP2000/g, 'modelo');
   return B;
 }
 function calcB(){ const B = datosB(), A = datosA(); return AnexoB.calcular(B, A, AnexoA.calcular(A)); }
@@ -56,7 +58,7 @@ function paneAnexoB(){
           : '<tr><td colspan="5" class="hint">El Anexo A todavía no tiene cargas por área.</td></tr>'}
         <tr class="sub"><td></td><td colspan="3">Subtotal ①</td><td class="n" id="w1">${fx(R.Wcargas,2)}</td></tr></tbody></table></div>
         <h4 class="sub">② Peso propio de la estructura</h4>
-        <div class="seg" role="group" aria-label="Cómo se ingresa el peso propio" style="margin-bottom:8px"><button type="button" data-modo="lista" class="${B.estructura.modo!=='sap'?'on':''}" ${ro_}>Lista de perfiles</button><button type="button" data-modo="sap" class="${B.estructura.modo==='sap'?'on':''}" ${ro_}>Total de SAP2000</button></div>
+        <div class="seg" role="group" aria-label="Cómo se ingresa el peso propio" style="margin-bottom:8px"><button type="button" data-modo="lista" class="${B.estructura.modo!=='sap'?'on':''}" ${ro_}>Lista de perfiles</button><button type="button" data-modo="sap" class="${B.estructura.modo==='sap'?'on':''}" ${ro_}>Total del modelo</button></div>
         ${B.estructura.modo === 'sap' ? `<div class="fg g4">${fIn(B,'estructura.sapKN','Peso propio total [kN]')}${fIn(B,'estructura.sapFuente','Fuente',{cls:'span2',num:false})}
             <div class="f"><label>Imagen de la tabla (opcional)</label><div class="nav-btns">${B.estructura.sapImg ? '<button class="btn sm" type="button" id="verSap">🖼️ Ver</button>' : ''}${esIng() ? `<button class="btn sm pri" type="button" id="subSap">${B.estructura.sapImg ? 'Cambiar' : '📎 Subir'}</button>` : ''}</div></div></div>`
           : `<div class="tw"><table class="t wtab"><thead><tr><th>Perfil</th><th>kg/m</th><th>Longitud total [m]</th><th>Peso [kN]</th><th></th></tr></thead><tbody>
@@ -80,16 +82,16 @@ function paneAnexoB(){
       <div class="card"><div class="ct">B-2.2 Fuerza horizontal equivalente y torsión accidental</div>
         <div class="fg g4">${fIn(B,'dimX','Dimensión en X [m]',{ph:R.dimX ? fx(R.dimX,2)+' (L)' : '—'})}${fIn(B,'dimY','Dimensión en Y [m]',{ph:R.dimY ? fx(R.dimY,2)+' (W)' : '—'})}${fIn(B,'excent','Excentricidad accidental',{ph:'0.05',h:'5 % (A.3.6.7.1)'})}</div>
         <div id="resA" style="margin-top:10px"></div></div>
-      <div class="card"><div class="ct">B-2.4 Comparación con el análisis modal de SAP2000</div>
-        <div class="fg g4">${fIn(B,'Tx','Periodo modal Tx [s]',{ph:'de SAP2000'})}${fIn(B,'Ty','Periodo modal Ty [s]',{ph:'de SAP2000'})}
-          ${fIn(B,'Vtx','Cortante basal modal Vtx [kN]',{ph:'de SAP2000'})}${fIn(B,'Vty','Cortante basal modal Vty [kN]',{ph:'de SAP2000'})}
+      <div class="card"><div class="ct">B-2.4 Comparación con el análisis dinámico modal</div>
+        <div class="fg g4">${fIn(B,'Tx','Periodo modal Tx [s]',{ph:'del modelo'})}${fIn(B,'Ty','Periodo modal Ty [s]',{ph:'del modelo'})}
+          ${fIn(B,'Vtx','Cortante basal modal Vtx [kN]',{ph:'del modelo'})}${fIn(B,'Vty','Cortante basal modal Vty [kN]',{ph:'del modelo'})}
           <div class="f span2">${S.m.anexos?.K ? `<div class="hint" style="padding-top:6px">Estructura <b>${B.irregular ? 'irregular (se exige 90 %)' : 'regular (se exige 80 %)'}</b>, según el paso Combinaciones e irregularidades.</div>` : fChk(B,'irregular','Estructura irregular (exige 90 % en vez de 80 %)')}</div></div>
         <div id="modalB" style="margin-top:10px"></div>
         <div class="hint" style="margin-top:6px">A.4.2.1: el periodo del análisis no puede ser mayor que Cu·Ta. A.5.4.5: el cortante modal en la base no puede ser menor que el 80 % de Vs (90 % si es irregular); si es menor, los resultados modales se multiplican por el factor de ajuste.</div>
         <div class="iter-box"><div class="iter-t">Historial de iteraciones</div>
-          ${esIng() ? `<div class="iter-row">${fIn(B,'notaIter','Nota de esta iteración (qué cambió)',{num:false, ph:'Ej.: IPE 240 → IPE 270; factor 1.265 aplicado al espectro en SAP'})}
+          ${esIng() ? `<div class="iter-row">${fIn(B,'notaIter','Nota de esta iteración (qué cambió)',{num:false, ph:'Ej.: IPE 240 → IPE 270; factor 1.265 aplicado al espectro en el modelo'})}
             <button class="btn sm" type="button" id="guardarIter">📌 Guardar iteración y empezar otra</button></div>
-          <div class="hint">Cada vez que cambies la estructura o el factor de escala en SAP2000, guarda la iteración antes de escribir los nuevos valores. La fila <b>Actual</b> es la que sale completa en la memoria.</div>` : ''}
+          <div class="hint">Cada vez que cambies la estructura o el factor de escala en el modelo, guarda la iteración antes de escribir los nuevos valores. La fila <b>Actual</b> es la que sale completa en la memoria.</div>` : ''}
           <div id="iterB" style="margin-top:8px"></div></div></div>
       <div class="card"><div class="ct">Páginas del Anexo B</div>
         <p class="lead" style="margin-bottom:10px">Imprime o guarda en PDF las páginas del Anexo B con el formato de la memoria (carta).</p>
@@ -127,7 +129,7 @@ function paneAnexoB(){
   if($('#guardarIter')) $('#guardarIter').onclick = () => {
     const R = calcB(); if(!R.ok) return toast('Faltan datos: ' + R.faltan.join(', '));
     const F = AnexoB.foto(B, R);
-    if(AnexoB.mismaFoto(B.iter[B.iter.length-1], F)) return toast('Esta iteración ya está guardada. Cambia los datos de SAP2000 o la estructura primero.');
+    if(AnexoB.mismaFoto(B.iter[B.iter.length-1], F)) return toast('Esta iteración ya está guardada. Cambia los datos del modelo o la estructura primero.');
     B.iter.push({ n:B.iter.length + 1, fecha:new Date().toISOString().slice(0,10), nota:(B.notaIter||'').trim(), ...F });
     B.notaIter = ''; guardarMemoria(); toast(`Iteración ${B.iter.length} guardada. Ya puedes escribir los nuevos valores.`); paneAnexoB();
   };
@@ -182,9 +184,9 @@ function pintarResB(){
   set('w1', fx(R.Wcargas,2)); set('w2', fx(R.Wprop,2)); set('w3', fx(R.Wotras,2)); set('wtot', `${fx(R.W,2)} kN (${fx(R.W*1000/AnexoB.G,0)} kg)`);
   if($('#resA')) $('#resA').innerHTML = !R.ok ? `<div class="note amber">Faltan: ${R.faltan.join(', ')}.</div>` :
     tabla(['Dirección','T usado [s]','Sa [g]','k','Vs [kN]','Momento torsor [kN·m]'], [
-      ['X', fx(R.tx.T,3) + (R.tx.din ? (R.tx.limitado ? ' (Cu·Ta)' : ' (SAP)') : ' (Ta)'), fx(R.tx.Sa,4), fx(R.tx.k,2), `<b>${fx(R.tx.Vs,2)}</b>`, `${fx(R.MtX,2)} <span class="hint">= Vs × ${R.e} × ${fx(R.dimY,2)} m</span>`],
-      ['Y', fx(R.ty.T,3) + (R.ty.din ? (R.ty.limitado ? ' (Cu·Ta)' : ' (SAP)') : ' (Ta)'), fx(R.ty.Sa,4), fx(R.ty.k,2), `<b>${fx(R.ty.Vs,2)}</b>`, `${fx(R.MtY,2)} <span class="hint">= Vs × ${R.e} × ${fx(R.dimX,2)} m</span>`]]) +
-    `<div class="hint" style="margin-top:6px">Vs = Sa · W (Ec. A.4.3-1). W = ${fx(R.W,2)} kN. Estructura de un nivel: toda la fuerza va a la cubierta (Cvx = 1). La FHE se aplica en SAP2000 en cada dirección con su momento torsor.</div>`;
+      ['X', fx(R.tx.T,3) + (R.tx.din ? (R.tx.limitado ? ' (Cu·Ta)' : ' (modal)') : ' (Ta)'), fx(R.tx.Sa,4), fx(R.tx.k,2), `<b>${fx(R.tx.Vs,2)}</b>`, `${fx(R.MtX,2)} <span class="hint">= Vs × ${R.e} × ${fx(R.dimY,2)} m</span>`],
+      ['Y', fx(R.ty.T,3) + (R.ty.din ? (R.ty.limitado ? ' (Cu·Ta)' : ' (modal)') : ' (Ta)'), fx(R.ty.Sa,4), fx(R.ty.k,2), `<b>${fx(R.ty.Vs,2)}</b>`, `${fx(R.MtY,2)} <span class="hint">= Vs × ${R.e} × ${fx(R.dimX,2)} m</span>`]]) +
+    `<div class="hint" style="margin-top:6px">Vs = Sa · W (Ec. A.4.3-1). W = ${fx(R.W,2)} kN. Estructura de un nivel: toda la fuerza va a la cubierta (Cvx = 1). La FHE se aplica en el modelo en cada dirección con su momento torsor.</div>`;
 }
 
 // Gráfica del espectro Sa vs T con To, Tc, TL y los periodos usados

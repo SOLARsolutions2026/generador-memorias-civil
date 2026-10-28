@@ -69,7 +69,7 @@ function analizar(texto){
   const T = leer(texto), tb = n => T[n] || [];
   const pc = tb('PROGRAM CONTROL')[0] || {};
   const unidades = pc.CurrUnits || '', okUnid = /^\s*kn\s*,\s*m\b/i.test(unidades);
-  if(!Object.keys(T).length || !tb('JOINT COORDINATES').length) return { ok:false, error:'El archivo no parece ser un modelo de SAP2000 en texto (.$2k): no tiene la tabla de coordenadas de nudos.' };
+  if(!Object.keys(T).length || !tb('JOINT COORDINATES').length) return { ok:false, error:'El archivo no parece ser un modelo en texto (.s2k / .$2k): no tiene la tabla de coordenadas de nudos.' };
 
   // Materiales: se unen las tablas 01, 02 y 03
   const mb = Object.fromEntries(tb('MATERIAL PROPERTIES 02 - BASIC MECHANICAL PROPERTIES').map(r => [r.Material, r]));
@@ -196,7 +196,7 @@ function revisar(M, RA, RB, CB){
 
   // Patrones: tipo coherente con el nombre y peso propio una sola vez
   for(const p of M.patrones){ const esp = TIPO_ESPERADO[p.cat];
-    if(esp && p.tipo && !esp.test(p.tipo)) out.push({ grupo:'Patrones', estado:'info', txt:`El patrón ${p.n} (carga ${NOM_CAT[p.cat]}) está definido como tipo «${p.tipo}». Si usas las combinaciones automáticas de SAP2000, debería ser ${({L:'Live',W:'Wind',E:'Quake',D:'Dead'})[p.cat]}.` }); }
+    if(esp && p.tipo && !esp.test(p.tipo)) out.push({ grupo:'Patrones', estado:'info', txt:`El patrón ${p.n} (carga ${NOM_CAT[p.cat]}) está definido como tipo «${p.tipo}». Si usas las combinaciones automáticas del software, debería ser ${({L:'Live',W:'Wind',E:'Quake',D:'Dead'})[p.cat]}.` }); }
   const sw = M.patrones.reduce((a, p) => a + p.swm, 0);
   out.push(sw === 1 ? { grupo:'Patrones', estado:'ok', txt:`El peso propio se incluye una sola vez (${M.patrones.filter(p => p.swm).map(p => p.n).join(', ')}, multiplicador 1).` }
     : { grupo:'Patrones', estado:'no', txt: sw === 0 ? 'Ningún patrón incluye el peso propio (SelfWtMult = 0 en todos).' : `El peso propio se suma ${sw} veces (revisa SelfWtMult en los patrones).` });
@@ -215,9 +215,9 @@ function revisar(M, RA, RB, CB){
     const g = M.dist.filter(d => d.cat === r.cat && d.tipo === 'Force' && cerca(d.a, r.v) && cerca(d.b, r.v));
     g.forEach(x => usados.add(x));
     const que = `${r.el} — ${NOM_CAT[r.cat]}${r.n ? ' (' + r.n + ')' : ''}`;
-    if(g.length) out.push({ grupo:'Cargas del Anexo A', estado:'ok', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m → en SAP2000 ${g.map(x => `${x.pat} ${f2(x.a)} kN/m en ${x.n} elemento${x.n>1?'s':''}`).join('; ')}.` });
+    if(g.length) out.push({ grupo:'Cargas del Anexo A', estado:'ok', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m → en el modelo ${g.map(x => `${x.pat} ${f2(x.a)} kN/m en ${x.n} elemento${x.n>1?'s':''}`).join('; ')}.` });
     else { const hay = [...new Set(M.dist.filter(d => d.cat === r.cat).map(d => f2(d.a)))];
-      out.push({ grupo:'Cargas del Anexo A', estado:'no', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m no aparece en SAP2000.${hay.length ? ' Valores de carga ' + NOM_CAT[r.cat] + ' en el modelo: ' + hay.join(', ') + ' kN/m.' : ''}` }); }
+      out.push({ grupo:'Cargas del Anexo A', estado:'no', que, esperado:r.v, txt:`${que}: ${f2(r.v)} kN/m no aparece en el modelo.${hay.length ? ' Valores de carga ' + NOM_CAT[r.cat] + ' en el modelo: ' + hay.join(', ') + ' kN/m.' : ''}` }); }
   }
   for(const d of M.dist.filter(d => !usados.has(d) && !['E','N'].includes(d.cat) && (d.a || d.b)))
     out.push({ grupo:'Cargas sin referencia', estado:'info', txt:`${d.pat} ${f2(d.a)}${d.b !== d.a ? '→' + f2(d.b) : ''} kN/m (${d.dir === 'Gravity' ? 'gravedad' : (d.sis === 'Local' ? 'local ' : '') + d.dir}) en ${d.n} elemento${d.n>1?'s':''} (${d.ids}). No corresponde a un valor del Anexo A; verifica de dónde sale (p. ej. otras cargas del Anexo B).` });
@@ -238,7 +238,7 @@ function revisar(M, RA, RB, CB){
   // Fuerzas sísmicas frente a la FHE del Anexo B
   if(RB?.ok){
     const qs = M.nudosF.filter(o => o.cat === 'E');
-    if(!qs.length) out.push({ grupo:'Sismo (Anexo B)', estado:'info', txt:'No se encontraron cargas en nudos en los patrones sísmicos; compara manualmente la FHE aplicada en SAP2000.' });
+    if(!qs.length) out.push({ grupo:'Sismo (Anexo B)', estado:'info', txt:'No se encontraron cargas en nudos en los patrones sísmicos; compara manualmente la FHE aplicada en el modelo.' });
     for(const o of qs){
       const F = Math.abs(o.F1) >= Math.abs(o.F2) ? ['X', o.F1, RB.tx.Vs] : ['Y', o.F2, RB.ty.Vs];
       if(Math.abs(F[1]) > 1e-6) out.push({ grupo:'Sismo (Anexo B)', estado: cerca(F[1], F[2]) ? 'ok' : 'no', txt:`${o.pat}: suma de fuerzas en ${F[0]} = ${f2(F[1])} kN; FHE del Anexo B = ${f2(F[2])} kN.` });

@@ -33,7 +33,7 @@ const fichaHTML = (obj, quien) => `<div class="f span2"><label>Ficha técnica (P
 
 function paneAnexoA(){
   const A = datosA();
-  const T = { cubierta:'Cubierta', muerta:'Carga muerta', viva:'Carga viva', viento:'Viento (B.6.5)', resumen:'Resumen SAP2000' };
+  const T = { cubierta:'Cubierta', muerta:'Carga muerta', viva:'Carga viva', viento:'Viento (B.6.5)', resumen:'Resumen para el modelo' };
   pane(`<div class="tabs" role="tablist">${Object.entries(T).map(([k,v]) => `<button type="button" role="tab" data-tab="${k}" class="${k===tabA?'on':''}">${v}</button>`).join('')}</div><div id="tabA"></div>`);
   $$('[data-tab]').forEach(b => b.onclick = () => { tabA = b.dataset.tab; paneAnexoA(); });
   pintarTabA();
@@ -145,11 +145,11 @@ viento(A, R){
       ${fIn(A,'viento.Gmanual','Factor ráfaga G (si no es rígida)',{ph:'0.85'})}
       ${A.tipo.paneles ? (A.tipo.lamina ? `<div class="f"><label>Luz del riel entre apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Separación de correas (Cubierta)</div></div>` : fIn(A,'viento.luz','Luz del riel entre apoyos [m]',{h:'Para el área efectiva de viento'})) : ''}
       ${A.tipo.lamina ? fIn(A,'viento.luzCorrea','Luz de la correa entre vigas [m]',{ph:'4.0',h:'Para el área efectiva de viento'}) : ''}
-      ${fSel(A,'viento.fuente','Presión que va a SAP2000',[['sprfv','Sistema principal (SPRFV)'],['cyr','Componentes y revestimiento']],{cls:'span2'})}</div></div>
+      ${fSel(A,'viento.fuente','Presión que va al modelo',[['sprfv','Sistema principal (SPRFV)'],['cyr','Componentes y revestimiento']],{cls:'span2'})}</div></div>
     <div class="card"><div class="ct">Resultados</div><div id="resA">${RES_A.viento(A,R)}</div></div>`;
 },
 resumen(A, R){
-  return `<div class="card"><div class="ct">Cargas para SAP2000 [kN/ml]${esIng()?'<button class="btn sm" type="button" id="copiarA">Copiar tabla</button>':''}</div><div id="resA">${RES_A.resumen(A,R)}</div>
+  return `<div class="card"><div class="ct">Cargas para el modelo [kN/ml]${esIng()?'<button class="btn sm" type="button" id="copiarA">Copiar tabla</button>':''}</div><div id="resA">${RES_A.resumen(A,R)}</div>
     <div class="hint" style="margin-top:8px">Valores redondeados hacia arriba a 3 decimales. W↓ = presión hacia la cubierta, W↑ = succión. Presión mínima de diseño 0.40 kN/m².</div></div>
     <div class="card"><div class="ct">Fichas técnicas del Anexo A</div>${(() => { const f = [A.tipo.paneles && ['Panel', A.panel], A.tipo.paneles && ['Riel', A.riel]].filter(Boolean);
       return f.length ? f.map(([t,o]) => `<div class="file"><div class="ic p">PDF</div><div class="nm">${t}: ${esc(o.nombre||'—')}<small>${o.ficha ? 'Adjunta' : 'Falta adjuntar en Carga muerta'}</small></div>${o.ficha ? `<button class="btn sm" type="button" data-verficha2="${t==='Panel'?'panel':'riel'}">Ver</button>` : pill('pend','Falta')}</div>`).join('') + '<div class="hint" style="margin-top:6px">Se unirán al PDF final de la memoria, después de las páginas del Anexo A.</div>' : '<div class="hint">Sin fichas técnicas.</div>'; })()}</div>
@@ -295,7 +295,7 @@ resumen(A){
   $$('[data-verficha2]').forEach(b => b.onclick = async () => { const u = await urlFicha(A[b.dataset.verficha2].ficha); u ? window.open(u, '_blank') : toast('No se encontró el PDF.'); });
   if($('#copiarA')) $('#copiarA').onclick = () => {
     const t = [...document.querySelectorAll('table.sapres tr')].map(tr => [...tr.children].map(td => td.textContent).join('\t')).join('\n');
-    navigator.clipboard.writeText(t).then(() => toast('Tabla copiada: pégala en Excel o en tus notas de SAP2000.'));
+    navigator.clipboard.writeText(t).then(() => toast('Tabla copiada: pégala en Excel o en tus notas del modelo.'));
   };
   $('#printA').onclick = async () => {
     for(const im of (A.viento.imgsExpo||[])) im._url = await urlDe(im.path);

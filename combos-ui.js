@@ -63,9 +63,9 @@ function paneCombos(){
     Tx: RB?.ok ? `Mt = ${fx(RB.MtX,2)} kN·m` : '—', Ty: RB?.ok ? `Mt = ${fx(RB.MtY,2)} kN·m` : '—', IMPx:'según criterio del diseñador', IMPy:'según criterio del diseñador' };
   const fuente = { D:'Anexo A', Lr:'Anexo A', W:'Anexo A', Ex:'Anexo B', Ey:'Anexo B', Tx:'Anexo B', Ty:'Anexo B', IMPx:'—', IMPy:'—' };
   const usados = Object.keys(Combos.SIMB).filter(k => sis || !['Ex','Ey','Tx','Ty'].includes(k)).filter(k => K.impacto || !k.startsWith('IMP'));
-  h += `<div class="card"><div class="ct">Resumen de cargas y patrones de SAP2000</div>
-    ${tabla(['Símbolo','Carga','Valor','Viene de','Patrón(es) en SAP2000'], usados.map(k => [`<b>${k}</b>`, Combos.SIMB[k], val[k], fuente[k],
-      `<input data-a="pat.${k}" value="${esc(K.pat[k] || '')}" placeholder="nombre en SAP" ${ro_} style="min-width:150px"/>`]))}
+  h += `<div class="card"><div class="ct">Resumen de cargas y patrones del modelo</div>
+    ${tabla(['Símbolo','Carga','Valor','Viene de','Patrón(es) en el modelo'], usados.map(k => [`<b>${k}</b>`, Combos.SIMB[k], val[k], fuente[k],
+      `<input data-a="pat.${k}" value="${esc(K.pat[k] || '')}" placeholder="nombre en el modelo" ${ro_} style="min-width:150px"/>`]))}
     <div class="hint" style="margin-top:6px">Si un símbolo usa varios patrones, sepáralos con coma (p. ej. «DEAD, DEAD SI»). La viva de cubierta se trata como Lr.</div>
     ${M?.ok && esIng() ? '<button class="btn sm" type="button" id="patModelo" style="margin-top:8px">↺ Tomar los nombres del modelo del Anexo C</button>' : ''}</div>`;
   // 3. Combinaciones
@@ -80,9 +80,9 @@ function paneCombos(){
     ${sis ? `<div class="fg g4" style="margin-top:10px;align-items:end"><div class="f span2"><label>Método para el sismo</label><div class="seg" role="group"><button type="button" data-met="env" class="${K.metodoE !== 'lineal' ? 'on' : ''}" ${ro_}>Envolventes (100 % X / 100 % Y)</button><button type="button" data-met="lineal" class="${K.metodoE === 'lineal' ? 'on' : ''}" ${ro_}>Combinación por combinación</button></div></div>
       ${K.metodoE !== 'lineal' ? fIn(K,'nomEX','Nombre envolvente X',{num:false,ph:'100% X 30% Y'}) + fIn(K,'nomEY','Nombre envolvente Y',{num:false,ph:'30% X 100% Y'}) : ''}</div>
       <div class="hint">${K.metodoE !== 'lineal' ? 'Componentes sin reducir (SX, SY) → envolvente por dirección (sirve para derivas y torsión) → 1.2D y 0.9D + envolvente × 1/R.' : 'Cada combinación con ±Ex ±Tx ±0.3Ey dividida por R.'}</div>` : ''}
-    ${RK.faltaPat.length ? `<div class="note amber" style="margin-top:10px">Falta el nombre del patrón de SAP para: <b>${RK.faltaPat.join(', ')}</b>.</div>` : ''}
+    ${RK.faltaPat.length ? `<div class="note amber" style="margin-top:10px">Falta el nombre del patrón en el modelo para: <b>${RK.faltaPat.join(', ')}</b>.</div>` : ''}
     ${['Resistencia','Sismo: componentes','Sismo: envolventes','Servicio','Derivas','Impacto','Otras'].map(g => { const l = RK.lista.filter(c => c.grupo === g); if(!l.length) return '';
-      return `<h4 class="sub">${g}${g === 'Resistencia' ? ' (B.2.4.2)' : g === 'Servicio' ? ' (B.2.3.1)' : ''}</h4>${tabla(['','Nombre','Combinación','Ref.','Factores en SAP2000'], l.map(c => [
+      return `<h4 class="sub">${g}${g === 'Resistencia' ? ' (B.2.4.2)' : g === 'Servicio' ? ' (B.2.3.1)' : ''}</h4>${tabla(['','Nombre','Combinación','Ref.','Factores en el modelo'], l.map(c => [
         `<input type="checkbox" data-con="${esc(c.id)}" ${c.on ? 'checked' : ''} ${ro_} aria-label="Usar ${esc(c.id)}"/>`, `<b>${esc(c.id)}</b>`, esc(c.txt) + (c.nota ? ` <span class="hint">(${esc(c.nota)})</span>` : ''), esc(c.ref),
         `<span class="ids">${Object.entries(c.sap).map(([p, f]) => esc(p) + ' ' + f).join(' · ')}</span>`]), 'comb-tb')}`; }).join('')}
     <h4 class="sub">Otras combinaciones (escritas a mano)</h4>
@@ -90,7 +90,7 @@ function paneCombos(){
       <div class="f"><input data-a="otras.${i}.txt" value="${esc(o.txt || '')}" placeholder="Ej.: 1.2D + 1.0IMPx + 0.5Lr" ${ro_}/></div>${esIng() ? `<button class="btn sm danger" type="button" data-delk="${i}" aria-label="Quitar">✕</button>` : ''}</div>`).join('')}
     ${esIng() ? '<button class="btn sm" type="button" id="addK" style="margin-top:6px">＋ Agregar combinación</button>' : ''}
     <div class="hint" style="margin-top:4px">Símbolos: ${Object.keys(Combos.SIMB).join(', ')}.</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn grn" type="button" id="copiaK">📋 Copiar tabla para SAP2000 / Excel</button><button class="btn" type="button" id="bajaK">⬇ Descargar (.txt)</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn grn" type="button" id="copiaK">📋 Copiar tabla para el software / Excel</button><button class="btn" type="button" id="bajaK">⬇ Descargar (.txt)</button></div>
     <div class="hint" style="margin-top:6px">La tabla trae una fila por caso: ComboName, ComboType, CaseType, CaseName, ScaleSF (las componentes van antes de las envolventes que las usan). Al subir el modelo en el Anexo C, la app revisa que estas combinaciones estén con los mismos factores.</div></div>`;
   h += `<div class="note blue">Estas tablas se explicarán en la <b>memoria general</b> (pendiente de construir); aquí se trabajan y se revisan.</div>`;
   pane(h);
@@ -123,7 +123,7 @@ function paneCombos(){
   if($('#addK')) $('#addK').onclick = () => { K.otras.push({ nom:'', txt:'' }); guardarMemoria(); paneCombos(); };
   $$('[data-delk]').forEach(b => b.onclick = () => { K.otras.splice(+b.dataset.delk, 1); guardarMemoria(); paneCombos(); });
   const txt = () => Combos.tablaSAP(calcK().activas);
-  $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt()); toast('Tabla copiada. Pégala en Excel o en SAP2000.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
+  $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt()); toast('Tabla copiada. Pégala en Excel o en el software.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
   $('#bajaK').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt()], { type:'text/plain' })); a.download = `${S.m.consecutivo}_combinaciones.txt`; a.click(); };
 }
 
@@ -137,16 +137,16 @@ function torsionHTML(K, M, ro_){
       ${tabla(['Nudo','U1 [m]','U2 [m]','Δ = √(U1²+U2²)'], r.n.map(x => [esc(x.j), fx(x.U1,6), fx(x.U2,6), fx(x.D,4)]))}
       ${tabla(['Δmáx','1.2·(Δ1+Δ2)/2','1.4·(Δ1+Δ2)/2','Resultado'], [[fx(r.t.max,4), fx(r.t.l12,4), fx(r.t.l14,4),
         r.t.tipo ? pill('no', r.t.tipo === '1bP' ? '1bP torsional extrema' : '1aP torsional') : pill('ok', 'Sin irregularidad torsional')]])}</div>`; };
-  return `<div class="tor-box"><h4 class="sub" style="margin-top:0">Irregularidad torsional 1aP / 1bP — cálculo con los desplazamientos de SAP2000</h4>
+  return `<div class="tor-box"><h4 class="sub" style="margin-top:0">Irregularidad torsional 1aP / 1bP — cálculo con los desplazamientos del modelo</h4>
     <div class="fg g4">
       <div class="f"><label>Nudos extremos (sentido X)</label><input data-tor="nudos" value="${esc(T.nudos || '')}" placeholder="Ej.: 23, 18" ${ro_}/></div>
       <div class="f"><label>Caso para X</label>${selC('casoX', 'DERX')}</div>
       <div class="f"><label>Nudos extremos (sentido Y)</label><input data-tor="nudosY" value="${esc(T.nudosY || '')}" placeholder="vacío = los mismos" ${ro_}/></div>
       <div class="f"><label>Caso para Y</label>${selC('casoY', 'DERY')}</div></div>
     ${!M?.ok ? '<div class="note amber">Primero sube el modelo en el Anexo C.</div>'
-      : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En SAP2000, después de correr el análisis: <b>File → Export → SAP2000 .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge DERX y DERY). Luego usa «Reemplazar» en el Anexo C.
-          <details open style="margin-top:6px"><summary><b>O pega aquí la tabla «Joint Displacements» copiada desde SAP</b> (en la ventana de la tabla: Edit → Copy Entire Table)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
-    ${hay ? `<details style="margin-top:8px"><summary class="hint">Usar otra tabla de desplazamientos (pegarla desde SAP)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	StepType	U1	U2 …" ${ro_}></textarea></details>` : ''}
+      : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En el software, después de correr el análisis: <b>File → Export → .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge DERX y DERY). Luego usa «Reemplazar» en el Anexo C.
+          <details open style="margin-top:6px"><summary><b>O pega aquí la tabla «Joint Displacements» copiada desde el software</b> (en la ventana de la tabla: Edit → Copy Entire Table)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
+    ${hay ? `<details style="margin-top:8px"><summary class="hint">Usar otra tabla de desplazamientos (pegarla desde el software)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	StepType	U1	U2 …" ${ro_}></textarea></details>` : ''}
     ${esIng() && M?.ok ? '<button class="btn sm pri" type="button" id="torCalc" style="margin-top:8px">⚙ Revisar irregularidad torsional</button>' : ''}
     ${res?.ok ? `<div class="tor-res">${filaDir('X')}${filaDir('Y')}</div><div class="hint">Calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))}. Si cambias el modelo, vuelve a revisar.</div>` : ''}
     ${res?.error ? `<div class="note amber" style="margin-top:8px">${esc(res.error)}</div>` : ''}</div>`;

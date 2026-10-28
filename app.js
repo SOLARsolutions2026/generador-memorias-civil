@@ -246,7 +246,7 @@ const STEPS = [
   { id:'A',  ph:'Cálculos',   n:'A', t:'Anexo A — Cargas',        s:'Muerta, viva y viento' },
   { id:'B',  ph:'Cálculos',   n:'B', t:'Anexo B — FHE',           s:'Análisis sísmico' },
   { id:'K',  ph:'Cálculos',   n:'∑', t:'Combinaciones',           s:'Irregularidades y NSR-10 B.2' },
-  { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — SAP2000',       s:'Datos del modelo' },
+  { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — Modelo',        s:'Datos y resultados' },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Próximamente', off:1 },
   { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Próximamente', off:1 },
   { id:'FG', ph:'Documentos', n:'F', t:'Planos y suelos',         s:'Próximamente', off:1 },
@@ -399,7 +399,7 @@ const ANEXOS_LISTO = {
     if(!an.K) return ['datos del paso'];
     const R = Combos.calcular(an.K, an.B?.aplica !== false), f = [];
     if(an.B?.aplica !== false && !(R.R.R > 0)) f.push('R0 del sistema estructural');
-    if(R.faltaPat.length) f.push('patrón de SAP para ' + R.faltaPat.join(', '));
+    if(R.faltaPat.length) f.push('nombre del patrón en el modelo para ' + R.faltaPat.join(', '));
     return f; } },
   C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
     const C = an.C, f = [];
@@ -500,7 +500,7 @@ ficha(){
     <div class="drop-img ${m.imagen_path?'has':''}" id="dropImg" ${esIng()?'role="button" tabindex="0" aria-label="Subir imagen de portada"':''}>
       <div class="ph-in" id="thumb">${m.imagen_path?'Cargando imagen…':`<div style="font-size:30px">🖼️</div><b>${esIng()?'Toca aquí para subir la imagen':'Sin imagen'}</b>${esIng()?'<br/>o arrástrala desde tu carpeta (JPG o PNG)':''}`}</div></div>
     ${esIng()?`<div class="nav-btns" style="margin-top:8px"><button class="btn sm pri" type="button" id="upImg">${m.imagen_path?'Cambiar imagen':'Subir imagen'}</button>${m.imagen_path?'<button class="btn sm danger" type="button" id="delImg">Quitar</button>':''}
-      <span class="hint">Captura del modelo de SAP2000 o render. Va en el recuadro grande de la portada; se reduce sola para ahorrar espacio.</span></div>`:''}</div>
+      <span class="hint">Captura del modelo estructural o render. Va en el recuadro grande de la portada; se reduce sola para ahorrar espacio.</span></div>`:''}</div>
   <div class="card"><div class="ct">Propietario / cliente</div>
     <div style="margin-bottom:10px"><div class="seg" role="group" aria-label="Tipo de propietario"><button type="button" data-tipo="natural" class="${!emp?'on':''}" ${ro}>Persona natural</button><button type="button" data-tipo="empresa" class="${emp?'on':''}" ${ro}>Empresa / persona jurídica</button></div></div>
     <div class="fg g3">${inp('prop', emp ? 'Razón social' : 'Nombre completo', { ph: emp ? 'Ej: Inversiones La Brasa S.A.S.' : 'Nombre y apellidos' })}
