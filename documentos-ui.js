@@ -127,8 +127,8 @@ async function imprimirCompleta(){
       let h = null; try{ h = await htmlAnexo(L); }catch(e){ console.warn(e); }
       if(h){ if(op.sep !== false) partes.push(sepAnexo(L)); partes.push(`<div class="doc-blk">${h}</div>`); incl.push(L); } else omit.push('Anexo ' + L);
     }
-    // F o G solo llevan hoja si aplican y tienen PDF adjunto (pedido de Amo 29-oct)
-    for(const k of ['F','G']){ const X = datosFG(k); if(X.aplica === false || !X.archivos.length){ omitNA.push('Anexo ' + k); continue; } partes.push(portadaFG(k)); incl.push(k); }
+    // F o G con «No» no llevan hoja; con «Sí» sí, aunque no tengan PDF (Amo puede unirlo por fuera) — pedido de Amo 29-oct
+    for(const k of ['F','G']){ const X = datosFG(k); if(X.aplica === false){ omitNA.push('Anexo ' + k); continue; } partes.push(portadaFG(k)); incl.push(k); }
     const gen = m.anexos.gen = m.anexos.gen || {};
     gen.impreso = { fecha:new Date().toISOString(), incl, toc:mem?.toc || [], tabs:mem?.tabs || [], figs:mem?.figs || [] }; guardarMemoria();
     // la portada va sola (margen 0); el resto dentro de .doc-cuerpo con los márgenes laterales como relleno, para que nada
@@ -176,7 +176,7 @@ async function unirPDF(file, op, log){
   if(fin0 > portadaN) seg.push({ tipo:'imp', de:portadaN, a:fin0, ent:null });
   letras.forEach((L, j) => {
     // un PDF impreso antes con la hoja de F/G que no aplica: esa hoja se descarta
-    if((L === 'F' || L === 'G') && (datosFG(L).aplica === false || !datosFG(L).archivos.length)) return;
+    if((L === 'F' || L === 'G') && datosFG(L).aplica === false) return;
     seg.push({ tipo:'imp', de:ini[L], a:j < letras.length - 1 ? ini[letras[j + 1]] : n, ent:{ t:`ANEXO ${L} — ${mayus(TIT_AX[L])}`, niv:2, L } });
     if(L === 'A' && op.fichas && fichasTec().length){ seg.push({ tipo:'mark', ent:{ t:'ANEXO A-1 — FICHAS TÉCNICAS DE LOS ELEMENTOS FOTOVOLTAICOS', niv:3, L:'A-1' } }); fichasTec().forEach(f => seg.push({ tipo:'ext', carta:true, path:f.path, ent:{ t:f.t, niv:4 } })); }
     if((L === 'F' || L === 'G') && datosFG(L).aplica !== false) for(const a of datosFG(L).archivos) seg.push({ tipo:'ext', carta:L === 'G', path:a.path, ent:{ t:a.nombre.replace(/\.pdf$/i, ''), niv:3 } });
