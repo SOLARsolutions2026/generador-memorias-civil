@@ -85,7 +85,7 @@ function renderRevision(){
       ${selR('viento.grupo', 'Grupo de uso', Object.entries(AnexoA.GRUPOS).map(([k, v]) => [k, v.nombre]))}
       ${selR('viento.V', 'Velocidad básica V (m/s)', AnexoA.VELOCIDADES.map(v => [v, `${v} m/s`]), { h:'Figura B.6.4-1' })}
       ${selR('viento.zona', 'Zona de cubierta (por defecto)', [['1', 'Zona 1 — interior'], ['2', 'Zona 2 — borde'], ['3', 'Zona 3 — esquinas / borde (la más desfavorable)']])}</div>
-    <div class="fg g4">${inpR('viento.L', 'Largo de la edificación (m)', { n:1 })}${inpR('viento.W', 'Ancho en el sentido de la pendiente (m)', { n:1 })}${inpR('viento.He', 'Altura de cornisa (m)', { n:1 })}${inpR('viento.Hr', 'Altura de cumbrera (m)', { n:1 })}</div>
+    <div class="fg g4">${inpR('viento.L', 'Largo L (m)', { n:1, h:'Paralelo a las correas (a lo largo del alero).' })}${inpR('viento.W', 'Ancho W (m)', { n:1, h:'En el sentido de la pendiente (de alero a cumbrera).' })}${inpR('viento.He', 'Altura de cornisa He (m)', { n:1, h:'Del piso al borde bajo de la cubierta.' })}${inpR('viento.Hr', 'Altura de cumbrera Hr (m)', { n:1, h:'Del piso al punto más alto.' })}</div>
     <div class="fg g4">${selR('viento.rug', 'Rugosidad del terreno', [['B', 'B — urbana / suburbana'], ['C', 'C — abierta'], ['D', 'D — plana sin obstrucciones']])}
       ${inpR('viento.distRug', 'Distancia con esa rugosidad (m)', { n:1 })}
       ${selR('viento.expManual', 'Exposición', [['', 'Automática (B.6.5.6.3)'], ['B', 'B'], ['C', 'C'], ['D', 'D']])}</div>
