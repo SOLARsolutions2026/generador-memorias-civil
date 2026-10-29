@@ -80,14 +80,16 @@ function renderRevision(){
     <div class="rv-strip" id="rvCargas">${cargasStrip(R, ctx)}</div></div>
 
   <div class="card"><div class="ct">② Viento — NSR-10 B.6.5 (componentes y revestimiento)</div>
+    <div class="rv-row"><div style="flex:1;min-width:0">
     <div class="fg g4">${selR('viento.tipoEd', 'Tipo de edificación', [['cerrada', 'Edificación cerrada (GCpi ±0.18)'], ['parcial', 'Parcialmente cerrada (GCpi ±0.55)'], ['libre', 'Cubierta libre, sin muros']])}
       ${selR('viento.grupo', 'Grupo de uso', Object.entries(AnexoA.GRUPOS).map(([k, v]) => [k, v.nombre]))}
       ${selR('viento.V', 'Velocidad básica V (m/s)', AnexoA.VELOCIDADES.map(v => [v, `${v} m/s`]), { h:'Figura B.6.4-1' })}
-      ${selR('viento.zona', 'Zona de cubierta (por defecto)', [['1', 'Zona 1 — interior'], ['2', 'Zona 2 — borde'], ['3', 'Zona 3 — esquina (la más desfavorable)']])}</div>
+      ${selR('viento.zona', 'Zona de cubierta (por defecto)', [['1', 'Zona 1 — interior'], ['2', 'Zona 2 — borde'], ['3', 'Zona 3 — esquinas / borde (la más desfavorable)']])}</div>
     <div class="fg g4">${inpR('viento.L', 'Largo de la edificación (m)', { n:1 })}${inpR('viento.W', 'Ancho en el sentido de la pendiente (m)', { n:1 })}${inpR('viento.He', 'Altura de cornisa (m)', { n:1 })}${inpR('viento.Hr', 'Altura de cumbrera (m)', { n:1 })}</div>
     <div class="fg g4">${selR('viento.rug', 'Rugosidad del terreno', [['B', 'B — urbana / suburbana'], ['C', 'C — abierta'], ['D', 'D — plana sin obstrucciones']])}
       ${inpR('viento.distRug', 'Distancia con esa rugosidad (m)', { n:1 })}
       ${selR('viento.expManual', 'Exposición', [['', 'Automática (B.6.5.6.3)'], ['B', 'B'], ['C', 'C'], ['D', 'D']])}</div>
+    </div><div class="rv-dib rv-dibv" id="rvVdib">${svgVientoRev(R, ctx, cor)}</div></div>
     <div class="rv-strip" id="rvViento">${vientoStrip(R, ctx, cor)}</div></div>
 
   <div class="card"><div class="ct">③ Correas a verificar</div>
@@ -109,6 +111,52 @@ const rvSet = (o, p, v) => { const ks = p.split('.'), last = ks.pop(); ks.reduce
 function cargasStrip(R, ctx){
   const a = ctx.area;
   return `<b>Carga muerta por área:</b> ${a.items.map(i => `${esc(i.n)} ${fR(i.kg, 1)}`).join(' + ')} = <b>${fR(a.kg, 1)} kg/m² (${fR(a.qD, 3)} kN/m²)</b> · el peso propio de la correa se suma en cada una.`;
+}
+// ─── Dibujo de la cubierta para el viento: alzado (alturas, ancho, pendiente) y planta con las zonas 1, 2 y 3 ───
+function svgVientoRev(R, ctx, cor, imp){
+  const v = R.viento, g = ctx.g, ok = g.ok, n = Correas.num;
+  const L = ok ? g.L : 20, W = ok ? g.W : 10, He = ok ? g.He : 3, Hr = ok ? g.Hr : 4, th = ok ? g.theta : 5.7;
+  const az = imp ? '#1f3a60' : '#1a56db', gr = '#64748b', tx = '#334155', amb = '#f59e0b';
+  const t = (x, d = 2) => ok ? `${fR(x, d)} m` : '?';
+  const cota = (x1, y1, x2, y2, lbl, vert) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${gr}" stroke-width=".8" marker-start="url(#rva)" marker-end="url(#rva)"/>`
+    + (vert ? `<text x="${x1 - 4}" y="${(y1 + y2) / 2}" font-size="9" fill="${tx}" text-anchor="middle" transform="rotate(-90 ${x1 - 4} ${(y1 + y2) / 2})">${lbl}</text>` : `<text x="${(x1 + x2) / 2}" y="${y1 + 11}" font-size="9" fill="${tx}" text-anchor="middle">${lbl}</text>`);
+  // Alzado (ancho W en el sentido de la pendiente)
+  const ax = 30, ay = 18, aw = 170, ah = 110, sc = Math.min(aw / W, ah / Math.max(Hr, He, 0.1)), bw = W * sc, x0 = ax + (aw - bw) / 2, yb = ay + ah;
+  const yE = yb - He * sc, yR = yb - Hr * sc, tipo = v.tipoEd || 'cerrada';
+  let muros = '';
+  if(tipo === 'libre') muros = `<line x1="${x0 + 3}" y1="${yb}" x2="${x0 + 3}" y2="${yE}" stroke="${az}" stroke-width="3"/><line x1="${x0 + bw - 3}" y1="${yb}" x2="${x0 + bw - 3}" y2="${yR}" stroke="${az}" stroke-width="3"/>`;
+  else { const fill = `<path d="M${x0},${yb} V${yE} L${x0 + bw},${yR} V${yb} Z" fill="${imp ? '#eef1f5' : '#eef2ff'}" stroke="${az}" stroke-width="1.5"/>`;
+    muros = fill + (tipo === 'parcial' ? `<rect x="${x0 + bw * 0.35}" y="${yb - Math.min(He * sc * 0.6, 40)}" width="${bw * 0.3}" height="${Math.min(He * sc * 0.6, 40)}" fill="#fff" stroke="${az}" stroke-width="1"/><text x="${x0 + bw / 2}" y="${yb - 4}" font-size="8" fill="${gr}" text-anchor="middle">abertura</text>` : ''); }
+  const alz = `${muros}<line x1="${x0 - 6}" y1="${yE + 2}" x2="${x0 + bw + 6}" y2="${yR - 2 * (yE - yR) / bw * 6 / 2}" stroke="${az}" stroke-width="3"/>
+    <line x1="${ax - 8}" y1="${yb}" x2="${ax + aw + 8}" y2="${yb}" stroke="${gr}" stroke-width="1.2"/>
+    ${cota(x0, yb + 6, x0 + bw, yb + 6, `W = ${t(W)}`)}${cota(x0 - 12, yb, x0 - 12, yE, `He = ${t(He)}`, true)}${cota(x0 + bw + 14, yb, x0 + bw + 14, yR, `Hr = ${t(Hr)}`, true)}
+    <text x="${x0 + bw / 2}" y="${Math.min(yE, yR) - 8}" font-size="9.5" fill="${tx}" text-anchor="middle">θ = ${ok ? fR(th, 1) + '°' : '?'}</text>
+    <path d="M${ax - 22},${ay + 30} h16 m-5,-4 l5,4 l-5,4" fill="none" stroke="${amb}" stroke-width="1.6"/><text x="${ax - 22}" y="${ay + 24}" font-size="8.5" fill="${amb}">V</text>
+    <text x="${ax + aw / 2}" y="${ay - 4}" font-size="10" font-weight="700" fill="${tx}" text-anchor="middle">Alzado</text>`;
+  // Planta con zonas
+  const w0 = cor ? Correas.vientoCorrea(R, AnexoA, n(cor.L), n(cor.s), cor.zona) : null;
+  const dmin = Math.min(L, W), hm = (He + Hr) / 2, a = w0?.ok ? w0.a : Math.max(Math.min(0.1 * dmin, 0.4 * hm), Math.max(0.04 * dmin, 0.9));
+  const zSel = String(cor?.zona || v.zona || '3');
+  const px = 30, py = 175, pw = 170, ph = 105, s2 = Math.min(pw / L, ph / W), rw = L * s2, rh = W * s2, X = px + (pw - rw) / 2, Y = py, A = Math.min(a * s2, rw / 2, rh / 2);
+  const col = z => z === zSel ? (imp ? '#fde68a' : '#fde68a') : z === '3' ? '#cbd5e1' : z === '2' ? '#e2e8f0' : '#f8fafc';
+  let zonas = '';
+  if(tipo === 'libre'){
+    zonas = `<rect x="${X}" y="${Y}" width="${rw}" height="${rh}" fill="${col('3')}"/>`
+      + `<rect x="${X + A}" y="${Y + A}" width="${Math.max(0, rw - 2 * A)}" height="${Math.max(0, rh - 2 * A)}" fill="${col('2')}"/>`
+      + `<rect x="${X + 2 * A}" y="${Y + 2 * A}" width="${Math.max(0, rw - 4 * A)}" height="${Math.max(0, rh - 4 * A)}" fill="${col('1')}"/>`
+      + `<text x="${X + A / 2}" y="${Y + rh / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">3</text><text x="${X + 1.5 * A}" y="${Y + rh / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">2</text>`;
+  } else {
+    zonas = `<rect x="${X}" y="${Y}" width="${rw}" height="${rh}" fill="${col('2')}"/><rect x="${X + A}" y="${Y + A}" width="${Math.max(0, rw - 2 * A)}" height="${Math.max(0, rh - 2 * A)}" fill="${col('1')}"/>`
+      + [[X, Y], [X + rw - A, Y], [X, Y + rh - A], [X + rw - A, Y + rh - A]].map(([x, y]) => `<rect x="${x}" y="${y}" width="${A}" height="${A}" fill="${col('3')}"/>`).join('')
+      + `<text x="${X + A / 2}" y="${Y + A / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">3</text><text x="${X + rw / 2}" y="${Y + A / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">2</text>`;
+  }
+  zonas += `<text x="${X + rw / 2}" y="${Y + rh / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">1</text>`;
+  const pl = `${zonas}<rect x="${X}" y="${Y}" width="${rw}" height="${rh}" fill="none" stroke="${az}" stroke-width="1.5"/>
+    ${cota(X, Y + rh + 6, X + rw, Y + rh + 6, `L = ${t(L)}`)}${cota(X - 10, Y, X - 10, Y + rh, `W = ${t(W)}`, true)}
+    <text x="${px + pw / 2}" y="${py - 6}" font-size="10" font-weight="700" fill="${tx}" text-anchor="middle">Planta — zonas de viento</text>
+    <text x="${px + pw / 2}" y="${py + ph + 30}" font-size="8.5" fill="${gr}" text-anchor="middle">a = ${ok ? fR(a, 2) + ' m' : '?'} · <tspan fill="#b45309">■</tspan> zona ${zSel}${cor ? ` (${esc(cor.nom)})` : ''}</text>`;
+  return `<svg viewBox="0 0 230 320" class="rv-vsvg" role="img" aria-label="Geometría de la cubierta para el viento: alzado y planta con zonas">
+    <defs><marker id="rva" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,2 L5,5 L0,8" fill="none" stroke="${gr}" stroke-width="1.5"/></marker></defs>${alz}${pl}</svg>`;
 }
 function vientoStrip(R, ctx, cor){
   if(!ctx.g.ok) return `<span class="no">Faltan datos para el viento: ${ctx.g.faltan.join(', ')}.</span>`;
@@ -206,7 +254,7 @@ function activarRevision(R){
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/ficha`);
   $('#rvImp').onclick = imprimirRevision;
   const cor = () => R.correas.find(c => c.id === R.activa);
-  const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx); };
+  const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); $('#rvVdib').innerHTML = svgVientoRev(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx); };
   const valor = el => el.type === 'checkbox' ? el.checked : el.value;
   $$('[data-fk]').forEach(el => el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); });
   $$('[data-rv]').forEach(el => {
@@ -286,14 +334,14 @@ async function revisionPrintHTML(){
   <table class="ax-tb"><thead><tr><th>Carga muerta por área</th><th>Fuente</th><th>kg/m²</th></tr></thead><tbody>${ctx.area.items.map(i => `<tr><td>${esc(i.n)}</td><td>${esc(i.fuente || '')}</td><td class="c">${fR(i.kg, 2)}</td></tr>`).join('')}
     <tr class="tot"><td colspan="2">Total (sin peso propio de la correa)</td><td class="c">${fR(ctx.area.kg, 2)} kg/m² = ${fR(ctx.area.qD, 3)} kN/m²</td></tr></tbody></table>
   <p>Carga viva de cubierta Lr = ${fR(R.Lr !== '' && R.Lr != null ? Correas.num(R.Lr) : Correas.LrMin(ctx.g.ok ? ctx.g.theta : 0), 2)} kN/m² sobre la proyección horizontal (Tabla B.4.2.1-2).</p>
-  ${w0?.ok ? `<h4>Viento (B.6.5, componentes y revestimiento)</h4><table class="ax-kv">
+  ${w0?.ok ? `<h4>Viento (B.6.5, componentes y revestimiento)</h4><div class="rv-pr-row"><table class="ax-kv">
     <tr><td>Tipo de edificación</td><td>${{ cerrada:'Cerrada', parcial:'Parcialmente cerrada', libre:'Cubierta libre' }[w0.tipo]}</td></tr>
     <tr><td>Velocidad básica V / grupo / I</td><td>${w0.V} m/s · ${esc((AnexoA.GRUPOS[R.viento.grupo] || {}).nombre || '')} · I = ${w0.I}</td></tr>
     <tr><td>Geometría</td><td>${fR(w0.g.L, 2)} × ${fR(w0.g.W, 2)} m, cornisa ${fR(w0.g.He, 2)} m, cumbrera ${fR(w0.g.Hr, 2)} m, θ = ${fR(w0.g.theta, 1)}°, h = ${fR(w0.g.hm, 2)} m</td></tr>
     <tr><td>Exposición / Kz / Kd</td><td>${w0.ex.usada} · ${fR(w0.Kz, 3)} · ${w0.Kd}</td></tr>
     <tr><td>qh = 0.613·Kz·Kzt·Kd·V²·I</td><td>${fR(w0.qh, 3)} kN/m²</td></tr>
     <tr><td>Coeficientes</td><td>${w0.tipo === 'libre' ? 'CN de la Figura B.6.5-19A según zona y área' : `GCp de la ${w0.fig}, GCpi = ±${w0.GCpi}`}</td></tr>
-    <tr><td>Presión de diseño</td><td>p = ${w0.tipo === 'libre' ? 'qh·G·CN' : 'qh·[(GCp) − (GCpi)]'}, mínimo 0.40 kN/m²; se calcula para cada correa con su zona y área efectiva</td></tr></table>` : ''}
+    <tr><td>Presión de diseño</td><td>p = ${w0.tipo === 'libre' ? 'qh·G·CN' : 'qh·[(GCp) − (GCpi)]'}, mínimo 0.40 kN/m²; se calcula para cada correa con su zona y área efectiva</td></tr></table><figure class="ax-fig rv-pr-v">${svgVientoRev(R, ctx, R.correas[0], true)}</figure></div>` : ''}
   </section>`;
   rs.forEach((x, k) => {
     const cr = x.c, r = x.r, n = `3.${k + 1}`;

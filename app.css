@@ -629,3 +629,5 @@ table.t td{border-bottom:1px solid #edf1f6}
 .rv-print .rv-firma{margin-top:30px;text-align:center;break-inside:avoid}.rv-print .rv-firma img{max-height:60px}.rv-print .rv-firma div{border-top:1px solid #333;display:inline-block;padding-top:3px;font-size:9.5pt;min-width:2.8in}
 .rv-print .rv-det{font-family:inherit;font-size:9pt}
 .rv-strip{margin-top:10px;background:#f1f5f9;border-left:3px solid var(--navy,#1f3a60);border-radius:6px;padding:9px 12px;font-size:12.5px;line-height:1.55;color:#334155}.rv-strip .no{color:#b91c1c;font-weight:700}
+.rv-dibv{width:250px}.rv-vsvg{width:100%;height:auto;display:block}
+.rv-print .rv-pr-row figure.rv-pr-v{width:2.4in}
