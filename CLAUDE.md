@@ -29,6 +29,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - Fichas técnicas: las de la biblioteca base están en el repo `fichas/*.pdf` (públicas, comprimidas con qpdf); las que sube Amo van a
   Supabase `<memoria_id>/fichas/{panel|riel}.pdf` y, al "Guardar en biblioteca", se copian a `biblioteca/<lista>-<nombre>.pdf`. `urlFicha()` resuelve ambas.
   Se unen al PDF final después de las páginas del Anexo A (paso «Generar PDF final»).
+  Carta vertical (pedido de Amo 29-oct): `calc/carta.js` (`Carta.paginas`) pone cada página en carta 612×792, escalada y girada 90° si es acostada; se aplica al unir a las fichas y al Anexo G (los planos F quedan en su tamaño). Las de `fichas/` ya se convirtieron con `node tools/fichas_carta.js` (+ qpdf).
 - Separación máxima de apoyos del riel (`riel.luzMax`): CHIKO 1.5 m, Alurack 2.0 m (fichas técnicas). La separación de apoyos del riel = `lamina.sep` si hay cubierta (solo lectura), si no `viento.luz` (`luzRiel()`); la correa usa `viento.luzCorrea`. Aviso en pantalla y nota impresa.
 - Correcciones acordadas frente a los Excel originales (26-oct-2026): D de lámina multiplica por la separación (el Excel dividía);
   peso de lámina kg/m ÷ ancho útil; ancho aferente del riel = L/2 (editable) en muerta, viva y viento; g = 9.81;

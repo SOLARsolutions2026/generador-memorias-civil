@@ -176,8 +176,8 @@ async function unirPDF(file, op, log){
   if(fin0 > portadaN) seg.push({ tipo:'imp', de:portadaN, a:fin0, ent:null });
   letras.forEach((L, j) => {
     seg.push({ tipo:'imp', de:ini[L], a:j < letras.length - 1 ? ini[letras[j + 1]] : n, ent:{ t:`ANEXO ${L} — ${mayus(TIT_AX[L])}`, niv:2, L } });
-    if(L === 'A' && op.fichas && fichasTec().length){ seg.push({ tipo:'mark', ent:{ t:'ANEXO A-1 — FICHAS TÉCNICAS DE LOS ELEMENTOS FOTOVOLTAICOS', niv:3, L:'A-1' } }); fichasTec().forEach(f => seg.push({ tipo:'ext', path:f.path, ent:{ t:f.t, niv:4 } })); }
-    if((L === 'F' || L === 'G') && datosFG(L).aplica !== false) for(const a of datosFG(L).archivos) seg.push({ tipo:'ext', path:a.path, ent:{ t:a.nombre.replace(/\.pdf$/i, ''), niv:3 } });
+    if(L === 'A' && op.fichas && fichasTec().length){ seg.push({ tipo:'mark', ent:{ t:'ANEXO A-1 — FICHAS TÉCNICAS DE LOS ELEMENTOS FOTOVOLTAICOS', niv:3, L:'A-1' } }); fichasTec().forEach(f => seg.push({ tipo:'ext', carta:true, path:f.path, ent:{ t:f.t, niv:4 } })); }
+    if((L === 'F' || L === 'G') && datosFG(L).aplica !== false) for(const a of datosFG(L).archivos) seg.push({ tipo:'ext', carta:L === 'G', path:a.path, ent:{ t:a.nombre.replace(/\.pdf$/i, ''), niv:3 } });
   });
   // Copia de páginas; idxImp[i] = posición (sin las listas del inicio) de la página impresa i
   const marcas = [], extPag = new Set(), idxImp = {};
@@ -186,9 +186,14 @@ async function unirPDF(file, op, log){
     if(s.tipo === 'mark'){ marcas.push({ ...s.ent, pag:out.getPageCount(), n:0 }); continue; }
     let pags = [];
     if(s.tipo === 'imp'){ const idx = []; for(let i = s.de; i < s.a; i++) idx.push(i); pags = await out.copyPages(src, idx); idx.forEach((i, k) => idxImp[i] = out.getPageCount() + k); }
-    else { log(`Agregando «${s.ent.t}»…`); try{ const d = await PDFLib.PDFDocument.load(await bytesDe(s.path), { ignoreEncryption:true }); pags = await out.copyPages(d, d.getPageIndices()); }catch(e){ log(`⚠ No se pudo agregar «${s.ent.t}»: ${e.message}`); continue; } }
     const p0 = out.getPageCount();
-    pags.forEach(p => { out.addPage(p); if(s.tipo === 'ext') extPag.add(out.getPageCount() - 1); });
+    if(s.tipo === 'ext'){ log(`Agregando «${s.ent.t}»…`);
+      // fichas técnicas y estudio de suelos: a carta vertical (Carta, calc/carta.js); los planos quedan en su tamaño
+      try{ const d = await PDFLib.PDFDocument.load(await bytesDe(s.path), { ignoreEncryption:true });
+        if(s.carta) pags = await Carta.paginas(PDFLib, out, d); else { pags = await out.copyPages(d, d.getPageIndices()); pags.forEach(p => out.addPage(p)); } }
+      catch(e){ log(`⚠ No se pudo agregar «${s.ent.t}»: ${e.message}`); continue; }
+      for(let i = p0; i < out.getPageCount(); i++) extPag.add(i); }
+    else pags.forEach(p => out.addPage(p));
     if(s.ent) marcas.push({ ...s.ent, pag:p0, n:pags.length });
   }
   // ── Listas del inicio: tabla de contenido, tablas, figuras y anexos ──
