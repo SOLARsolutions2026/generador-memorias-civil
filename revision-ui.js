@@ -178,24 +178,77 @@ function correaHTML(R, c, ctx, ro){
     : `
       <div class="seg" role="group" aria-label="Tipo de sección" style="margin-bottom:8px"><button type="button" data-rsec="L" class="${c.sec !== 'HSS' ? 'on' : ''}" ${ro}>Ángulo (L)</button><button type="button" data-rsec="HSS" class="${c.sec === 'HSS' ? 'on' : ''}" ${ro}>Tubo rectangular</button></div>
       <div class="fg g4">${s('acero', 'Acero', (c.sec === 'HSS' ? Correas.ACEROS_HSS : Correas.ACEROS_L).map(k => [k, `${ac[k].n} — Fy ${ac[k].Fy} MPa`]))}
-        ${c.sec === 'HSS' ? `${i('H', 'H — altura, normal a la cubierta (mm)')}${i('B', 'B — ancho (mm)')}${i('tH', 't — espesor (mm)', { h:'Se diseña con 0.93t' })}` : `${i('b', 'b — ala (mm)')}${i('t', 't — espesor (mm)')}`}</div>
-      ${c.sec !== 'HSS' ? `<div style="margin-top:4px">${ch('arriostre', 'La lámina va fijada al ala y la arriostra', 'Sí: flexión en ejes geométricos. No: ejes principales y pandeo lateral-torsional del ángulo (F.2.6.10).')}</div>` : ''}`;
+        ${c.sec === 'HSS' ? `${i('H', 'H — altura, normal a la cubierta (mm)')}${i('B', 'B — ancho (mm)')}${i('tH', 't — espesor (mm)', { h:'Se diseña con 0.93t' })}` : `${i('b', 'b — ala (mm)')}${i('t', 't — espesor (mm)')}`}</div>`;
   return `<div class="rv-cor">
     <div class="fg g4">${i('nom', 'Nombre')}<div class="f" style="grid-column:span 3"><label>Ubicación / descripción</label><input data-rc="desc" value="${esc(c.desc || '')}" placeholder="Ej.: Correas del eje B a C, zona de paneles" ${ro}/></div></div>
     <div class="rv-row"><div style="flex:1">
       <h4 class="sub">Sección — ${mat ? 'madera (Título G, esfuerzos admisibles)' : 'acero (Título F, LRFD)'}</h4>${sec}
       <h4 class="sub">Geometría</h4>
-      <div class="fg g4">${i('s', 'Separación entre correas s (m)', { h:'Ancho aferente' })}${i('L', 'Luz entre apoyos L (m)')}${i('alfa', 'Inclinación (°)', { ph:th != null ? `${fR(th, 1)} (del viento)` : '' })}
-        ${s('apoyo', 'Condición de apoyo', Object.entries(Correas.APOYOS).map(([k, v]) => [k, `${v.n} — M = ${v.txtM}`]))}</div>
+      <div class="fg g4">${i('s', 'Separación entre correas s (m)', { h:'Ancho aferente' })}${i('L', 'Luz entre apoyos L (m)')}${i('alfa', 'Inclinación (°)', { ph:th != null ? `${fR(th, 1)} (del viento)` : '' })}</div>
       <div class="fg g4">${s('zona', 'Zona de viento de esta correa', [['', `La general (zona ${R.viento.zona})`], ['1', 'Zona 1'], ['2', 'Zona 2'], ['3', 'Zona 3']])}${i('limV', 'Deflexión viva / viento: L /', { ph:R.cielo.aplica ? '360' : '240' })}${i('limT', 'Deflexión total: L /', { ph:R.cielo.aplica ? '240' : '180' })}</div>
       ${mat ? `<h4 class="sub">Condiciones de servicio — coeficientes G.2.2.3</h4>
       <div class="fg g4">${i('CHc', 'Humedad en la construcción (%)')}${i('CHs', 'Humedad en servicio (%)')}${i('temp', 'Temperatura (°C)')}${i('Kcr', 'Factor de deflexión diferida', { ph:Correas.num(c.CHs, 12) <= 19 ? '1.8 (seca)' : '2.0 (húmeda)', h:'Tabla G.3.2-5 (por confirmar con la norma)' })}</div>
-      <div class="fg g4">${i('lu', 'Longitud no arriostrada lu (m)', { ph:'= L' })}${i('BA', 'Desviación del grano BA (mm)')}${i('AC', 'Longitud medida AC (mm)', { h:'Pendiente BA/AC ≤ 1/8 (Tabla G.2.2-9)' })}</div>
-      <div class="rv-chks">${ch('diafragma', 'La cubierta (entablado o lámina fijada) toma la carga a lo largo de la pendiente', 'Sí: la correa solo trabaja en el eje fuerte.')}${ch('restr', 'Borde a compresión soportado lateralmente (CL = 1)')}${ch('incision', 'El elemento tiene incisiones (G.2.2.3.4)')}${ch('conjunta', 'Acción de conjunto: 3 o más elementos a ≤ 0.61 m (G.2.2.3.5)')}</div>` : ''}
+      <div class="fg g4">${i('lu', 'Longitud no arriostrada lu (m)', { ph:'= L', h:'Distancia entre puntos que impiden el volcamiento lateral' })}</div>
+` : ''}
     </div><div class="rv-dib">${svgSecCorrea(c)}<div class="hint" style="text-align:center">${esc(nomSecCor(c))}</div></div></div>
+    <h4 class="sub">Condiciones con imagen de referencia</h4>${refCards(R, c, ro)}
     <div class="nav-btns" style="margin-top:12px"><button class="btn pri" type="button" id="rvCalc">⚡ Calcular verificación NSR-10</button>
       ${esIng() ? `<button class="btn" type="button" id="rvDup">⧉ Duplicar correa</button>${R.correas.length > 1 ? '<button class="btn danger" type="button" id="rvDel">Eliminar correa</button>' : ''}` : ''}</div>
     <div id="rvRes">${resultadoHTML(R, c, ctx)}</div></div>`;
+}
+
+// ─── Tarjetas con imagen de referencia (como en la calculadora de madera de Amo) ───
+const SVG_REF = {
+  apoyo:sel => { const az = '#1f3a60', on = k => sel === k ? '#f59e0b' : az, tri = x => `<path d="M${x},40 l-6,9 h12 z" fill="none" stroke="#64748b" stroke-width="1.2"/>`;
+    const fila = (y, k, n, t) => { const x0 = 20, w = 200, xs = [...Array(n + 1)].map((_, i) => x0 + w * i / n);
+      return `<g transform="translate(0,${y})"><line x1="${x0}" y1="40" x2="${x0 + w}" y2="40" stroke="${on(k)}" stroke-width="${sel === k ? 4 : 2.5}"/>${xs.map(tri).join('')}<text x="${x0 + w + 8}" y="44" font-size="10" fill="${on(k)}" font-weight="${sel === k ? 700 : 400}">${t}</text></g>`; };
+    return `<svg viewBox="0 0 330 150" role="img" aria-label="Condición de apoyo">${fila(-20, 'simple', 1, 'Simple')}${fila(25, 'cont2', 2, '2 vanos')}${fila(70, 'cont3', 3, '3 o más')}<text x="20" y="145" font-size="9" fill="#64748b">L = distancia entre apoyos de cada vano</text></svg>`; },
+  arriostre:on => `<svg viewBox="0 0 260 150" role="img" aria-label="Ángulo bajo la lámina">
+    <path d="M10,40 q15,-14 30,0 t30,0 t30,0 t30,0 t30,0 t30,0 t30,0 t30,0" fill="none" stroke="#64748b" stroke-width="2"/>
+    <path d="M90,46 h80 v6 h-74 v60 h-6 z" fill="#dbeafe" stroke="#1f3a60" stroke-width="1.5"/>
+    ${on ? '<line x1="110" y1="30" x2="110" y2="56" stroke="#b45309" stroke-width="2.5"/><line x1="150" y1="30" x2="150" y2="56" stroke="#b45309" stroke-width="2.5"/><text x="178" y="40" font-size="10" fill="#b45309">tornillos</text>'
+      : '<text x="178" y="40" font-size="10" fill="#b91c1c">sin fijación</text><path d="M170,85 q12,-10 0,-20" fill="none" stroke="#b91c1c" stroke-width="1.5" marker-end="url(#ra)"/>'}
+    <defs><marker id="ra" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/></marker></defs>
+    <text x="10" y="140" font-size="9" fill="#64748b">${on ? 'La lámina impide que el ángulo gire o se desplace' : 'El ángulo puede girar: pandeo lateral-torsional'}</text></svg>`,
+  diafragma:on => `<svg viewBox="0 0 260 150" role="img" aria-label="Cubierta como diafragma">
+    <path d="M20,110 L200,40 L240,60 L60,130 Z" fill="${on ? '#fde68a' : '#f1f5f9'}" stroke="#7c4a12" stroke-width="1.5"/>
+    ${[0.25, 0.5, 0.75].map(k => `<line x1="${20 + 40 * k + 0}" y1="${110 + 20 * k}" x2="${200 + 40 * k}" y2="${40 + 20 * k}" stroke="#7c4a12" stroke-width="3"/>`).join('')}
+    <path d="M150,30 v28" stroke="#1f3a60" stroke-width="2" marker-end="url(#rb)"/><path d="M150,58 l-26,10" stroke="#b45309" stroke-width="2" marker-end="url(#rc)"/>
+    <defs><marker id="rb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1f3a60"/></marker><marker id="rc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b45309"/></marker></defs>
+    <text x="10" y="20" font-size="10" fill="#b45309">componente a lo largo de la pendiente</text>
+    <text x="10" y="145" font-size="9" fill="#64748b">${on ? 'El entablado o la lámina fijada la toma (diafragma)' : 'La correa la toma por su eje débil'}</text></svg>`,
+  borde:on => `<svg viewBox="0 0 260 150" role="img" aria-label="Borde a compresión soportado">
+    <rect x="40" y="30" width="180" height="10" fill="${on ? '#fde68a' : '#f1f5f9'}" stroke="#7c4a12"/>
+    <rect x="105" y="40" width="40" height="80" fill="#f5e6d0" stroke="#7c4a12" stroke-width="1.5"/>
+    ${on ? '<line x1="115" y1="22" x2="115" y2="52" stroke="#64748b" stroke-width="2"/><line x1="135" y1="22" x2="135" y2="52" stroke="#64748b" stroke-width="2"/><text x="150" y="60" font-size="10" fill="#b45309">clavado continuo</text>' : '<text x="150" y="60" font-size="10" fill="#b91c1c">borde libre</text>'}
+    <text x="10" y="145" font-size="9" fill="#64748b">${on ? 'No hay volcamiento lateral: CL = 1' : 'Se calcula CL con lu (estabilidad lateral)'}</text></svg>`,
+};
+function refCards(R, c, ro){
+  const card = (img, tit, ref, ctrl, txt, extra = '') => `<div class="rv-ref"><div class="rv-ref-img">${img}</div><div class="rv-ref-b"><b>${tit}</b>${ref ? ` <span class="hint">— ${ref}</span>` : ''}${ctrl}<p>${txt}</p>${extra}</div></div>`;
+  const sn = (k, l) => `<div class="f"><label>${l}</label><select data-rcb="${k}" ${ro}><option value="1" ${c[k] ? 'selected' : ''}>Sí</option><option value="0" ${!c[k] ? 'selected' : ''}>No</option></select></div>`;
+  const ap = `<div class="f"><label>Condición de apoyo</label><select data-rc="apoyo" ${ro}>${Object.entries(Correas.APOYOS).map(([k, v]) => `<option value="${k}" ${c.apoyo === k ? 'selected' : ''}>${v.n}</option>`).join('')}</select></div>`;
+  const cApoyo = card(SVG_REF.apoyo(c.apoyo), 'Condición de apoyo', '', ap, `Simple: la correa apoya solo en sus dos extremos (M = wL²/8). Continua: pasa sobre varios apoyos sin cortarse; el momento mayor queda sobre el primer apoyo interior (2 vanos wL²/8 y cortante 0.625wL; 3 o más wL²/10 y 0.6wL).`);
+  if(c.mat !== 'mad'){
+    if(c.sec === 'HSS') return `<div class="rv-refs">${cApoyo}</div>`;
+    return `<div class="rv-refs">${card(SVG_REF.arriostre(c.arriostre !== false), '¿La lámina arriostra el ala?', 'F.2.6.10', sn('arriostre', '¿Está fijada con tornillos al ala?'),
+      'Sí: la lámina va atornillada al ala del ángulo a lo largo de toda la correa e impide que gire; la flexión se revisa en los ejes geométricos. No: el ángulo puede girar; se revisa en sus ejes principales con pandeo lateral-torsional (más exigente).')}${cApoyo}</div>`;
+  }
+  const k = Correas.coefMadera(c), pend = k.pend;
+  return `<div class="rv-refs">
+    ${card('<img src="img/ref-incision.jpg" alt="Madera con incisiones"/>', 'Incisiones (Cin)', 'G.2.2.3.4', sn('incision', '¿El elemento tiene incisiones?'),
+      'Aplica cuando la madera tiene incisiones paralelas al grano (por ejemplo, para el tratamiento de preservación) de máximo 10 mm de profundidad, 9.5 mm de longitud y densidad no mayor a 1 185 incisiones/m². Si se exceden esos límites, Cin se determina por ensayos o con la sección reducida. Reduce Fb, Ft, Fc y Fv a 0.80 y E a 0.95.')}
+    ${card('<img src="img/ref-conjunta.jpg" alt="Acción de conjunto"/>', 'Acción de conjunto (Cr)', 'G.2.2.3.5', sn('conjunta', '¿Hay acción de conjunto garantizada?'),
+      'Tres o más elementos de igual rigidez, de 50 a 100 mm de espesor, separados no más de 61 cm y unidos por un entablado o elemento que reparta la carga. Aumenta Fb un 15 % (Cr = 1.15). Con separaciones mayores de 0.61 m la app no lo aplica.',
+      c.conjunta && Correas.num(c.s) > 0.61 ? `<div class="note amber">La separación es ${fR(Correas.num(c.s), 2)} m &gt; 0.61 m: no se aplica Cr.</div>` : '')}
+    ${card('<img src="img/ref-grano.jpg" alt="Desviación del grano"/>', 'Desviación del grano (CDG)', 'G.2.2.3.7',
+      `<div class="fg g2"><div class="f"><label>BA — desvío (mm)</label><input data-rc="BA" inputmode="decimal" value="${esc(c.BA ?? '')}" ${ro}/></div><div class="f"><label>AC — longitud (mm)</label><input data-rc="AC" inputmode="decimal" value="${esc(c.AC ?? '')}" ${ro}/></div></div>`,
+      'Sigue una fibra sobre la cara del elemento: AC es la distancia medida a lo largo del eje y BA el desvío de la fibra, perpendicular al eje, en esa misma distancia. La pendiente es BA/AC; por ejemplo, 1 mm de desvío en 12 mm de largo da 1/12 (CDG = 0.69 en flexión). La Tabla G.2.2-9 llega hasta 1/8.',
+      `<div class="rv-cdg ${k.fuera ? 'no' : ''}" id="rvCdg">Pendiente = ${fR(pend, 3)} → CDG flexión ${fR(k.cdgB, 2)}${k.fuera ? ' · fuera de tabla (> 1/8): no apta' : ''}</div>`)}
+    ${card(SVG_REF.diafragma(c.diafragma !== false), 'La cubierta trabaja como diafragma', '', sn('diafragma', '¿El entablado o la lámina toman la carga a lo largo de la pendiente?'),
+      'En una cubierta inclinada, el peso se divide en una parte perpendicular a la cubierta y otra a lo largo de la pendiente. Si hay machimbre, entablado o lámina bien fijada, esa segunda parte la toma la cubierta y la correa solo trabaja en su eje fuerte. Si no, la correa también se flexiona por su eje débil.')}
+    ${card(SVG_REF.borde(!!c.restr), 'Borde a compresión soportado', 'G.3.3.4', sn('restr', '¿El borde superior está soportado en toda su longitud?'),
+      'Sí: el borde a compresión está clavado de forma continua a un entablado o tablero, la viga no puede volcarse y CL = 1. No: se calcula el coeficiente de estabilidad lateral CL con la longitud no arriostrada lu.')}
+    ${cApoyo}</div>`;
 }
 
 function resultadoHTML(R, c, ctx){
@@ -254,7 +307,8 @@ function activarRevision(R){
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/ficha`);
   $('#rvImp').onclick = imprimirRevision;
   const cor = () => R.correas.find(c => c.id === R.activa);
-  const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); $('#rvVdib').innerHTML = svgVientoRev(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx); };
+  const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); $('#rvVdib').innerHTML = svgVientoRev(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx);
+    if($('#rvCdg') && c.mat === 'mad'){ const k = Correas.coefMadera(c); $('#rvCdg').className = 'rv-cdg' + (k.fuera ? ' no' : ''); $('#rvCdg').textContent = `Pendiente = ${fR(k.pend, 3)} → CDG flexión ${fR(k.cdgB, 2)}${k.fuera ? ' · fuera de tabla (> 1/8): no apta' : ''}`; } };
   const valor = el => el.type === 'checkbox' ? el.checked : el.value;
   $$('[data-fk]').forEach(el => el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); });
   $$('[data-rv]').forEach(el => {
@@ -266,6 +320,7 @@ function activarRevision(R){
     if(el.tagName === 'SELECT' || el.type === 'checkbox') el.onchange = () => { set(); re(); }; else el.oninput = () => { set(); refresca(); if(el.dataset.rc === 'nom'){ /* nombre de la pestaña al salir */ } };
     if(el.dataset.rc === 'nom') el.onchange = re;
   });
+  $$('[data-rcb]').forEach(el => el.onchange = () => { cor()[el.dataset.rcb] = el.value === '1'; guardarMemoria(); re(); });
   if($('#rvPanel')) $('#rvPanel').onchange = e => { R.panel = { ...(S.cfg.biblioteca.paneles[e.target.value]) }; guardarMemoria(); re(); };
   if($('#rvRiel')) $('#rvRiel').onchange = e => { R.riel = { ...(S.cfg.biblioteca.rieles[e.target.value]) }; guardarMemoria(); re(); };
   $$('[data-rsec]').forEach(b => b.onclick = () => { const c = cor(); c.sec = b.dataset.rsec; c.acero = c.sec === 'HSS' ? 'A500B' : 'A36'; guardarMemoria(); re(); });
