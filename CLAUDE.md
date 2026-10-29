@@ -156,6 +156,13 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - `$`/`$$` aceptan una raíz opcional: `$(sel, raiz)`.
 - Regla de actualizaciones: los cambios solo AGREGAN campos/columnas; nunca borrar ni renombrar datos existentes; el código nuevo debe leer memorias viejas (defaults).
 
+## Variantes de diseño (29-oct, opción A de Amo) — `variantes-ui.js`
+- Columnas `mem_memorias.variante_de` (id de la original, on delete cascade), `variante_nom` (nombre interno que escribe Amo; NO se imprime), `variante_origen` (de cuál se copió), `definitiva` (bool, una por grupo).
+  El consecutivo se repite: índice único parcial `mem_memorias_consecutivo_raiz` (solo memorias sin `variante_de`).
+- Lista: una fila por grupo con los datos de la ★ definitiva; «⧉ Crear variante» (`modalVariante`: nombre + «Copiar desde») y ▾ que despliega Inicial + variantes (✎ renombrar, ★ Volver definitiva, Eliminar variante, Abrir); `localStorage.memAbierta` recuerda el grupo abierto.
+- `crearVariante`: copia fila, revisiones y archivos (`storage.copy` a `<nuevo id>/…`) y reescribe en ficha/anexos/imagen_path las rutas `<id viejo>/` → `<id nuevo>/`. Eliminar la fila del grupo borra todas (y sus archivos). Consulta solo ve definitivas.
+- En la barra de la memoria abierta: chip `.vchip` «⧉ <nombre> ★» para saber qué diseño se edita.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

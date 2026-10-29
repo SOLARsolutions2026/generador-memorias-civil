@@ -135,7 +135,7 @@ const ir = h => { if(location.hash === h) route(); else location.hash = h; };
 
 // ═══ LISTA DE MEMORIAS (ingeniero) ═══
 async function cargarMemorias(){
-  const { data, error } = await sb.from('mem_memorias').select('id,consecutivo,titulo,estado,ficha,imagen_path,paquete,archivada_en,created_at,updated_at').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('mem_memorias').select('id,consecutivo,titulo,estado,ficha,imagen_path,paquete,archivada_en,created_at,updated_at,variante_de,variante_nom,variante_origen,definitiva').order('created_at', { ascending:false });
   if(error) throw error;
   S.mems = data;
 }
@@ -160,39 +160,58 @@ async function renderLista(){
   const MB = b => b / 1048576;
   const usado = MB(tam.reduce((a,b)=>a+b,0) + tamCfg), pct = usado / CAP_MB * 100;
   const cols = ['#1a56db','#10b981','#a855f7','#f59e0b'];
-  const acts = m => {
-    const [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
-    let b = pill(c, t);
-    if(m.estado === 'wip') b += `<button class="btn sm danger" type="button" data-borrar="${m.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/ficha">Continuar</button>`;
+  // Variantes (opción A de Amo, 29-oct): cada grupo = memoria original (raíz) + sus variantes; la fila muestra la ★ definitiva
+  const tamDe = id => tam[S.mems.findIndex(x => x.id === id)] || 0;
+  const grupos = S.mems.filter(m => !m.variante_de).map(r => { const vs = S.mems.filter(x => x.variante_de === r.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1);
+    const todos = [r, ...vs]; return { r, vs, todos, def:todos.find(x => x.definitiva !== false) || r }; });
+  const acts = (g) => {
+    const m = g.def, [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
+    let b = (g.vs.length ? `<button class="chev" type="button" data-chev="${g.r.id}" aria-label="Ver diseños" aria-expanded="false">▾</button>` : '')
+      + `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>` + pill(c, t);
+    if(m.estado === 'wip') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/ficha">Continuar</button>`;
     else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Portada</button><button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;
     else b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Ver ficha</button>`;
     return b;
   };
+  const nomDis = m => m.variante_de ? (m.variante_nom || 'Variante') : (m.variante_nom || 'Inicial');
+  const subFila = (g, m) => `<div class="mi"><div><div class="nm" style="font-size:13.5px">${esc(nomDis(m))}${m === g.def ? ' <span class="vtag">★ definitiva</span>' : ''}</div>
+      <div class="meta">${m.variante_origen ? `Copia de «${esc(m.variante_origen)}» del ${fmtFecha(m.created_at)} · ` : ''}editada ${fmtFecha(m.updated_at)} · ${MB(tamDe(m.id)).toFixed(1)} MB</div></div>
+    <div class="acts"><button class="btn sm" type="button" data-renvar="${m.id}" title="Cambiar el nombre interno">✎</button>
+      ${m === g.def ? '' : `<button class="btn sm" type="button" data-defvar="${m.id}">★ Volver definitiva</button>`}
+      ${m.variante_de ? `<button class="btn sm danger" type="button" data-borvar="${m.id}">Eliminar</button>` : ''}
+      <button class="btn sm pri" type="button" data-go="#/m/${m.id}/ficha">Abrir</button></div></div>`;
   $('#app').innerHTML = `
   <div class="main-hd"><div><h2>Memorias de cálculo</h2><p class="lead">Las memorias en ejecución viven en la app. Cuando una esté aprobada, la archivas en el NAS y se libera su espacio; su ficha queda en la lista.</p></div>
     <div class="nav-btns"><button class="btn pri" type="button" id="nueva">+ Nueva memoria</button></div></div>
   <div class="card"><div class="ct">Espacio de archivos en la app${pill(pct>=80?'no':pct>=60?'pend':'ok', `${usado.toFixed(1)} MB de 1 GB · ${pct.toFixed(1)} %`)}</div>
     <div class="store"><div class="bar2">${S.mems.map((m,k)=> tam[k] ? `<i style="width:${MB(tam[k])/CAP_MB*100}%;background:${cols[k%4]}" title="${esc(m.consecutivo)}"></i>` : '').join('')}</div></div>
     <div class="hint" style="margin-top:6px">Al llegar al 80 % archiva en el NAS las memorias aprobadas para liberar espacio.</div></div>
-  <div class="mlist">${S.mems.length ? S.mems.map((m,k) => {
-      const f = m.ficha || {};
-      const lugar = [f.mun, f.depto].filter(Boolean).join(', ');
-      return `<div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}</div>
-        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(tam[k]).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}</div></div>
-        <div class="acts">${acts(m)}</div></div>`; }).join('')
+  <div class="mlist">${grupos.length ? grupos.map(g => {
+      const m = g.def, f = m.ficha || {};
+      const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
+      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}</div>
+        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div></div>
+        <div class="acts">${acts(g)}</div></div>
+        ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; }).join('')
     : '<div class="card empty">Todavía no hay memorias. Crea la primera con <b>+ Nueva memoria</b>.</div>'}</div>`;
   $('#nueva').onclick = nuevaMemoria;
   $$('[data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
   $$('[data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
+  $$('[data-chev]').forEach(b => b.onclick = () => { const sub = $(`[data-sub="${b.dataset.chev}"]`); sub.hidden = !sub.hidden; b.textContent = sub.hidden ? '▾' : '▴'; b.setAttribute('aria-expanded', !sub.hidden);
+    try{ localStorage.setItem('memAbierta', sub.hidden ? '' : b.dataset.chev); }catch(e){} });
+  try{ const ab = localStorage.getItem('memAbierta'); if(ab && $(`[data-chev="${ab}"]`)) $(`[data-chev="${ab}"]`).click(); }catch(e){}
+  activarVariantes(grupos);
 }
 async function borrarMemoria(m){
-  if(!m || !confirm(`¿Eliminar ${m.consecutivo} con sus revisiones e imágenes? No se puede deshacer.`)) return;
+  if(!m) return;
+  const grupo = [m, ...S.mems.filter(x => x.variante_de === m.id)];
+  if(!confirm(`¿Eliminar ${m.consecutivo}${grupo.length > 1 ? ` y sus ${grupo.length - 1} variante${grupo.length > 2 ? 's' : ''}` : ''} con sus revisiones e imágenes? No se puede deshacer.`)) return;
   try{
-    const arch = await archivosDe(m.id);
+    const arch = (await Promise.all(grupo.map(x => archivosDe(x.id)))).flat();
     if(arch.length) await sb.storage.from(BUCKET).remove(arch.map(f => f.ruta));
     const { error } = await sb.from('mem_memorias').delete().eq('id', m.id);
     if(error) throw error;
-    if(S.m?.id === m.id) S.m = null;
+    if(grupo.some(x => x.id === S.m?.id)) S.m = null;
     toast(`${m.consecutivo} eliminada.`); renderLista();
   }catch(e){ err(e, 'No se pudo eliminar'); }
 }
@@ -223,7 +242,7 @@ async function nuevaMemoria(){
 async function renderConsulta(){
   $('#app').innerHTML = '<p class="muted">Cargando…</p>';
   try{ await cargarMemorias(); }catch(e){ return err(e); }
-  const lista = S.mems.filter(m => m.estado !== 'wip');
+  const lista = S.mems.filter(m => m.estado !== 'wip' && m.definitiva !== false);
   $('#app').innerHTML = `<div class="main-hd"><div><h2>Memorias aprobadas</h2><p class="lead">Consulta y descarga. Las memorias archivadas indican el paquete que se debe buscar en el NAS.</p></div>
     <div class="f" style="min-width:240px"><label for="q">Buscar</label><input id="q" placeholder="Proyecto, municipio o consecutivo"/></div></div>
     <div class="card"><div class="tw"><table class="t"><thead><tr><th>Consecutivo</th><th>Proyecto</th><th>Municipio</th><th>Estado</th><th></th></tr></thead><tbody id="tb"></tbody></table></div></div>`;
@@ -275,7 +294,7 @@ function renderWS(cur){
   const s = pasos.find(x => x.id === cur), activos = pasos.filter(x => !x.off), i = activos.indexOf(s);
   $('#app').innerHTML = `
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
-    <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span><span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>${esIng() ? '<button class="btn sm" type="button" id="btnHist" title="Copias anteriores de esta memoria">🕘 Historial</button>' : ''}</div>
+    <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span>${m.variante_de || m.variante_nom ? `<span class="vchip" title="Diseño que estás editando">⧉ ${esc(m.variante_nom || (m.variante_de ? 'Variante' : 'Inicial'))}${m.definitiva !== false ? ' ★' : ''}</span>` : ''}<span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>${esIng() ? '<button class="btn sm" type="button" id="btnHist" title="Copias anteriores de esta memoria">🕘 Historial</button>' : ''}</div>
   <div class="mbar"><div class="mi2"><small>Paso ${s.n}</small><b>${s.t}</b></div>
     <button type="button" class="hamb" id="openSteps" aria-label="Ver todos los pasos"><span class="ln"><i></i><i></i><i></i></span>Pasos</button></div>
   <div class="scrim" id="scrim" hidden></div>
