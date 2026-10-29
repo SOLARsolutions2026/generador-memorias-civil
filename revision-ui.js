@@ -63,8 +63,7 @@ function renderRevision(){
   <div class="card"><div class="ct">Datos del proyecto</div>
     <div class="fg g3">${inpF('proyecto', 'Proyecto', 'Ej.: Revisión cubierta Casa López')}${inpF('prop', 'Propietario / cliente')}${inpF('doc', 'Identificación (NIT / C.C.)')}
       ${inpF('dir', 'Dirección / predio')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}</div>
-    <div class="hint">La portada, el consecutivo, el ingeniero y la firma se llenan solos. Los demás datos de la portada (contacto, matrícula, predial) y el control de revisiones están en «📋 Portada y revisiones».</div>
-    ${esIng() ? `<div class="nav-btns" style="margin-top:8px"><button class="btn sm" type="button" id="rvImg">${m.imagen_path ? '🖼 Cambiar imagen de portada' : '🖼 Subir imagen de portada'}</button></div>` : ''}</div>
+    <div class="hint">La portada (sin imagen), el consecutivo, el ingeniero y la firma se llenan solos. Los demás datos de la portada (contacto, matrícula, predial) y el control de revisiones están en «📋 Portada y revisiones».</div></div>
 
   <div class="card"><div class="ct"><span>① Cubierta y cargas — NSR-10 Título B</span></div>
     <div class="fg g4">${selR('cub.perfil', 'Material de la cubierta', Object.entries(AnexoA.LAMINAS).map(([k, v]) => [k, v.nombre]))}
@@ -206,7 +205,6 @@ function activarRevision(R){
   if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/ficha`);
   $('#rvImp').onclick = imprimirRevision;
-  if($('#rvImg')) $('#rvImg').onclick = async () => { const f = await elegirArchivo('image/*'); if(f) subirPortada(f, re); };
   const cor = () => R.correas.find(c => c.id === R.activa);
   const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx); };
   const valor = el => el.type === 'checkbox' ? el.checked : el.value;
