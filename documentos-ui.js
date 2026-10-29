@@ -42,7 +42,7 @@ function paneFG(){
     const X = datosFG(k), d = DOCS[k], tot = X.archivos.reduce((s, a) => s + (a.pags || 0), 0);
     return `<div class="card"><div class="ct"><span>Anexo ${k} · ${d.n}</span>${X.aplica === false ? pill('gray', 'No aplica') : X.archivos.length ? pill('ok', `${X.archivos.length} archivo${X.archivos.length > 1 ? 's' : ''} · ${tot} pág.`) : pill('pend', 'Falta el PDF')}</div>
       <div class="f" style="margin-bottom:10px"><label>¿La memoria lleva ${d.n.toLowerCase()}?</label><div class="seg" role="group"><button type="button" data-fgap="${k}|1" class="${X.aplica !== false ? 'on' : ''}" ${ro_}>Sí</button><button type="button" data-fgap="${k}|0" class="${X.aplica === false ? 'on' : ''}" ${ro_}>No</button></div></div>
-      ${X.aplica === false ? `<div class="f"><label>Nota (sale en la portada del anexo)</label><textarea data-fgnota="${k}" rows="2" ${ro_} placeholder="Ej.: El estudio de suelos no hace parte del alcance; se tomó qa = 150 kN/m² indicado por el propietario.">${esc(X.nota || '')}</textarea></div>` : `
+      ${X.aplica === false ? `<p class="hint">No se agrega ninguna hoja de este anexo a la memoria.</p>` : `
       <div class="f"><label>Descripción (sale en la portada del anexo)</label><textarea data-fgdesc="${k}" rows="2" ${ro_} placeholder="${esc(d.ph)}">${esc(X.desc || '')}</textarea></div>
       <h4 class="sub">Archivos PDF (en este orden van en la memoria)</h4>
       ${X.archivos.length ? `<div class="tw"><table class="t"><thead><tr><th>#</th><th>Archivo</th><th>Páginas</th><th>Tamaño</th><th></th></tr></thead><tbody>${X.archivos.map((a, i) => `<tr><td>${i + 1}</td><td>${esc(a.nombre)}</td><td class="n">${a.pags ?? '—'}</td><td class="n">${kbTxt(a.kb)}</td>
@@ -117,7 +117,7 @@ const TIT_AX = { A:'Análisis de cargas', B:'Fuerza horizontal equivalente', C:'
 // Página separadora antes de cada anexo (como en la memoria de Amo); la marca @@S<letra>@@ le dice al paso 2 dónde empieza
 const sepAnexo = L => `<div class="doc-blk doc-sep"><span class="mk">@@S${L}@@</span><div class="sep-l">ANEXO ${L}</div><div class="sep-t">${esc(TIT_AX[L])}</div></div>`;
 async function imprimirCompleta(){
-  const m = S.m, partes = [], incl = [], omit = [], op = m.anexos.gen?.op || {};
+  const m = S.m, partes = [], incl = [], omit = [], omitNA = [], op = m.anexos.gen?.op || {};
   toast('Preparando la memoria completa…', 90000);
   try{
     const [uImg, uFirma] = await Promise.all([urlDe(m.imagen_path), urlDe(S.cfg.firma_path)]);
@@ -127,16 +127,19 @@ async function imprimirCompleta(){
       let h = null; try{ h = await htmlAnexo(L); }catch(e){ console.warn(e); }
       if(h){ if(op.sep !== false) partes.push(sepAnexo(L)); partes.push(`<div class="doc-blk">${h}</div>`); incl.push(L); } else omit.push('Anexo ' + L);
     }
-    for(const k of ['F','G']){ partes.push(portadaFG(k)); incl.push(k); }
+    // F o G que no aplican no llevan hoja (pedido de Amo 29-oct)
+    for(const k of ['F','G']){ if(datosFG(k).aplica === false){ omitNA.push('Anexo ' + k); continue; } partes.push(portadaFG(k)); incl.push(k); }
     const gen = m.anexos.gen = m.anexos.gen || {};
     gen.impreso = { fecha:new Date().toISOString(), incl, toc:mem?.toc || [], tabs:mem?.tabs || [], figs:mem?.figs || [] }; guardarMemoria();
-    const pa = $('#print-area'); pa.innerHTML = partes.join('');
+    // la portada va sola (margen 0); el resto dentro de .doc-cuerpo con los márgenes laterales como relleno, para que nada
+    // sea más ancho que la hoja y el navegador no reduzca todo (la portada salía achicada)
+    const pa = $('#print-area'); pa.innerHTML = partes[0] + `<div class="doc-cuerpo">${partes.slice(1).join('')}</div>`;
     await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
     try{ await Promise.all(['400','italic 400','600','italic 600','700','italic 700'].map(v => document.fonts.load(`${v} 12px EBG`))); }catch(e){}
     await document.fonts.ready;
     if(omit.length) toast(`No se incluyeron (faltan datos): ${omit.join(', ')}.`, 6000); else toast('Listo.', 800);
     // márgenes con espacio para el rótulo que se agrega en el paso 2; la portada sin márgenes
-    const st = document.createElement('style'); st.textContent = '@page{size:letter;margin:.85in .75in 1.05in}@page portada{margin:0}#print-area .pg{page:portada}';
+    const st = document.createElement('style'); st.textContent = '@page{size:letter;margin:.85in 0 1.05in}@page portada{margin:0}#print-area .pg{page:portada}#print-area .doc-cuerpo{padding:0 .75in}';
     document.head.appendChild(st); const t = document.title; document.title = `${m.consecutivo}_MEMORIA_SIN_UNIR`;
     window.print(); document.title = t; setTimeout(() => st.remove(), 500);
   }catch(e){ err(e, 'No se pudo preparar la memoria'); }
