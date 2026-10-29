@@ -8,7 +8,7 @@ const PLACAS = [['1/4"',6.35],['5/16"',7.94],['3/8"',9.525],['1/2"',12.7],['5/8"
 const TIPOS_E = {
   placa:{ pre:'CN', n:'Placa base y anclajes', s:'columna → pedestal · ejes X e Y · cargas = reacciones del modelo' },
   vc:   { pre:'TP', n:'Viga – columna a momento', s:'cubrejuntas pernadas + cartela a cortante · IPE / HEA' },
-  sold: { pre:'SL', n:'Soldadura de filete', s:'10 formas: cordones, L, C, U, rectangular, perfil I, circular y a tope' },
+  sold: { pre:'SL', n:'Soldadura de filete', s:'formas según el elemento: perfil I, tubo, barra o platina; filete o a tope' },
 };
 function datosE(){
   const m = S.m; m.anexos = m.anexos || {};
@@ -30,16 +30,22 @@ function nuevaCon(tipo, E, D){
     pl:{ L:250, b:120, t:9.525, acero:'A36' }, pc:{ d:'5/8"', tipo:'A325', rosca:true, nf:2, nc:3, s:50, le:30, g:70, lu:40 },
     ct:{ h:110, b:90, t:9.525, acero:'A36', d:'5/8"', tipo:'A325', rosca:true, n:2, s:50, le:30, e:50 }, wPl:6, wCt:5, electrodo:'E70XX', man:{ M:'', V:'', P:'' } };
   const el = col || D.met[0], s = el ? secDe(el) : null;
-  const forma = !s ? 'O' : s.tipo === 'HSS' ? 'O' : s.tipo === 'BAR' ? 'c' : 'I';
+  const forma = formasSold(s)[0];
   const pb = E.con.find(x => x.tipo === 'placa' && x.de === el?.id);
-  return { ...base, de:el?.id || '', a:'PL', plN:pb?.plN || sigPL(E), forma, b:s ? (s.b || s.B || s.d || 100) : 100, d:s ? (s.h || s.H || s.d || 150) : 150, w:6, t:s?.tf || s?.tn || 9.525, acero:'A36', electrodo:'E70XX',
+  return { ...base, de:el?.id || '', a:'PL', plN:pb?.plN || sigPL(E), forma, b:s ? (s.b || s.B || s.d || 100) : 100, d:s ? (s.h || s.H || s.d || 150) : 150, w:6, t:espesorSold(forma, s) || 9.525, acero:'A36', electrodo:'E70XX',
     man:{ V:'', H:'', T:'', N:'', Mx:'', My:'' } };
 }
 
+// Soldadura: tipo del elemento soldado (I, HSS, BAR o PL = platina sin perfil) y formas que se le pueden hacer
+function secSold(c, D){ const e = metDe(D, c.de); return e ? secDe(e) : null; }
+const tipoSold = s => s ? s.tipo : 'PL';
+const formasSold = s => AnexoE.FORMAS_EL[tipoSold(s)];
+function espesorSold(forma, s){ if(!s) return null; if(s.tipo === 'I') return forma === 'Iw' ? s.tw : forma === 'T' ? Math.min(s.tf, s.tw) : s.tf; if(s.tipo === 'HSS') return s.tn; return null; }
 // ─── Nombres y etiquetas ───
 const metDe = (D, id) => D.met.find(e => e.id === id), pedDe = (D, id) => D.ped.find(e => e.id === id);
 function nomEl(D, id, c){
   if(id === 'PL') return c.plN || 'PL';
+  if(!id && c.tipo === 'sold') return 'platina';
   const e = metDe(D, id) || pedDe(D, id); return e ? e.nom : '?';
 }
 function etiquetaE(c, D){
@@ -93,8 +99,9 @@ function correrE(c, D, filas){
   if(c.tipo === 'vc'){ if(!inp.viga || !inp.col) return { ok:false, error:'Escoge la viga y la columna (perfiles I del Anexo D).' }; return AnexoE.vigaColumna(inp, filas); }
   if(!filas.length) return { ok:false, error:'Faltan las cargas (escoge un perfil con fuerzas del modelo o escríbelas a mano).' };
   // soldadura: se revisa cada fila y se guarda la que controla
-  const el = metDe(D, c.de), sI = c.forma === 'I' && el ? secDe(el) : null;
-  if(sI?.tipo === 'I'){ inp.seg = AnexoE.contornoI(sI.b, sI.h, sI.tw, sI.tf); inp.b = sI.b; inp.d = sI.h; }   // contorno real del perfil
+  const sS = secSold(c, D), fms = formasSold(sS);
+  if(!fms.includes(c.forma)) return { ok:false, error:`La forma «${AnexoE.FORMAS[c.forma]?.n || c.forma}» no aplica a este elemento: escoge una de las que aparecen.` };
+  if(sS){ inp.seg = AnexoE.segPerfil(c.forma, sS); inp.b = sS.b || sS.B || sS.d; inp.d = sS.h || sS.H || sS.d; }   // medidas reales del perfil
   let peor = null; for(const f of filas){ const X = AnexoE.soldadura({ ...inp, ...f }); if(!peor || X.ratio > peor.ratio){ peor = X; peor.fila = f; } }
   const checks = {}; peor.checks.forEach((k, i) => { checks['s' + i] = { ...k, fila:peor.fila }; });
   return { ...peor, tipo:'sold', checks, avisos:[], nFilas:filas.length };
@@ -198,20 +205,23 @@ function svgVC(I, X, ed, f={}){
 }
 // Soldadura: forma a escala, centroide y punto crítico
 function svgSold(I, R, ed, falla){
-  const W = 330, H = 300, fm = AnexoE.FORMAS[I.forma] || AnexoE.FORMAS.O, b = numE(I.b) || 100, d = numE(I.d) || 100;
-  const seg = I.forma === 'I' && I._sec ? AnexoE.contornoI(I._sec.b, I._sec.h, I._sec.tw, I._sec.tf) : fm.seg(b, d);
-  const ancho = I.forma === 'c' ? d : b, k = Math.min(200/Math.max(ancho, 1), 200/Math.max(d, 1)), ox = (W - ancho*k)/2, oy = 40 + d*k;
+  const W = 330, H = 300, fm = AnexoE.FORMAS[I.forma] || AnexoE.FORMAS.O, sc = I._sec, tp = tipoSold(sc);
+  const b = sc ? (sc.b || sc.B || sc.d) : numE(I.b) || 100, d = sc ? (sc.h || sc.H || sc.d) : numE(I.d) || 100;
+  const seg = AnexoE.segPerfil(I.forma, sc, b, d), circ = I.forma === 'c' || tp === 'BAR';
+  const ancho = circ ? d : b, k = Math.min(200/Math.max(ancho, 1), 200/Math.max(d, 1)), ox = (W - ancho*k)/2, oy = 40 + d*k;
   const Q = y => oy - y*k;
-  const fondo = I._sec && I.forma === 'I' ? perfilI(ox + b*k/2, oy - d*k/2, I._sec.b*k, I._sec.h*k, Math.max(2, I._sec.tw*k), Math.max(2, I._sec.tf*k), '#e2e8f0', '#94a3b8')
-    : I.forma === 'c' ? `<circle cx="${ox + d*k/2}" cy="${oy - d*k/2}" r="${d*k/2}" fill="#e2e8f0" stroke="#94a3b8"/>` : `<rect x="${ox}" y="${oy - d*k}" width="${b*k}" height="${d*k}" fill="#e2e8f0" stroke="#94a3b8"/>`;
+  const fondo = tp === 'I' ? perfilI(ox + b*k/2, oy - d*k/2, sc.b*k, sc.h*k, Math.max(2, sc.tw*k), Math.max(2, sc.tf*k), '#e2e8f0', '#94a3b8')
+    : circ ? `<circle cx="${ox + d*k/2}" cy="${oy - d*k/2}" r="${d*k/2}" fill="#e2e8f0" stroke="#94a3b8"/>`
+    : tp === 'HSS' ? `<rect x="${ox}" y="${oy - d*k}" width="${b*k}" height="${d*k}" fill="#e2e8f0" stroke="#94a3b8"/><rect x="${ox + Math.max(2, sc.tn*k)}" y="${oy - d*k + Math.max(2, sc.tn*k)}" width="${b*k - 2*Math.max(2, sc.tn*k)}" height="${d*k - 2*Math.max(2, sc.tn*k)}" fill="#fff" stroke="#94a3b8"/>`
+    : `<rect x="${ox}" y="${oy - d*k}" width="${b*k}" height="${d*k}" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 3"/>`;
   const col = falla ? C_RJ : C_SO;
-  const lineas = seg.map(([x1, y1, x2, y2]) => `<line x1="${ox + x1*k}" y1="${Q(y1)}" x2="${ox + x2*k}" y2="${Q(y2)}" stroke="${col}" stroke-width="5" stroke-linecap="round"/>`).join('');
+  const lineas = seg.map(([x1, y1, x2, y2]) => `<line x1="${ox + x1*k}" y1="${Q(y1)}" x2="${ox + x2*k}" y2="${Q(y2)}" stroke="${col}" stroke-width="${I.forma === 'T' ? 7 : 5}" stroke-linecap="round"/>`).join('');
   const g = R?.P ? `<g stroke="#0f172a" stroke-width="1"><line x1="${ox + R.P.xg*k - 7}" y1="${Q(R.P.yg)}" x2="${ox + R.P.xg*k + 7}" y2="${Q(R.P.yg)}"/><line x1="${ox + R.P.xg*k}" y1="${Q(R.P.yg) - 7}" x2="${ox + R.P.xg*k}" y2="${Q(R.P.yg) + 7}"/></g><text x="${ox + R.P.xg*k + 9}" y="${Q(R.P.yg) - 6}" font-size="9.5" fill="#0f172a">G</text>` : '';
   const pc = R?.peor ? `<circle cx="${ox + R.peor.x*k}" cy="${Q(R.peor.y)}" r="6" fill="none" stroke="${C_RJ}" stroke-width="2"/><text x="${ox + R.peor.x*k + 8}" y="${Q(R.peor.y) + 14}" font-size="9.5" font-weight="700" fill="${C_RJ}">punto crítico</text>` : '';
-  const sec = !!I._sec && I.forma === 'I';
-  return svgE(W, H, `<text x="8" y="14" font-size="10" font-weight="700" fill="#64748b">${esc(fm.n.toUpperCase())}</text>${fondo}${lineas}${g}${pc}
-    ${I.forma !== 'c' && I.forma !== '1' && I.forma !== 'T' ? cotaE(ox, oy + 16, ox + b*k, oy + 16, `b ${fx(b,0)}`, sec ? null : 'b', { ed }) : ''}
-    ${cotaE(ox - 16, oy - d*k, ox - 16, oy, `${I.forma === 'c' ? 'Ø' : I.forma === '1' || I.forma === 'T' ? 'L' : 'd'} ${fx(d,0)}`, sec ? null : 'd', { ed })}
+  const editable = !sc, lin = !sc && (I.forma === '1' || I.forma === 'T');
+  return svgE(W, H, `<text x="8" y="14" font-size="10" font-weight="700" fill="#64748b">${esc((sc ? (sc.n || '') + ' · ' : '') + fm.n.toUpperCase())}</text>${fondo}${lineas}${g}${pc}
+    ${!circ && !lin ? cotaE(ox, oy + 16, ox + b*k, oy + 16, `${tp === 'HSS' ? 'B' : 'b'} ${fx(b,0)}`, editable ? 'b' : null, { ed }) : ''}
+    ${cotaE(ox - 16, oy - d*k, ox - 16, oy, `${circ ? 'Ø' : lin ? 'L' : tp === 'HSS' ? 'H' : 'd'} ${fx(d,0)}`, editable ? 'd' : null, { ed })}
     <g transform="translate(${W - 62},${H - 40})" ${ed && I.forma !== 'T' ? 'class="cz" data-cota="w" role="button" tabindex="0" aria-label="Cambiar el tamaño del filete"' : ''}><rect x="-50" y="-11" width="100" height="22" rx="5" fill="#fff" stroke="${col}"/><text y="4" text-anchor="middle" font-size="10.5" font-weight="700" fill="${col}">${I.forma === 'T' ? 'penetración total' : `filete w ${fx(numE(I.w),0)} mm`}</text></g>`, 'Soldadura');
 }
 const svgSoldX = (I, R, ed, falla) => svgSold(I, R, ed, falla);
@@ -229,7 +239,7 @@ function dibujosE(c, D, X, ed){
   if(c.tipo === 'placa') return `<div class="e-dib">${svgPlacaPlanta(I, X, ed, f)}${svgPlacaAlzado(I, X, ed, f)}</div>`;
   if(c.tipo === 'vc') return `<div class="e-dib one">${svgVC(I, X, ed, f) || '<p class="hint">Escoge la viga y la columna para ver el dibujo.</p>'}</div>`;
   const e = metDe(D, c.de), s = e ? secDe(e) : null;
-  return `<div class="e-dib one">${svgSoldX({ ...I, _sec:s?.tipo === 'I' ? s : null }, X?.ok ? X : null, ed, f.falla)}</div>`;
+  return `<div class="e-dib one">${svgSoldX({ ...I, _sec:s }, X?.ok ? X : null, ed, f.falla)}</div>`;
 }
 // Miniaturas de la galería
 function miniE(tipo){
@@ -303,19 +313,24 @@ function formE(c, D, t, ro_){
     return cargasE(c, D);
   }
   if(t === 0){
-    const e = metDe(D, c.de), s = e ? secDe(e) : null, I = s?.tipo === 'I' && c.forma === 'I';
-    return `${comun}<div class="fg g4">${selE_(c,'de','Elemento soldado (Anexo D)',[['','— escoge —'], ...mets])}${selE_(c,'a','Se suelda a',[['PL', `Platina (${c.plN || 'PL'})`], ...D.met.filter(x => x.id !== c.de).map(x => [x.id, `${x.nom} · ${nomSec(x)}`]), ...D.ped.map(p => [p.id, p.nom])])}${c.a === 'PL' ? fIn(c,'plN','Nombre de la platina',{num:false}) : ''}</div>
-      <div class="e-formas">${Object.entries(AnexoE.FORMAS).map(([k, f]) => `<button type="button" class="e-fm ${c.forma === k ? 'on' : ''}" data-forma="${k}" ${ro_}>${svgFormaMini(k)}<span>${esc(f.n)}</span></button>`).join('')}</div>
-      <div class="fg g4">${I ? `<div class="hint" style="align-self:center">Medidas del perfil ${esc(s.n)}: contorno real.</div>` : fIn(c,'b','b [mm]') + fIn(c,'d', c.forma === 'c' ? 'Diámetro [mm]' : c.forma === '1' || c.forma === 'T' ? 'Largo L [mm]' : 'd [mm]')}
-        ${c.forma === 'T' ? '' : fIn(c,'w','Pierna del filete w [mm]')}${fIn(c,'t','Espesor menor unido t [mm]')}</div>
+    const sS = secSold(c, D), tp = tipoSold(sS), fms = formasSold(sS), fm = AnexoE.FORMAS[c.forma] || {};
+    const nomT = { I:'perfil I', HSS:'tubo rectangular', BAR:'barra redonda', PL:'platina' }[tp];
+    const nomF = k => k === 'Hd' && sS ? `Dos lados de ${fx(sS.H,0)} mm` : k === 'Hb' && sS ? `Dos lados de ${fx(sS.B,0)} mm` : AnexoE.FORMAS[k].n.replace(/ \((perfil I|tubo)\)$/, '');
+    return `${comun}<div class="fg g4">${selE_(c,'de','Elemento soldado',[['','Platina o placa (sin perfil)'], ...mets])}${selE_(c,'a','Se suelda a',[['PL', `Platina (${c.plN || 'PL'})`], ...D.met.filter(x => x.id !== c.de).map(x => [x.id, `${x.nom} · ${nomSec(x)}`]), ...D.ped.map(p => [p.id, p.nom])])}${c.a === 'PL' ? fIn(c,'plN','Nombre de la platina',{num:false}) : ''}</div>
+      <div class="hint" style="margin-top:6px">Formas posibles para ${nomT}${sS ? ' ' + esc(sS.n || '') : ''}:</div>
+      <div class="e-formas">${fms.map(k => `<button type="button" class="e-fm ${c.forma === k ? 'on' : ''}" data-forma="${k}" ${ro_}>${svgFormaMini(k, tp)}<span>${esc(nomF(k))}</span></button>`).join('')}</div>
+      <div class="fg g4">${sS ? `<div class="hint span2" style="align-self:center">Medidas tomadas del ${nomT} ${esc(sS.n || '')} (se cambian en el Anexo D).</div>` : fIn(c,'b','b [mm]') + fIn(c,'d', c.forma === '1' || c.forma === 'T' ? 'Largo L [mm]' : 'd [mm]')}
+        ${c.forma === 'T' ? '' : fIn(c,'w','Pierna del filete w [mm]')}${fIn(c,'t','Espesor menor unido t [mm]', sS ? { h:'Se propone el de la parte soldada' } : {})}</div>
       <div class="fg g4">${selE_(c,'electrodo','Electrodo',elec)}${selE_(c,'acero','Acero del metal base',aceros)}</div>
-      <p class="hint">A<sub>u</sub> = ${esc(AnexoE.FORMAS[c.forma]?.au || '')} · J<sub>u</sub> = ${esc(AnexoE.FORMAS[c.forma]?.ju || '')} (por unidad de garganta). El cálculo usa la geometría exacta de los cordones.</p>`;
+      ${fm.au && c.forma !== 'T' ? `<p class="hint">A<sub>u</sub> = ${esc(fm.au)}${fm.ju !== '—' ? ` · J<sub>u</sub> = ${esc(fm.ju)}` : ''} (por unidad de garganta). El cálculo usa la geometría exacta de los cordones.</p>` : c.forma === 'T' ? '<p class="hint">A tope de penetración completa: la resistencia es la del metal base (Tabla F.2.10.2-5).</p>' : ''}`;
   }
   return cargasE(c, D);
 }
-function svgFormaMini(k){
-  const f = AnexoE.FORMAS[k], seg = k === 'I' ? AnexoE.contornoI(40, 40, 4, 5).slice(0, 2).concat([[18, 0, 18, 40], [22, 0, 22, 40]]) : f.seg(40, 40), sc = 1;
-  return `<svg viewBox="-6 -6 52 52" width="44" height="44" aria-hidden="true"><rect x="0" y="0" width="40" height="40" fill="#f1f5f9" stroke="#cbd5e1"/>${seg.map(([a, b, c2, d]) => `<line x1="${a*sc}" y1="${40 - b*sc}" x2="${c2*sc}" y2="${40 - d*sc}" stroke="${C_SO}" stroke-width="${k === 'T' ? 6 : 4}" stroke-linecap="round"/>`).join('')}</svg>`;
+function svgFormaMini(k, tp){
+  const sec = tp === 'I' ? { tipo:'I', b:40, h:40, tw:4, tf:5 } : tp === 'HSS' ? { tipo:'HSS', B:40, H:40 } : tp === 'BAR' ? { tipo:'BAR', d:40 } : null;
+  const seg = k === 'c' ? AnexoE.FORMAS.c.seg(0, 40) : AnexoE.segPerfil(k, sec, 40, 40);
+  const fondo = tp === 'I' ? `<path d="M0,0 H40 V5 H22 V35 H40 V40 H0 V35 H18 V5 H0 Z" fill="#e2e8f0" stroke="#cbd5e1"/>` : tp === 'BAR' || k === 'c' ? '<circle cx="20" cy="20" r="20" fill="#e2e8f0" stroke="#cbd5e1"/>' : '<rect x="0" y="0" width="40" height="40" fill="#f1f5f9" stroke="#cbd5e1"/>';
+  return `<svg viewBox="-6 -6 52 52" width="44" height="44" aria-hidden="true">${fondo}${seg.map(([a, b, c2, d]) => `<line x1="${a}" y1="${40 - b}" x2="${c2}" y2="${40 - d}" stroke="${C_SO}" stroke-width="${k === 'T' ? 6 : 4}" stroke-linecap="round"/>`).join('')}</svg>`;
 }
 function cargasE(c, D){
   const ro_ = esIng() ? '' : 'disabled', M = S.m.anexos?.C?.modelo;
@@ -407,7 +422,8 @@ function detECalc(c, X, imp){
 }
 function soldKV(X, kvT){
   const P = X.P, q = X.peor;
-  if(X.forma === 'T') return kvT([['Longitud · espesor', `${fx(P.A,0)} · ${fx(X.t,1)} mm`], ['Penetración completa: controla el metal base', 'F.2.10.2-5']]);
+  if(X.forma === 'T') return kvT([['Longitud de los cordones · espesor de diseño (el menor)', `${fx(P.A,0)} · ${fx(X.t,1)} mm`], ['Punto crítico (x, y)', `(${fx(q.x,1)}, ${fx(q.y,1)}) mm`],
+    ['Fuerzas por unidad de longitud fx · fy · fz', `${fx(q.fx,1)} · ${fx(q.fy,1)} · ${fx(q.fz,1)} N/mm`], ['σ = |fz|/t · τ = √(fx² + fy²)/t', `${fx(X.sig,1)} · ${fx(X.tau,1)} MPa`], ['Penetración completa: controla el metal base', 'F.2.10.2-5']]);
   return kvT([['Longitud total Aw · centroide (x̄, ȳ)', `${fx(P.A,1)} mm · (${fx(P.xg,1)}, ${fx(P.yg,1)}) mm`], ['Ix · Iy · J = Ix + Iy (por unidad de garganta)', `${fx(P.Ix,0)} · ${fx(P.Iy,0)} · ${fx(P.J,0)} mm³`],
     ['Punto crítico (x, y)', `(${fx(q.x,1)}, ${fx(q.y,1)}) mm`], ['fx = H/A − T·(y − ȳ)/J · fy = V/A + T·(x − x̄)/J · fz = N/A + Mx·(y − ȳ)/Ix + My·(x − x̄)/Iy', `${fx(q.fx,1)} · ${fx(q.fy,1)} · ${fx(q.fz,1)} N/mm`],
     ['f = √(fx² + fy² + fz²)', fx(q.f,1) + ' N/mm'], ['Esfuerzo en la garganta f/(0.707·w)', fx(X.esf,1) + ' MPa'], ['φ·0.60·FEXX (φ = 0.75)', fx(X.phiRn,1) + ' MPa'],
@@ -458,7 +474,11 @@ function sugE(c, D, filas, key, X){
     else { const wr = Math.ceil(X.wReq || 0); if(c.forma !== 'T' && wr > +c.w) add(prueba(`Filete de ${wr} mm (el requerido)`, z => { z.w = wr; }));
       for(const dw of [1, 2]) add(prueba(`Filete de ${+c.w + dw} mm`, z => { z.w = +z.w + dw; }));
       if(c.electrodo !== 'E70XX') add(prueba('Electrodo E70XX', z => { z.electrodo = 'E70XX'; }));
-      if(c.forma !== 'O' && c.forma !== 'I' && c.forma !== 'c' && c.forma !== 'T') add(prueba('Soldar todo el perímetro (rectangular)', z => { z.forma = 'O'; }));
+      const sS = secSold(c, D), tp = tipoSold(sS);
+      if(tp === 'PL' && !['O','T'].includes(c.forma)) add(prueba('Soldar todo el perímetro (rectangular)', z => { z.forma = 'O'; }));
+      if(tp === 'I' && c.forma !== 'I' && c.forma !== 'T') add(prueba('Soldar todo el contorno del perfil (alas + alma)', z => { z.forma = 'I'; z.t = sS.tf; }));
+      if(tp === 'HSS' && c.forma !== 'O' && c.forma !== 'T') add(prueba('Soldar todo el perímetro del tubo', z => { z.forma = 'O'; }));
+      if(tp !== 'PL' && c.forma !== 'T') add(prueba('Soldadura a tope de penetración completa', z => { z.forma = 'T'; }));
       if(/Metal base/.test(k)) add(prueba(`Metal base de ${+c.t + 3} mm`, z => { z.t = +z.t + 3; })); }
   }
   const ok = ops.filter(o => o.r != null && o.r <= 1); if(ok[0]) ok[0].mejor = true;
@@ -500,6 +520,7 @@ function activarCotas(c, D){
 }
 function activarE(c, D){
   const E = datosE();
+  if(c.tipo === 'sold' && !formasSold(secSold(c, D)).includes(c.forma) && esIng()){ ajustarSold(c, D); guardarMemoria(); $('#eForm').innerHTML = formE(c, D, tabE, ''); }
   $$('[data-tabe]').forEach(b => b.onclick = () => { tabE = +b.dataset.tabe; $$('[data-tabe]').forEach(x => x.classList.toggle('on', x === b)); $('#eForm').innerHTML = formE(c, D, tabE, esIng() ? '' : 'disabled'); activarForm(c, D); });
   if($('#eBorrar')) $('#eBorrar').onclick = () => { if(!confirm(`¿Borrar ${c.nom}?`)) return; E.con = E.con.filter(x => x.id !== c.id); selE = null; guardarMemoria(); paneAnexoE(); };
   activarForm(c, D);
@@ -514,12 +535,12 @@ function activarForm(c, D){
     setP(c, inp.dataset.a, v);
     if(['de','a','cabeza','nom'].includes(inp.dataset.a)){ guardarMemoria(); if(inp.dataset.a === 'de' && c.tipo === 'sold') ajustarSold(c, D); paneAnexoE(); } else re();
   }));
-  $$('#eForm [data-forma]').forEach(b => b.onclick = () => { c.forma = b.dataset.forma; guardarMemoria(); $('#eForm').innerHTML = formE(c, D, tabE, ''); activarForm(c, D); pintarResE(c, D); });
+  $$('#eForm [data-forma]').forEach(b => b.onclick = () => { c.forma = b.dataset.forma; const sS = secSold(c, D); if(sS) c.t = espesorSold(c.forma, sS) || c.t; guardarMemoria(); $('#eForm').innerHTML = formE(c, D, tabE, ''); activarForm(c, D); pintarResE(c, D); });
   $$('#eForm [data-carg]').forEach(b => b.onclick = () => { c.cargas = b.dataset.carg; guardarMemoria(); $('#eForm').innerHTML = formE(c, D, tabE, ''); activarForm(c, D); pintarResE(c, D); });
   $$('#eForm [data-nudo]').forEach(i => i.onchange = () => { const s = new Set(c.nudos || []); i.checked ? s.add(i.dataset.nudo) : s.delete(i.dataset.nudo); c.nudos = [...s]; guardarMemoria(); pintarResE(c, D); });
 }
-function ajustarSold(c, D){ const e = metDe(D, c.de), s = e ? secDe(e) : null; if(!s) return;
-  c.forma = s.tipo === 'HSS' ? 'O' : s.tipo === 'BAR' ? 'c' : 'I'; c.b = s.b || s.B || s.d; c.d = s.h || s.H || s.d; c.t = s.tf || s.tn || c.t; }
+function ajustarSold(c, D){ const e = metDe(D, c.de), s = e ? secDe(e) : null; if(!s){ if(!formasSold(null).includes(c.forma)) c.forma = 'L'; c.b = 100; c.d = 150; c.t = 9.525; return; }
+  if(!formasSold(s).includes(c.forma)) c.forma = formasSold(s)[0]; c.b = s.b || s.B || s.d; c.d = s.h || s.H || s.d; c.t = espesorSold(c.forma, s) || c.t; }
 
 // ═══ Impresión del Anexo E ═══
 async function imprimirE(){
@@ -541,7 +562,7 @@ function anexoEPrintHTML(Xs, D){
     if(c.tipo === 'vc') return [['Viga · columna', `${esc(I.viga?.n || '')} · ${esc(I.col?.n || '')}`], ['Cubrejuntas', `${fx(+c.pl.L,0)} × ${fx(+c.pl.b,0)} × ${fx(+c.pl.t,2)} mm ${esc(c.pl.acero)}`],
       ['Pernos de las cubrejuntas', `${Math.round(+c.pc.nf)} × ${Math.round(+c.pc.nc)} ${esc(c.pc.d)} ${esc(c.pc.tipo)} por ala · s ${fx(+c.pc.s,0)} · borde ${fx(+c.pc.le,0)} · g ${fx(+c.pc.g,0)} mm`],
       ['Cartela', `${fx(+c.ct.h,0)} × ${fx(+c.ct.b,0)} × ${fx(+c.ct.t,2)} mm · ${Math.round(+c.ct.n)} pernos ${esc(c.ct.d)} ${esc(c.ct.tipo)} · e ${fx(+c.ct.e,0)} mm`], ['Soldaduras', `cubrejunta ${fx(+c.wPl,0)} mm · cartela ${fx(+c.wCt,0)} mm · ${esc(c.electrodo)}`]];
-    return [['Forma', `${esc(AnexoE.FORMAS[c.forma]?.n || '')}${c.forma === 'I' ? '' : ` · b ${fx(+c.b,0)} · d ${fx(+c.d,0)} mm`}`], ['Filete · electrodo · metal base', `${c.forma === 'T' ? 'penetración completa' : fx(+c.w,0) + ' mm'} · ${esc(c.electrodo)} · t ${fx(+c.t,1)} mm ${esc(c.acero)}`]]; };
+    const sS = secSold(c, D); return [['Elemento · forma', `${sS ? esc(sS.n || '') + ' · ' : 'platina · '}${esc(AnexoE.FORMAS[c.forma]?.n || '')}${sS ? '' : ` · b ${fx(+c.b,0)} · d ${fx(+c.d,0)} mm`}`], ['Filete · electrodo · metal base', `${c.forma === 'T' ? 'penetración completa' : fx(+c.w,0) + ' mm'} · ${esc(c.electrodo)} · t ${fx(+c.t,1)} mm ${esc(c.acero)}`]]; };
   const ok = Xs.filter(x => x.X.ok);
   return `<div class="ax"><section>
     <div class="ax-hd"><div class="ax-t">ANEXO ${L} - DISEÑO DE CONEXIONES METÁLICAS</div><div class="ax-n">NSR-10 Título F.2 y Título C</div><div class="ax-n2">Placas base, anclajes, conexiones a momento y soldaduras</div>
@@ -552,7 +573,7 @@ function anexoEPrintHTML(Xs, D){
     ${tb(['Conexión','Une','Tipo','Relación D/C','Resultado'], Xs.map(({ c, X }) => [`<b>${esc(c.nom)}</b>`, esc(etiquetaE(c, D)), esc(TIPOS_E[c.tipo].n), X.ok ? fx(X.ratio,3) : '—', X.ok ? (X.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}</section>
     ${ok.map(({ c, X }, i) => { const I = entradaE(c, D), fl = fallasE(X); const e = metDe(D, c.de), s = e ? secDe(e) : null;
       const figs = c.tipo === 'placa' ? `<figure>${svgPlacaPlanta(I, X, false, fl)}<figcaption>Planta</figcaption></figure><figure>${svgPlacaAlzado(I, X, false, fl)}<figcaption>Corte</figcaption></figure>`
-        : c.tipo === 'vc' ? `<figure style="grid-column:1/-1">${svgVC(I, X, false, fl)}<figcaption>Alzado</figcaption></figure>` : `<figure style="grid-column:1/-1">${svgSoldX({ ...I, _sec:s?.tipo === 'I' ? s : null }, X, false, fl.falla)}<figcaption>Cordones de soldadura (G = centroide)</figcaption></figure>`;
+        : c.tipo === 'vc' ? `<figure style="grid-column:1/-1">${svgVC(I, X, false, fl)}<figcaption>Alzado</figcaption></figure>` : `<figure style="grid-column:1/-1">${svgSoldX({ ...I, _sec:s }, X, false, fl.falla)}<figcaption>Cordones de soldadura (G = centroide)</figcaption></figure>`;
       return `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(c.nom)} · ${esc(etiquetaE(c, D))} — ${esc(TIPOS_E[c.tipo].n)}${c.desc ? ' (' + esc(c.desc) + ')' : ''}</h3>
         <div class="ax-mapas">${figs}</div>
         <table class="ax-kv">${datos(c, X).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}<tr><td>Cargas</td><td>${c.cargas === 'manual' ? 'escritas por el diseñador' : `${X._filas.length} combinaciones de resistencia del modelo`}</td></tr></table>

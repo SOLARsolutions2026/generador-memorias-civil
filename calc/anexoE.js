@@ -39,7 +39,27 @@ const FORMAS = {
   'I':{ n:'Perfil I (alas + alma)', au:'2b + 2d', ju:'(b³ + 3bd² + d³)/6', seg:(b, d) => [[0,0,b,0],[0,d,b,d],[b/2-3,0,b/2-3,d],[b/2+3,0,b/2+3,d]] },
   'c':{ n:'Circular (tubo)', au:'π·d', ju:'π·d³/4', seg:(b, d) => { const r = d/2, o = []; for(let i = 0; i < 48; i++){ const a1 = i/48*2*Math.PI, a2 = (i+1)/48*2*Math.PI; o.push([r + r*Math.cos(a1), r + r*Math.sin(a1), r + r*Math.cos(a2), r + r*Math.sin(a2)]); } return o; } },
   'T':{ n:'A tope (penetración completa)', au:'L', ju:'—', seg:(b, d) => [[0,0,0,d]] },
+  // Formas que dependen del perfil (decisión de Amo 28-oct: solo se ofrecen las que tienen sentido para el elemento)
+  'Ia':{ n:'Solo alas (perfil I)', au:'4b − 2tw', ju:'—', seg:(b, d) => [[0,0,b,0],[0,d,b,d],[0,5,b/2-3,5],[b/2+3,5,b,5],[0,d-5,b/2-3,d-5],[b/2+3,d-5,b,d-5]] },
+  'Iw':{ n:'Solo alma, a ambos lados (perfil I)', au:'2(d − 2tf)', ju:'—', seg:(b, d) => [[b/2-3,0,b/2-3,d],[b/2+3,0,b/2+3,d]] },
+  'Hd':{ n:'Dos lados de altura H (tubo)', au:'2H', ju:'H(3B² + H²)/6', seg:(b, d) => [[0,0,0,d],[b,0,b,d]] },
+  'Hb':{ n:'Dos lados de ancho B (tubo)', au:'2B', ju:'B(B² + 3H²)/6', seg:(b, d) => [[0,0,b,0],[0,d,b,d]] },
 };
+// Formas posibles según el elemento soldado
+const FORMAS_EL = { I:['I','Ia','Iw','T'], HSS:['O','Hd','Hb','T'], BAR:['c','T'], PL:['1','2','3','L','C','U','O','T'] };
+// Segmentos con las medidas reales del perfil (sec de AnexoD: I {b,h,tw,tf} · HSS {B,H} · BAR {d}); sin perfil = platina con b, d
+function segPerfil(forma, sec, b, d){
+  if(sec?.tipo === 'I'){
+    const B = sec.b, H = sec.h, tw = sec.tw, tf = sec.tf, a = (B - tw)/2, all = contornoI(B, H, tw, tf);
+    if(forma === 'Ia') return all.slice(0, 6);
+    if(forma === 'Iw') return all.slice(6);
+    if(forma === 'T') return [[0,0,B,0],[0,H,B,H],[B/2,tf,B/2,H-tf]];   // a tope: alas + alma (línea media)
+    return all;
+  }
+  if(sec?.tipo === 'HSS') return (FORMAS[forma === 'T' ? 'O' : forma] || FORMAS.O).seg(sec.B, sec.H);
+  if(sec?.tipo === 'BAR') return FORMAS.c.seg(0, sec.d);
+  return (FORMAS[forma] || FORMAS.L).seg(b, d);
+}
 // Contorno real de un perfil I (alas por fuera y por dentro + alma por ambos lados), para columna–placa (S2)
 function contornoI(bf, d, tw, tf){
   const o = [[0,0,bf,0],[0,d,bf,d]], a = (bf - tw)/2;
@@ -71,13 +91,12 @@ function soldadura(s){
     const f = Math.hypot(fx, fy, fz);
     if(!peor || f > peor.f) peor = { x, y, fx, fy, fz, f };
   }
-  if(s.forma === 'T'){   // a tope de penetración completa: controla el metal base (Tabla F.2.10.2-5)
-    const L = P.A, sN = (Math.abs(N) + (P.Ix > 0 ? Math.abs(Mx)*L/2/P.Ix*1 : 0))/(t*1)/1, tau = Math.hypot(H, V)/(t*L);
-    const sig = Math.abs(N)/(t*L) + 6*Math.abs(Mx)/(t*L*L);
+  if(s.forma === 'T'){   // a tope de penetración completa: controla el metal base (Tabla F.2.10.2-5); esfuerzos de la línea / espesor
+    const sig = Math.abs(peor.fz)/t, tau = Math.hypot(peor.fx, peor.fy)/t;
     const c1 = chk('Tensión o compresión normal al cordón (metal base, φ = 0.90)', 'F.2.10.2-5', sig, 0.9*ac[0], 'MPa');
     const c2 = chk('Cortante (metal base, φ = 1.00)', 'F.2.10.2-5', tau, 1.0*0.6*ac[0], 'MPa');
     const ratio = Math.max(c1.r, c2.r);
-    return { ok:true, forma:'T', P, seg, peor, checks:[c1, c2], ratio, cumple:ratio <= 1, wReq:null, b, d, t, w };
+    return { ok:true, forma:'T', P, seg, peor, checks:[c1, c2], ratio, cumple:ratio <= 1, wReq:null, b, d, t, w, sig, tau };
   }
   const phiRn = 0.75*0.6*Fexx;                        // MPa sobre la garganta
   const garg = 0.707*w, esf = peor.f/garg;            // MPa
@@ -325,6 +344,6 @@ function vigaColumna(c, filas){
     phiRnPt, cortY, cortR, bloqueCt, soldCtPhi, res, peor, checks, avisos, ratio, cumple:ratio <= 1 + 1e-9 };
 }
 
-const api = { PERNOS, TIPOS_PERNO, ANCLAJES, ACEROS, ELECTRODOS, BORDE_MIN, FORMAS, contornoI, propLineas, soldadura, placaBase, vigaColumna, filMin, filMax };
+const api = { FORMAS_EL, segPerfil, PERNOS, TIPOS_PERNO, ANCLAJES, ACEROS, ELECTRODOS, BORDE_MIN, FORMAS, contornoI, propLineas, soldadura, placaBase, vigaColumna, filMin, filMax };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoE = api;
 })(typeof window !== 'undefined' ? window : globalThis);
