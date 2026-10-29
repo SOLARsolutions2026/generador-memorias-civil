@@ -331,8 +331,15 @@ function vigaColumna(c, filas){
   const avisos = [], bmin = BORDE_MIN[pc.d] || 19;
   if(le < bmin) avisos.push(`Distancia al borde de la cubrejunta ${le} mm < ${bmin} mm (Tabla F.2.10.3-4).`);
   if(s < 2.67*dp) avisos.push(`Separación entre pernos ${s} mm < 2.67·d = ${(2.67*dp).toFixed(0)} mm (F.2.10.3.3).`);
-  if(largo + le > Lp - lu + 1) avisos.push(`Los pernos no caben en la cubrejunta: necesitan ${(lu + largo + le).toFixed(0)} mm y la platina mide ${Lp} mm.`);
-  if(g + dh > bp || g + dh > bb) avisos.push(`El gramil g = ${g} mm no cabe en el ancho de la platina o del ala.`);
+  // Largo necesario de la cubrejunta = lu + (n − 1)·s + le (cara de la columna → 1er perno → último perno → borde)
+  const Lnec = lu + (ncP - 1)*s + le;
+  if(Lnec > Lp + 0.5) avisos.push(`Los pernos no caben en la cubrejunta: L ≥ lu + (n − 1)·s + le = ${lu} + ${ncP - 1}×${s} + ${le} = ${Lnec.toFixed(0)} mm y la platina mide ${Lp} mm.`);
+  if(nf > 1 && (bp - g)/2 < le - 0.5) avisos.push(`Borde lateral de la cubrejunta (b − g)/2 = ${((bp - g)/2).toFixed(0)} mm < ${le} mm: reduce el gramil o ensancha la platina.`);
+  if(nf > 1 && (bb - g)/2 < bmin - 0.5) avisos.push(`Borde lateral en el ala de la viga (bf − g)/2 = ${((bb - g)/2).toFixed(0)} mm < ${bmin} mm (Tabla F.2.10.3-4).`);
+  const Hnec = (nt - 1)*st + 2*let_;
+  if(Hnec > hct + 0.5) avisos.push(`Los pernos no caben en la cartela: h ≥ (n − 1)·s + 2·le = ${Hnec.toFixed(0)} mm y la cartela mide ${hct} mm.`);
+  if(bct - et < let_ - 0.5) avisos.push(`Borde libre de la cartela b − e = ${(bct - et).toFixed(0)} mm < ${let_} mm.`);
+  if(st < 2.67*dt) avisos.push(`Separación entre pernos de la cartela ${st} mm < 2.67·d = ${(2.67*dt).toFixed(0)} mm (F.2.10.3.3).`);
   const tMinPl = Math.min(tp, tfc);
   if(wPl < filMin(tMinPl)) avisos.push(`Soldadura de la cubrejunta: ${wPl} mm < mínimo ${filMin(tMinPl)} mm (Tabla F.2.10.2-4).`);
   if(wCt < filMin(Math.min(tct, tfc))) avisos.push(`Soldadura de la cartela: ${wCt} mm < mínimo ${filMin(Math.min(tct, tfc))} mm.`);

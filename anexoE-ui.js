@@ -340,10 +340,10 @@ function formE(c, D, t, ro_){
   if(c.tipo === 'placa'){
     if(t === 0) return `${comun}<div class="fg g4">${selE_(c,'de','Columna (Anexo D)',[['','— escoge —'], ...mets])}${selE_(c,'a','Pedestal (Anexo D)',[['','— medidas a mano —'], ...D.ped.map(p => [p.id, `${p.nom} · ${p.b}×${p.h} mm`])])}
         ${selE_(c,'ori','Peralte d de la columna paralelo a',[['y','eje Y del modelo (h del pedestal)'],['x','eje X del modelo (b del pedestal)']])}${fIn(c,'plN','Nombre de la placa',{num:false})}</div>
-      <div class="fg g4">${fIn(c,'N','N placa [mm] (sentido de d)')}${fIn(c,'B','B placa [mm]')}${selE_(c,'tp','Espesor de la placa',placas)}${selE_(c,'aceroPlaca','Acero de la placa',aceros)}</div>
+      <div class="fg g4">${fIn(c,'N','N placa [mm] (sentido de d)',{h:hv('N')})}${fIn(c,'B','B placa [mm]',{h:hv('B')})}${selE_(c,'tp','Espesor de la placa',placas)}${selE_(c,'aceroPlaca','Acero de la placa',aceros)}</div>
       ${c.a ? '' : `<div class="fg g4">${fIn(c,'Lp','Pedestal en el sentido de N [mm]')}${fIn(c,'Wp','Pedestal en el sentido de B [mm]')}${fIn(c,'ha','Altura del pedestal [mm]')}${fIn(c,'fc',"f'c [MPa]")}</div>`}`;
-    if(t === 1) return `<div class="fg g4">${selE_(c,'perno','Diámetro del perno',pernos)}${selE_(c,'anclaje','Acero del anclaje',kv(AnexoE.ANCLAJES))}${fIn(c,'nB','Pernos por fila (2 filas)')}${fIn(c,'hef','Longitud embebida hef [mm]')}</div>
-      <div class="fg g4">${fIn(c,'S1','S1 entre filas [mm] (sentido N)')}${fIn(c,'S2','S2 entre pernos extremos [mm]')}${selE_(c,'cabeza','Extremo del perno',[['tuerca','Tuerca y arandela'],['gancho','Gancho en J']])}${c.cabeza === 'gancho' ? fIn(c,'eh','Largo del gancho eh [mm]',{ph:'4.5·d'}) : fIn(c,'arandela','Lado de la arandela embebida [mm]')}</div>
+    if(t === 1) return `<div class="fg g4">${selE_(c,'perno','Diámetro del perno',pernos)}${selE_(c,'anclaje','Acero del anclaje',kv(AnexoE.ANCLAJES))}${fIn(c,'nB','Pernos por fila (2 filas)')}${fIn(c,'hef','Longitud embebida hef [mm]',{h:hv('hef')})}</div>
+      <div class="fg g4">${fIn(c,'S1','S1 entre filas [mm] (sentido N)',{h:hv('S1')})}${fIn(c,'S2','S2 entre pernos extremos [mm]',{h:hv('S2')})}${selE_(c,'cabeza','Extremo del perno',[['tuerca','Tuerca y arandela'],['gancho','Gancho en J']])}${c.cabeza === 'gancho' ? fIn(c,'eh','Largo del gancho eh [mm]',{ph:'4.5·d'}) : fIn(c,'arandela','Lado de la arandela embebida [mm]')}</div>
       <div class="fg g4">${fChk(c,'fisurado','Concreto fisurado (del lado seguro)')}${fChk(c,'mortero','Mortero de nivelación bajo la placa (cortante × 0.8)')}</div>`;
     if(t === 2) return `<div class="fg g4">${fIn(c,'w','Pierna del filete w [mm]',{h:'0 = sin revisar'})}${selE_(c,'electrodo','Electrodo',elec)}</div><p class="hint">Se revisa el contorno real del perfil (alas por fuera y por dentro + alma a ambos lados) con el método de la línea, con las mismas combinaciones.</p>`;
     return cargasE(c, D);
@@ -352,14 +352,14 @@ function formE(c, D, t, ro_){
     const I = entradaE(c, D);
     if(t === 0) return `${comun}<h4 class="sub">Elementos que une</h4><div class="fg g4">${selE_(c,'de','Viga (Anexo D)',[['','— escoge —'], ...mets])}${selE_(c,'a','Columna (Anexo D)',[['','— escoge —'], ...mets])}</div>
       <p class="hint">${I.viga && I.col ? `Viga ${esc(I.viga.n)} (d ${fx(I.viga.h,0)} · bf ${fx(I.viga.b,0)} · tf ${fx(I.viga.tf,1)} mm) contra el ala de la columna ${esc(I.col.n)} (d ${fx(I.col.h,0)} · tf ${fx(I.col.tf,1)} · tw ${fx(I.col.tw,1)} mm).` : 'Escoge la viga y la columna (perfiles I del Anexo D).'}</p>`;
-    if(t === 1) return `<h4 class="sub">Datos de la platina (una arriba y otra abajo)</h4><div class="fg g4">${fIn(c,'pl.L','Largo [mm]')}${fIn(c,'pl.b','Ancho [mm]')}${selE_(c,'pl.t','Espesor',placas)}${selE_(c,'pl.acero','Acero',aceros)}</div>
+    if(t === 1) return `<h4 class="sub">Datos de la platina (una arriba y otra abajo)</h4><div class="fg g4">${fIn(c,'pl.L','Largo [mm]',{h:hv('pl.L')})}${fIn(c,'pl.b','Ancho [mm]',{h:hv('pl.b')})}${selE_(c,'pl.t','Espesor',placas)}${selE_(c,'pl.acero','Acero',aceros)}</div>
       <h4 class="sub">Datos de los pernos</h4><div class="fg g4">${selE_(c,'pc.d','Diámetro',pernos)}${selE_(c,'pc.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'pc.nf','Filas a lo ancho')}${fIn(c,'pc.nc','Pernos por fila')}</div>
-      <div class="fg g4">${fIn(c,'pc.s','Separación s [mm]')}${fIn(c,'pc.g','Gramil g (entre filas) [mm]')}${fIn(c,'pc.lu','Cara de la columna al 1er perno [mm]')}${fIn(c,'pc.le','Distancia mínima al borde [mm]')}</div>
+      <div class="fg g4">${fIn(c,'pc.s','Separación s [mm]',{h:hv('pc.s')})}${fIn(c,'pc.g','Gramil g (entre filas) [mm]',{h:hv('pc.g')})}${fIn(c,'pc.lu','Cara de la columna al 1er perno [mm]',{h:hv('pc.lu')})}${fIn(c,'pc.le','Distancia mínima al borde [mm]',{h:hv('pc.le')})}</div>
       <div class="fg g4">${fChk(c,'pc.rosca','Rosca en el plano de corte')}</div>
       <h4 class="sub">Gráfico</h4><div class="e-graf" id="eGraf">${grafVC(c, D, 1)}</div>`;
-    if(t === 2) return `<h4 class="sub">Datos de la platina</h4><div class="fg g4">${fIn(c,'ct.h','Alto [mm]')}${fIn(c,'ct.b','Ancho [mm]')}${selE_(c,'ct.t','Espesor',placas)}${selE_(c,'ct.acero','Acero',aceros)}</div>
-      <h4 class="sub">Datos de los pernos</h4><div class="fg g4">${selE_(c,'ct.d','Diámetro',pernos)}${selE_(c,'ct.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'ct.n','Número de pernos')}${fIn(c,'ct.s','Separación [mm]')}</div>
-      <div class="fg g4">${fIn(c,'ct.le','Distancia mínima al borde [mm]')}${fIn(c,'ct.e','Excentricidad e (pernos a la soldadura) [mm]')}${fChk(c,'ct.rosca','Rosca en el plano de corte')}</div>
+    if(t === 2) return `<h4 class="sub">Datos de la platina</h4><div class="fg g4">${fIn(c,'ct.h','Alto [mm]',{h:hv('ct.h')})}${fIn(c,'ct.b','Ancho [mm]',{h:hv('ct.b')})}${selE_(c,'ct.t','Espesor',placas)}${selE_(c,'ct.acero','Acero',aceros)}</div>
+      <h4 class="sub">Datos de los pernos</h4><div class="fg g4">${selE_(c,'ct.d','Diámetro',pernos)}${selE_(c,'ct.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'ct.n','Número de pernos')}${fIn(c,'ct.s','Separación [mm]',{h:hv('ct.s')})}</div>
+      <div class="fg g4">${fIn(c,'ct.le','Distancia mínima al borde [mm]',{h:hv('ct.le')})}${fIn(c,'ct.e','Excentricidad e (pernos a la soldadura) [mm]',{h:hv('ct.e')})}${fChk(c,'ct.rosca','Rosca en el plano de corte')}</div>
       <h4 class="sub">Gráfico</h4><div class="e-graf" id="eGraf">${grafVC(c, D, 2)}</div>`;
     if(t === 3) return `<div class="fg g4">${fIn(c,'wPl','Filete cubrejunta–columna [mm]')}${fIn(c,'wCt','Filete cartela–columna [mm]')}${selE_(c,'electrodo','Electrodo',elec)}</div>`;
     return cargasE(c, D);
@@ -411,22 +411,73 @@ function filasChkE(X, imp, sg){
     const dem = ch.soloOk ? (k === 'geo' ? (cumple ? 'cabe' : 'no cabe') : u(ch.dem)) : k === 'tp' ? `t req = ${fx(ch.req,1)} mm` : u(ch.dem);
     const cap = ch.soloOk ? (k === 'geo' ? '—' : u(ch.cap)) : k === 'tp' ? `(t req/t)² ≤ 1` : ch.u === '' ? '≤ 1.00' : u(ch.cap);
     const rel = imp ? fx(ch.r,3) : barra3(ch.r), ok = imp ? (cumple ? 'Cumple' : '<b>No cumple</b>') : pill(cumple ? 'ok' : 'no', cumple ? 'Cumple' : 'No cumple') + (!cumple && sg ? sg(k) : '');
-    return [`${ch.n} <span class="${imp ? '' : 'hint'}">${imp ? '(' + ch.ref + ')' : ch.ref}</span>`, dem, cap, ch.soloOk ? '' : rel, ok, `<span class="ids">${esc(ch.fila?.fl?._t || ch.fila?._t || '')}</span>`];
+    const fila = [`${ch.n.replace(/^(Columna|Cartela): /, '').replace(/^./, m => m.toUpperCase())} <span class="${imp ? '' : 'hint'}">${imp ? '(' + ch.ref + ')' : ch.ref}</span>`, dem, cap, ch.soloOk ? '' : rel, ok, `<span class="ids">${esc(ch.fila?.fl?._t || ch.fila?._t || '')}</span>`];
+    fila.k = k; fila.r = ch.r; return fila;
   });
 }
+// Grupos de chequeos (pedido de Amo 28-oct): para ver de una vez a qué parte corresponde cada uno
+const GRUPOS_E = {
+  placa:[['🧱', 'Concreto bajo la placa', ['apl']], ['▭', 'Placa base', ['geo','tp']], ['🔩', 'Pernos de anclaje — acero', ['ten','vs']],
+    ['🧱', 'Pernos de anclaje — concreto', ['cono','pull','sb','vb','vcp']], ['⇄', 'Pernos de anclaje — tensión y cortante juntos', ['int']], ['🔥', 'Soldadura columna – placa', ['sold']]],
+  vc:[['🔩', 'Pernos de la cubrejunta', ['perno']], ['▭', 'Platina cubrejunta', ['aplPl','ten','bloq','comp']], ['═', 'Viga (ala)', ['aplAla','bloqAla']],
+    ['▮', 'Columna', ['alaCol','almaFl','almaApl','panel']], ['🔩', 'Pernos de la cartela', ['pernoCt']], ['▭', 'Platina cartela', ['aplCt','cortCt','bloqCt']], ['🔥', 'Soldaduras', ['sold','soldCt']]],
+  sold:[['🔥', 'Resistencia', ['s0','s1']], ['📏', 'Tamaño del filete', ['s2','s3']]],
+};
+function gruposChk(c, X, filas){
+  const G = GRUPOS_E[c.tipo] || [], usados = new Set(), out = [];
+  for(const [ic, t, ks] of G){ const fs = filas.filter(f => ks.includes(f.k)); fs.forEach(f => usados.add(f.k)); if(fs.length) out.push({ ic, t, fs }); }
+  const resto = filas.filter(f => !usados.has(f.k)); if(resto.length) out.push({ ic:'•', t:'Otros', fs:resto });
+  return out;
+}
 function resEHTML(c, X, imp, sg){
-  if(!imp){   // pantalla: lista compacta (nombre, demanda / capacidad, barra, estado y 💡)
-    const fl = filasChkE(X, false, sg);
-    return `<div class="e-cks">${fl.map(r => `<div class="e-ck"><div class="e-ckn">${r[0]}<small>${r[1]}${r[2] ? ' / ' + r[2] : ''}${r[5].includes('</span>') && r[5].length > 25 ? ' · ' + r[5] : ''}</small></div><div class="e-ckr">${r[3]} ${r[4]}</div></div>`).join('')}</div>
+  const filas = filasChkE(X, imp, sg), grupos = gruposChk(c, X, filas);
+  const estado = fs => { const r = Math.max(...fs.map(f => f.r)); return r > 1 + 1e-9 ? 'no' : r > 0.9 ? 'pend' : 'ok'; };
+  if(!imp){   // pantalla: lista compacta agrupada (nombre, demanda / capacidad, barra, estado y 💡)
+    return `<div class="e-cks">${grupos.map(g => `<div class="e-gr"><div class="e-grh"><span>${g.ic} ${esc(g.t)}</span>${pill(estado(g.fs), estado(g.fs) === 'no' ? 'No cumple' : fx(Math.max(...g.fs.map(f => f.r)),2))}</div>
+      ${g.fs.map(r => `<div class="e-ck"><div class="e-ckn">${r[0]}<small>${r[1]}${r[2] ? ' / ' + r[2] : ''}${r[5].length > 25 ? ' · ' + r[5] : ''}</small></div><div class="e-ckr">${r[3]} ${r[4]}</div></div>`).join('')}</div>`).join('')}</div>
       <div class="wtot" style="background:${X.cumple ? '' : '#b91c1c'}"><span>Relación máxima (${X._filas?.length || 0} combinaciones)</span><span>${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
       ${(X.avisos || []).map(a => `<p class="note amber" style="margin-top:6px">${esc(a)}</p>`).join('')}`;
   }
-  const T = imp ? (cab, filas) => `<table class="ax-tb"><thead><tr>${cab.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${filas.map(r => `<tr>${r.map((x,i) => `<td class="${i?'c':''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table>` : tabla;
-  const n = X._filas?.length || 0;
-  return `${T(['Chequeo','Demanda','Capacidad','Relación','','Combinación que controla'], filasChkE(X, imp, sg))}
-    ${imp ? `<div class="ax-box">Relación máxima = ${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>` : `<div class="wtot" style="background:${X.cumple ? '' : '#b91c1c'}"><span>Relación máxima (${n} combinaciones revisadas)</span><span>${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>`}
-    ${(X.avisos || []).map(a => `<p class="${imp ? 'ax-nota' : 'note amber'}" style="margin-top:6px">${esc(a)}</p>`).join('')}`;
+  const cab = ['Chequeo','Demanda','Capacidad','Relación','','Combinación que controla'];
+  return `<table class="ax-tb"><thead><tr>${cab.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${grupos.map(g => `<tr class="ax-gr"><td colspan="6"><b>${esc(g.t)}</b></td></tr>${g.fs.map(r => `<tr>${r.map((x,i) => `<td class="${i?'c':''}">${x}</td>`).join('')}</tr>`).join('')}`).join('')}</tbody></table>
+    <div class="ax-box">Relación máxima = ${fx(X.ratio,3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>
+    ${(X.avisos || []).map(a => `<p class="ax-nota" style="margin-top:6px">${esc(a)}</p>`).join('')}`;
 }
+// Ayudas con la fórmula debajo de cada medida (se recalculan al escribir)
+function hvE(c, D, key){
+  const g = (o, p) => numE(getP(o, p)), mm = v => fx(v, 0) + ' mm';
+  if(c.tipo === 'vc'){
+    const I = entradaE(c, D), v = I.viga, pc = c.pc, ct = c.ct, d = dPerno(pc.d), dt = dPerno(ct.d);
+    const t = Math.min(g(c,'pl.t'), v?.tf || 99), nc = Math.max(1, Math.round(g(c,'pc.nc'))), le = g(c,'pc.le'), bmin = AnexoE.BORDE_MIN[pc.d] || 19, bminT = AnexoE.BORDE_MIN[ct.d] || 19;
+    const nt = Math.max(1, Math.round(g(c,'ct.n'))), lu = g(c,'pc.lu'), s = g(c,'pc.s');
+    switch(key){
+      case 'pl.L': { const n = lu + (nc - 1)*s + le; return `L ≥ lu + (n − 1)·s + le = ${fx(lu,0)} + ${nc - 1}×${fx(s,0)} + ${fx(le,0)} = <b>${mm(n)}</b>`; }
+      case 'pl.b': return `b ≥ g + 2·le = <b>${mm(g(c,'pc.g') + 2*le)}</b>${v ? ` · ancho del ala de la viga ${mm(v.b)}` : ''}`;
+      case 'pc.s': return `mín. 2.67·d = ${mm(2.67*d)} · recomendado 3·d = <b>${mm(3*d)}</b> · máx. mín(24·t ; 305) = ${mm(Math.min(24*t, 305))} (F.2.10.3.3 y .5)`;
+      case 'pc.le': return `mín. para ${esc(pc.d)} = <b>${mm(bmin)}</b> (Tabla F.2.10.3-4) · recomendado 1.5·d = ${mm(1.5*d)} · máx. 12·t ≤ 150 = ${mm(Math.min(12*t, 150))}`;
+      case 'pc.g': return `recomendado ≥ 3·d = ${mm(3*d)} · máx. b − 2·le = <b>${mm(g(c,'pl.b') - 2*le)}</b>${v ? ` y bf − 2·${bmin} = ${mm(v.b - 2*bmin)}` : ''}`;
+      case 'pc.lu': return `deja espacio para la soldadura y la llave: recomendado ≥ w + 1.5·d = <b>${mm(g(c,'wPl') + 1.5*d)}</b>`;
+      case 'ct.h': return `h ≥ (n − 1)·s + 2·le = ${nt - 1}×${fx(g(c,'ct.s'),0)} + 2×${fx(g(c,'ct.le'),0)} = <b>${mm((nt - 1)*g(c,'ct.s') + 2*g(c,'ct.le'))}</b>${v ? ` · máx. alto libre del alma ${mm(v.h - 2*v.tf - 2*(v.r || 0))}` : ''}`;
+      case 'ct.s': return `mín. 2.67·d = ${mm(2.67*dt)} · recomendado 3·d = <b>${mm(3*dt)}</b>`;
+      case 'ct.le': return `mín. para ${esc(ct.d)} = <b>${mm(bminT)}</b> (Tabla F.2.10.3-4) · recomendado 1.5·d = ${mm(1.5*dt)}`;
+      case 'ct.e': return `borde libre b − e ≥ le → e ≤ b − le = <b>${mm(g(c,'ct.b') - g(c,'ct.le'))}</b> · menor e = menos momento en los pernos`;
+      case 'ct.b': return `b ≥ e + le = <b>${mm(g(c,'ct.e') + g(c,'ct.le'))}</b>`;
+    }
+  }
+  if(c.tipo === 'placa'){
+    const I = entradaE(c, D), da = dPerno(c.perno), S1 = g(c,'S1'), S2 = g(c,'S2');
+    switch(key){
+      case 'S1': return `mín. 4·da = ${mm(4*da)} (C-D.8.1) · al borde del pedestal (Lp − S1)/2 = ${mm((I.Lp - S1)/2)} ≥ 6·da = <b>${mm(6*da)}</b> → S1 ≤ <b>${mm(I.Lp - 12*da)}</b> · al borde de la placa (N − S1)/2 ≥ 1.5·d → S1 ≤ ${mm(g(c,'N') - 3*da)}`;
+      case 'S2': return `mín. 4·da = ${mm(4*da)} · al borde del pedestal (Wp − S2)/2 ≥ 6·da → S2 ≤ <b>${mm(I.Wp - 12*da)}</b> · al borde de la placa → S2 ≤ ${mm(g(c,'B') - 3*da)}`;
+      case 'N': return `N ≥ S1 + 3·d = ${mm(S1 + 3*da)} y ≥ d de la columna + 2·(espacio de soldadura) ≈ ${mm((I._s?.d || 0) + 50)} · N ≤ pedestal ${mm(I.Lp)}`;
+      case 'B': return `B ≥ S2 + 3·d = ${mm(S2 + 3*da)} y ≥ bf de la columna + 50 ≈ ${mm((I._s?.bf || 0) + 50)} · B ≤ pedestal ${mm(I.Wp)}`;
+      case 'hef': return `mín. práctico 12·da = ${mm(12*da)} · máx. altura del pedestal − 50 = <b>${mm(I.ha - 50)}</b> · si los bordes están cerca, el cono usa h'ef (C-D.5.2.3)`;
+    }
+  }
+  return '';
+}
+const hv = key => `<span data-hv="${key}"></span>`;
+function pintarHints(c, D){ $$('#eForm [data-hv]').forEach(x => { x.innerHTML = hvE(c, D, x.dataset.hv); }); }
 function detECalc(c, X, imp){
   const kvT = filas => imp ? `<table class="ax-kv">${filas.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>` : tabla(['', ''], filas);
   const k3 = v => fx(v/1e3,2) + ' kN', h = t => `<h4 class="sub">${t}</h4>`;
@@ -540,7 +591,7 @@ function sugE(c, D, filas, key, X){
 async function pintarResE(c, D){
   const ctx = await ctxE(), box = $('#eRes'); if(!box || selE !== c.id) return;
   const X = calcE(c, D, ctx);
-  _lastX = X.ok ? X : null;
+  _lastX = X.ok ? X : null; pintarHints(c, D);
   $('#eDib').innerHTML = dibujosE(c, D, X.ok ? X : null, esIng());
   if($('#eGraf') && c.tipo === 'vc') $('#eGraf').innerHTML = grafVC(c, D, tabE);
   activarCotas(c, D);
@@ -582,6 +633,7 @@ function activarE(c, D){
   pintarResE(c, D);
 }
 function activarForm(c, D){
+  pintarHints(c, D);
   if(!esIng()) return;
   const re = debounce(() => { guardarMemoria(); pintarResE(c, D); }, 300);
   $$('#eForm [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {
