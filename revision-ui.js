@@ -449,7 +449,7 @@ async function revisionPrintHTML(){
   h += `<section><h3>4. Conclusión</h3><table class="ax-tb"><thead><tr><th>Correa</th><th>Sección</th><th>D/C máx.</th><th>Resultado</th></tr></thead><tbody>
     ${rs.map(x => `<tr><td>${esc(x.c.nom)}</td><td>${esc(nomSecCor(x.c))}</td><td class="c">${x.r.ok ? fR(x.r.max, 2) : '—'}</td><td class="c">${x.r.ok ? (x.r.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos'}</td></tr>`).join('')}</tbody></table>
     <p>${esc((R.obs || '').trim() || conclusionAuto(R, rs))}</p>
-    <div class="rv-firma">${c.firma_path ? `<img src="${esc(await urlDe(c.firma_path) || '')}" alt="Firma"/>` : '<div style="height:60px"></div>'}<div>${esc(c.nombre_firma || '')}<br/>${esc(c.matricula || '')}</div></div></section>`;
+    <div class="rv-firma">${c.firma_path ? `<img src="${esc(await urlDe(c.firma_path) || '')}" alt="Firma"/>` : '<span class="rv-sinfirma"></span>'}<div class="rv-fnom">${esc(c.nombre_firma || '')}<br/>${esc(c.matricula || '')}</div></div></section>`;
   if(fotos.length) h += `<section><h3>5. Registro fotográfico</h3><div class="ax-imgs">${fotos.map((f, i) => `<figure>${f.url ? `<img src="${esc(f.url)}" alt="Foto ${i + 1}"/>` : ''}<figcaption>Foto ${i + 1}. ${esc(f.nota || '')}</figcaption></figure>`).join('')}</div></section>`;
   return h + '</div>';
 }
