@@ -110,11 +110,12 @@ function activarProg(e){
 }
 // Tabla de elementos en el PDF (los 10 de mayor relación)
 function swPrintHTML(e){
-  const P = e.res?.porEl; if(!P || P.length < 1 || !disenoSw()) return '';
-  const rs = [...P].sort((a, b) => (b.r ?? -1) - (a.r ?? -1)).slice(0, 10), nm = esc(swNom());
-  return `<table class="ax-tb"><thead><tr><th>Elemento</th><th>L [m]</th><th>Lx [m]</th><th>Ly [m]</th><th>Lb [m]</th><th>Cb</th><th>Relación modelo</th><th>Relación memoria</th></tr></thead><tbody>${rs.map(x => { const u = x.u || {};
-    return `<tr><td>${esc(x.F)}${x.F === e.res.Fc ? ' (controla)' : ''}</td><td class="c">${fx(x.L,2)}</td><td class="c">${fx(u.Lx,2)}</td><td class="c">${fx(u.Ly,2)}</td><td class="c">${fx(u.Lb,2)}</td><td class="c">${fx(u.Cb,2)}</td><td class="c">${x.rp != null ? fx(x.rp,3) : '—'}</td><td class="c">${x.r != null ? fx(x.r,3) : '—'}</td></tr>`; }).join('')}</tbody></table>
-    <p class="ax-nota">Relación modelo = resultado del diseño en acero del ${nm}; relación memoria = esta revisión (NSR-10 F.2).${P.length > 10 ? ` Se muestran los 10 elementos de mayor relación de ${P.length}.` : ''}</p>`;
+  // En el PDF solo van los datos de cálculo de cada elemento y su relación (sin mencionar el diseño del software; pedido de Amo 28-oct)
+  const P = e.res?.porEl; if(!P || P.length < 2) return '';
+  const rs = [...P].sort((a, b) => (b.r ?? -1) - (a.r ?? -1)).slice(0, 10);
+  return `<table class="ax-tb"><thead><tr><th>Elemento</th><th>L [m]</th><th>Lx [m]</th><th>Ly [m]</th><th>Lb [m]</th><th>Cb</th><th>Relación D/C</th></tr></thead><tbody>${rs.map(x => { const u = x.u || {};
+    return `<tr><td>${esc(x.F)}${x.F === e.res.Fc ? ' (controla)' : ''}</td><td class="c">${fx(x.L,2)}</td><td class="c">${fx(u.Lx,2)}</td><td class="c">${fx(u.Ly,2)}</td><td class="c">${fx(u.Lb,2)}</td><td class="c">${fx(u.Cb,2)}</td><td class="c">${x.r != null ? fx(x.r,3) : '—'}</td></tr>`; }).join('')}</tbody></table>
+    ${P.length > 10 ? `<p class="ax-nota">Se muestran los 10 elementos de mayor relación de ${P.length}.</p>` : ''}`;
 }
 // Resumen de todos los perfiles: software frente a plantilla
 async function pintarCompSw(D){
