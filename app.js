@@ -248,7 +248,7 @@ const STEPS = [
   { id:'K',  ph:'Cálculos',   n:'∑', t:'Combinaciones',           s:'Irregularidades y NSR-10 B.2' },
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — Modelo',        s:'Datos y resultados' },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Metálicos y concreto' },
-  { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Próximamente', off:1 },
+  { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Placas base, momento y soldaduras' },
   { id:'FG', ph:'Documentos', n:'F', t:'Planos y suelos',         s:'Próximamente', off:1 },
   { id:'gen',ph:'Documentos', n:'✓', t:'Generar PDF final',       s:'Próximamente', off:1 },
 ];
@@ -407,6 +407,11 @@ const ANEXOS_LISTO = {
     if(!met.length && !an.D?.zap?.length && !an.D?.ped?.length) f.push('elementos');
     for(const e of [...met, ...(an.D?.zap || []), ...(an.D?.ped || [])]){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple) f.push(e.res.ratio > 1 ? `${e.nom} no cumple (relación ${e.res.ratio})` : `${e.nom} no cumple un requisito (separación, núcleo, esbeltez o anclaje)`); }
     return f; } },
+  E: { n:'Anexo E', huella: an => huella((an.E?.con || []).map(c => ({ ...c, res:undefined })), (an.D?.met || []).map(e => ({ ...e, res:undefined })), an.D?.ped, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res), faltan(an){
+    const con = an.E?.con || [], f = [];
+    if(!con.length) f.push('conexiones');
+    for(const c of con){ if(!c.res?.ok) f.push(`${c.nom}: ${c.res?.error || 'sin calcular'}`); else if(!c.res.cumple) f.push(`${c.nom} no cumple (relación ${c.res.ratio})`); }
+    return f; } },
   C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
     const C = an.C, f = [];
     if(!C?.modelo) f.push('archivo del modelo (.$2k)');
@@ -426,9 +431,9 @@ function estadoPaso(s){
   return ANEXOS_LISTO[s.id] ? estadoAnexo(s.id) : '';
 }
 // Botones de la cabecera de cada anexo: «Imprimir anexo» y «Marcar terminado» (siempre arriba, en el mismo sitio)
-const IMPRIME = { A:() => imprimirA(), B:() => imprimirB(), C:() => imprimirC(datosC()), D:() => imprimirD() };
+const IMPRIME = { A:() => imprimirA(), B:() => imprimirB(), C:() => imprimirC(datosC()), D:() => imprimirD(), E:() => imprimirE() };
 function puedeImprimir(id){ const an = S.m?.anexos || {};
-  return id === 'A' ? true : id === 'B' ? an.B?.aplica !== false : id === 'C' ? !!an.C?.modelo : id === 'D' ? ['met','zap','ped'].some(k => an.D?.[k]?.length) : false; }
+  return id === 'A' ? true : id === 'B' ? an.B?.aplica !== false : id === 'C' ? !!an.C?.modelo : id === 'D' ? ['met','zap','ped'].some(k => an.D?.[k]?.length) : id === 'E' ? !!an.E?.con?.length : false; }
 function pintarListo(){
   const box = $('#hdActs'); if(!box || !S.m) return;
   // puntos de la barra lateral
@@ -510,6 +515,7 @@ B(){ paneAnexoB(); },
 K(){ paneCombos(); },
 C(){ paneAnexoC(); },
 D(){ paneAnexoD(); },
+E(){ paneAnexoE(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;

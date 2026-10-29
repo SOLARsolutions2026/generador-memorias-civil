@@ -67,7 +67,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   y «✓ Marcar terminado» (con número de faltantes; al tocarlo muestra la lista; terminado → «Volver a abrir»). Ya no hay tarjetas «Páginas del Anexo X» ni barra `#listoBar` abajo.
 - Anexo terminado (app.js `ANEXOS_LISTO`, `pintarListo()` llena `#hdActs`): la app revisa datos faltantes y habilita «✓ Marcar terminado»;
   guarda `X.listo` = huella de los datos (B incluye los del A) y `X.listoFecha`. Si los datos cambian, la huella ya no coincide y el paso vuelve a «en proceso» solo. B sin sismo = ✓ directo.
-  Pendiente: agregar D y E a `ANEXOS_LISTO` cuando existan.
+  D y E ya están en `ANEXOS_LISTO`.
 
 - Observaciones internas (app.js `pintarNotas`): pestaña amarilla plegable al borde derecho (opción B de Amo) que abre un panel; `anexos.notas = {paso:[{id,t,fecha,autor,hecha}]}`
   para cualquier paso; casilla «resuelta» (tachada). Circulito amarillo (`.ydot`) en la lista de pasos si hay pendientes. No salen en la memoria; solo rol ingeniero.
@@ -115,6 +115,15 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   (P–M por compatibilidad con SVG, Bresler, esbeltez ≤ 22, cortante, confinamiento DMO, cargas simultáneas, anclaje); cuantía mínima 1 % de Ag = chequeo con tolerancia 0.5 % (Ast ≥ 0.995·0.01·Ag; C.10.9.1, pedido de Amo 28-oct; `rhoOk`, `AstMin`, bombillo 'rho'); la máxima 4 % solo aviso.
   Impresión: D-1 metálicos, luego Zapatas y Pedestales (numeración corrida si no hay metálicos).
 
+- `anexos.E` (paso E; cálculo `calc/anexoE.js` = `AnexoE`, pantalla `anexoE-ui.js`), datos `E.con[]` = {id, tipo placa|vc|sold, nom CN-n|TP-n|SL-n, etiqueta (vacía = «Conexión PF-1 a PL-1 sobre PD-1» automática), desc, de, a (ids del Anexo D; 'PL' = platina), plN (PL-n),
+  cargas 'modelo'|'manual', man{}, extremo ambos|i|j, nudos, res}. Opción A de Amo (28-oct): galería con dibujos para agregar + editor sobre el dibujo (cotas con recuadro `data-cota` → casilla flotante `#cotaPop`),
+  fallas en rojo (`fallasE`), 💡 `sugE` (recalcula con las mismas cargas). Correcciones aprobadas a los Excel: P1–P12, V1–V9, S1–S5.
+  Placa base: columna = PF (perfil), pedestal = PD (b,h,Hp,f'c; `ori` y = peralte d paralelo a Y del modelo → Mn = M1, Vn = F2), reacciones de los nudos del PD con `D.cRes`; Guía de diseño 1 (fp,máx con √(A2/A1) ≤ 2, ecrít con N, n con 0.8bf, Y por momento grande, t en compresión y tensión),
+  anclajes C-D (φ 0.75/0.65 acero, 0.70 concreto; h'ef con 3+ bordes; ψc 1.0 fisurado; Abrg = arandela − perno; Avc correcto por sentido; pryout; interacción D.7 con la regla 0.2 y /1.2; reventón lateral), soldadura con el contorno real del I.
+  Viga–columna: filas de los extremos de los elementos del grupo de la viga (M3, V2, P); Nf = M/(d − tf) + |P|/2; pernos, aplastamiento, An ≤ 0.85Ag, bloque, compresión K 0.65, soldadura 2b, columna (ala 6.25Fy·tf², alma, aplastamiento, panel), cartela con excentricidad.
+  Soldaduras: 10 formas (`FORMAS`: 1, 2, 3, L, C, U, O, I, c, T a tope) por segmentos (`propLineas`: A, centroide, Ix, Iy, J); f = √(fx²+fy²+fz²) en cada extremo; NSR-10 φ·0.6·FEXX sobre 0.707w, metal base, tamaños mín./máx.
+  Verificado: J del L 100×150 = 852 083 y G (20, 45) del ejemplo del PDF; flexión local del ala HEA 200 = 194 kN (Excel 192). Impresión `imprimirE` (E-1 resumen + E-1.n con dibujos, datos, chequeos y cálculo).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -127,7 +136,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: paso Combinaciones e irregularidades (solo pantalla).
 - Hecho: Anexo D elementos metálicos.
 - Hecho: Anexo D concreto (zapatas y pedestales).
-- Siguiente: memoria general (plantilla de Amo), E (conexiones), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
+- Hecho: Anexo E conexiones (placa base, viga–columna, soldaduras).
+- Siguiente: memoria general (plantilla de Amo), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.
