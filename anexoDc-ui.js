@@ -215,30 +215,48 @@ function detPedCalc(X, imp){
 // Sección del pedestal y diagrama P–M (SVG, sirve en pantalla y en el PDF)
 function svgPedestal(X){
   // Sección con barras, estribo perimetral y flejes en S (ramas adicionales a las 2 del estribo; pedido de Amo 29-oct)
-  const W = 190, s = 140/Math.max(X.b, X.h), w = X.b*s, h = X.h*s, x0 = (W - w)/2, y0 = 18, az = '#1d4ed8';
+  const W = 200, s = 140/Math.max(X.b, X.h), w = X.b*s, h = X.h*s, x0 = (W - w)/2, y0 = 18, az = '#1d4ed8';
   const px = x => x0 + x*s, py = y => y0 + (X.h - y)*s, rb = r => Math.max(2.5, r.db*s/2);
   const tol = 1, xs = X.bars.map(r => r.x), ys = X.bars.map(r => r.y), xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
   // filas intermedias disponibles: y de las barras de la cara izquierda (sin esquinas) y x de las barras de la cara inferior (sin esquinas)
   const yInt = [...new Set(X.bars.filter(r => Math.abs(r.x - xmin) < tol && r.y > ymin + tol && r.y < ymax - tol).map(r => +r.y.toFixed(1)))].sort((a, b) => a - b);
   const xInt = [...new Set(X.bars.filter(r => Math.abs(r.y - ymin) < tol && r.x > xmin + tol && r.x < xmax - tol).map(r => +r.x.toFixed(1)))].sort((a, b) => a - b);
+  // Posiciones simétricas respecto al centro (pedido de Amo 29-oct: configuración equilibrada)
   const escoger = (lst, n) => { if(n <= 0 || !lst.length) return []; if(n >= lst.length) return lst; const o = []; for(let k = 1; k <= n; k++) o.push(lst[Math.round(k*(lst.length + 1)/(n + 1)) - 1] ?? lst[lst.length - 1]); return [...new Set(o)]; };
-  const nH = Math.max(0, Math.round(X.rx || 2) - 2), nV = Math.max(0, Math.round(X.ry || 2) - 2);
-  const yH = escoger(yInt, nH), xV = escoger(xInt, nV), faltan = (nH - yH.length) + (nV - xV.length);
+  const simetrico = (sel, lst, c) => sel.every(v => lst.some(u => Math.abs((2*c - v) - u) < tol) && sel.some(u => Math.abs((2*c - v) - u) < tol));
+  // Ramas adicionales en cada dirección (pedido de Amo 29-oct): cada par = un estribo cerrado interior (rectangular) que abraza barras
+  // simétricas de las caras opuestas; si sobra una rama, un fleje en S en el centro. Todo simétrico para no correr el centro.
+  const exX = Math.max(0, Math.round(X.rx || 2) - 2), exY = Math.max(0, Math.round(X.ry || 2) - 2);
+  const plan = (ext, lst) => { const nh = Math.floor(ext/2), pos = escoger(lst, 2*nh), pares = [];
+    for(let i = 0; i < Math.floor(pos.length/2); i++) pares.push([pos[i], pos[pos.length - 1 - i]]);
+    const lib = lst.filter(v => !pos.includes(v)), sS = ext % 2 ? escoger(lib, 1) : [];
+    return { pares, sS, faltan: ext - 2*pares.length - sS.length }; };
+  const PX = plan(exX, yInt), PY = plan(exY, xInt);   // ramas paralelas a x → piezas horizontales sobre las filas yInt
+  const yH = PX.sS, xV = PY.sS, faltan = PX.faltan + PY.faltan, nRect = PX.pares.length + PY.pares.length;
+  const cx = (xmin + xmax)/2, cy = (ymin + ymax)/2;
+  const desbal = !simetrico([...PX.pares.flat(), ...yH], [...PX.pares.flat(), ...yH], cy) || !simetrico([...PY.pares.flat(), ...xV], [...PY.pares.flat(), ...xV], cx);
   const e = Math.max(4, X.bars[0] ? rb(X.bars[0]) + 2 : 4);
   // fleje en S: gancho hacia arriba en un extremo y hacia abajo en el otro
   const sH = y => { const a = px(xmin) - e, b = px(xmax) + e, yy = py(y); return `<path d="M${a + 6},${yy - 5} Q${a - 2},${yy - 6} ${a},${yy} L${b},${yy} Q${b + 2},${yy + 6} ${b - 6},${yy + 5}" fill="none" stroke="${az}" stroke-width="1.6"/>`; };
   const sV = x => { const a = py(ymin) + e, b = py(ymax) - e, xx = px(x); return `<path d="M${xx - 5},${a - 6} Q${xx - 6},${a + 2} ${xx},${a} L${xx},${b} Q${xx + 6},${b - 2} ${xx + 5},${b + 6}" fill="none" stroke="${az}" stroke-width="1.6"/>`; };
+  // estribo interior: rectángulo por fuera de las barras que abraza
+  const rectXY = (xa, xb, ya, yb, k) => { const g = e - 1 + k*1.8, X1 = px(xa) - g, X2 = px(xb) + g, Y1 = py(yb) - g, Y2 = py(ya) + g;
+    return `<rect x="${X1}" y="${Y1}" width="${X2 - X1}" height="${Y2 - Y1}" rx="2" fill="none" stroke="${az}" stroke-width="1.5"/><path d="M${X1 + 2},${Y1 + 8} L${X1 + 8},${Y1 + 2}" stroke="${az}" stroke-width="1.2"/>`; };
+  const rect = PX.pares.map(([a, b], k) => rectXY(xmin, xmax, Math.min(a, b), Math.max(a, b), k + 1)).join('')     // horizontales: de cara izquierda a derecha
+    + PY.pares.map(([a, b], k) => rectXY(Math.min(a, b), Math.max(a, b), ymin, ymax, k + 1)).join('');                // verticales: de cara inferior a superior
   const re = X.rec*s, ex = x0 + re, ey = y0 + re, ew = w - 2*re, eh = h - 2*re;
-  const nIs = yH.length + xV.length;
-  return `<svg viewBox="0 0 ${W} ${h + 58}" class="ped-svg" role="img" aria-label="Sección del pedestal con refuerzo"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#e5e7eb" stroke="#475569"/>
+  const nIs = yH.length + xV.length, pz = [nRect ? `${nRect} estribo${nRect > 1 ? 's' : ''} interior${nRect > 1 ? 'es' : ''}` : '', nIs ? `${nIs} fleje${nIs > 1 ? 's' : ''} en S` : ''].filter(Boolean).join(' + ');
+  return `<svg viewBox="0 0 ${W} ${h + 72}" class="ped-svg" role="img" aria-label="Sección del pedestal con refuerzo"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#e5e7eb" stroke="#475569"/>
     <rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" rx="3" fill="none" stroke="${az}" stroke-width="1.6"/>
     <path d="M${ex + 3},${ey + 12} L${ex + 12},${ey + 3} M${ex + 7},${ey + 14} L${ex + 14},${ey + 7}" stroke="${az}" stroke-width="1.4"/>
-    ${yH.map(sH).join('')}${xV.map(sV).join('')}
+    ${rect}${yH.map(sH).join('')}${xV.map(sV).join('')}
     ${X.bars.map(r => `<circle cx="${px(r.x)}" cy="${py(r.y)}" r="${rb(r)}" fill="${X.dos && !r.esq ? '#c2410c' : '#111'}"/>`).join('')}
     <text x="${W/2}" y="12" text-anchor="middle" font-size="10">${X.b} × ${X.h} mm</text>
     <text x="${W/2}" y="${y0 + h + 15}" text-anchor="middle" font-size="9">${X.dos ? `4 Ø${X.nomE} + ${X.nI} Ø${X.nomI}` : `${X.bars.length} Ø${X.nomI}`} · ρ ${fx(X.rho*100,2)} %</text>
-    <text x="${W/2}" y="${y0 + h + 27}" text-anchor="middle" font-size="8.5" fill="${az}">E Ø${X.est || ''} · ${Math.round(X.rx || 2)} ramas en x · ${Math.round(X.ry || 2)} ramas en y${nIs ? ` (${nIs} fleje${nIs > 1 ? 's' : ''} en S)` : ''}</text>
-    ${faltan > 0 ? `<text x="${W/2}" y="${y0 + h + 39}" text-anchor="middle" font-size="8" fill="#b91c1c">Faltan barras intermedias para ${faltan} rama${faltan > 1 ? 's' : ''}: aumenta las barras por cara</text>` : ''}</svg>`;
+    <text x="${W/2}" y="${y0 + h + 27}" text-anchor="middle" font-size="8.5" fill="${az}">E Ø${X.est || ''} · ramas: ${Math.round(X.rx || 2)} en x, ${Math.round(X.ry || 2)} en y</text>
+    ${pz ? `<text x="${W/2}" y="${y0 + h + 38}" text-anchor="middle" font-size="8" fill="${az}">perimetral + ${pz}</text>` : ''}
+    ${faltan > 0 ? `<text x="${W/2}" y="${y0 + h + 49}" text-anchor="middle" font-size="7.5" fill="#b91c1c">Faltan barras intermedias para ${faltan} rama${faltan > 1 ? 's' : ''}</text>`
+      : desbal ? `<text x="${W/2}" y="${y0 + h + 49}" text-anchor="middle" font-size="7.5" fill="#b45309">No queda centrado: usa barras impares por cara</text>` : ''}</svg>`;
 }
 function svgDiagrama(X){
   const W = 360, H = 230, x0 = 46, y0 = 12, w = W - x0 - 12, h = H - y0 - 30;
