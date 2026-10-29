@@ -64,6 +64,16 @@ function datosProyRev(m, F, inpF, ro){
     <div class="hint" style="margin-top:6px">El consecutivo, el ingeniero y la firma se llenan solos. El control de revisiones y la vista de la portada están en «📋 Revisiones y portada».</div></div>`;
 }
 
+// Qué falta para marcar terminada una revisión de cubierta (pedido de Amo 29-oct)
+function faltanRev(m){
+  const R = m.anexos?.R, F = m.ficha || {}, f = [];
+  if(!(F.proyecto || '').trim()) f.push('nombre del proyecto');
+  if(!(F.prop || '').trim()) f.push('propietario');
+  if(!R?.correas?.length) f.push('al menos una correa');
+  else R.correas.forEach(c => { if(!c.res || c.huella !== huellaCor(R, c)) f.push(`calcular ${c.nom}`); });
+  return f;
+}
+
 // ─── Página ───
 function renderRevision(){
   const m = S.m, R = datosR(), F = m.ficha, ro = esIng() ? '' : 'disabled', ctx = ctxR(R);
@@ -78,7 +88,7 @@ function renderRevision(){
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
     <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span>${m.variante_de || m.variante_nom ? `<span class="vchip">⧉ ${esc(m.variante_nom || 'Variante')}${m.definitiva !== false ? ' ★' : ''}</span>` : ''}
     <span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>
-    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}${m.tipo === 'verificacion' ? '<button class="btn sm" type="button" id="rvFicha">☰ Pasos de la verificación</button><button class="btn sm pri" type="button" id="rvImp">Generar PDF →</button></div>' : '<button class="btn sm" type="button" id="rvFicha" title="Control de revisiones y vista de la portada">📋 Revisiones y portada</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>'}
+    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}${m.tipo === 'revision' && esIng() && m.estado !== 'arch' ? (m.estado === 'apr' ? '<span class="pill ok">✓ Terminada</span><button class="btn sm" type="button" id="rvAbrir" title="Volver a «En proceso» para hacer cambios">↺ Volver a abrir</button>' : `<button class="btn sm" type="button" id="rvListo" title="${esc(faltanRev(m).length ? 'Falta: ' + faltanRev(m).join(', ') : 'Todo listo')}">✓ Marcar terminada${faltanRev(m).length ? ` (${faltanRev(m).length})` : ''}</button>`) : ''}${m.tipo === 'verificacion' ? '<button class="btn sm" type="button" id="rvFicha">☰ Pasos de la verificación</button><button class="btn sm pri" type="button" id="rvImp">Generar PDF →</button></div>' : '<button class="btn sm" type="button" id="rvFicha" title="Control de revisiones y vista de la portada">📋 Revisiones y portada</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>'}
   <div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">${m.tipo === 'verificacion' ? 'Verificación puntual' : 'Revisión de cubierta'} · ${pill(...(ESTADOS[m.estado] || ESTADOS.wip))}</div><h2>Verificación de correas — NSR-10</h2></div></div>
 
   ${m.tipo === 'revision' ? datosProyRev(m, F, inpF, ro) : `<div class="card"><div class="ct">Datos del proyecto</div>
@@ -327,6 +337,10 @@ function activarRevision(R){
   const m = S.m, re = () => renderRevision();
   $('#back').onclick = () => ir('#/');
   if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
+  if($('#rvListo')) $('#rvListo').onclick = () => { const f = faltanRev(m);
+    if(f.length) return toast('Antes de terminarla falta: ' + f.join(', ') + '.', 6000);
+    m.estado = 'apr'; guardarMemoria(); toast('Revisión terminada: queda aprobada y visible para consulta.'); re(); };
+  if($('#rvAbrir')) $('#rvAbrir').onclick = () => { m.estado = 'wip'; guardarMemoria(); toast('Revisión abierta de nuevo (en proceso).'); re(); };
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/${m.tipo === 'revision' ? 'revisiones' : 'ficha'}`);
   $('#rvImp').onclick = m.tipo === 'verificacion' ? () => ir(`#/m/${m.id}/gen`) : imprimirRevision;
   const cor = () => R.correas.find(c => c.id === R.activa);

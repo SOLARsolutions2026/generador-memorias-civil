@@ -496,7 +496,9 @@ function estadoAnexo(id){
 function estadoPaso(s){
   if(s.off) return '';
   if(s.id === 'ficha') return fichaCompleta() ? 'ok' : 'wip';
-  if(s.id === 'R') return S.m.anexos?.R?.correas?.some(c => c.res) ? (S.m.anexos.R.correas.every(c => c.res?.cumple) ? 'ok' : 'wip') : '';
+  if(s.id === 'R'){ const R = S.m.anexos?.R; if(!R?.correas?.some(c => c.res)) return '';   // calculada = terminada, cumpla o no (pedido de Amo 29-oct)
+    return R.correas.every(c => c.res && (typeof huellaCor !== 'function' || c.huella === huellaCor(R, c))) ? 'ok' : 'wip'; }
+  if(s.id === 'portada' && ['revision','verificacion'].includes(S.m.tipo)) return S.m.estado === 'wip' ? 'wip' : 'ok';
   if(s.id === 'revisiones') return S.revs.length ? 'ok' : 'wip';
   if(s.id === 'MG') return S.m.anexos?.M ? 'wip' : '';
   if(s.id === 'FG') return S.m.anexos?.F || S.m.anexos?.G ? estadoFG() : '';
