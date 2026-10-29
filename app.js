@@ -390,17 +390,16 @@ function tituloArchivo(f){
 }
 function filasDatos(f, imprimir){
   const v = (x, ph) => (x||'').trim() ? esc(x.trim()) : (imprimir ? '—' : `<span class="ph">[${ph}]</span>`);
-  const emp = f.tipo !== 'natural';
+  const emp = f.tipo !== 'natural', rev = S.m?.tipo === 'revision';   // revisión de cubierta: sin datos de contacto ni matrícula (pedido de Amo 29-oct)
   const ub = [f.dir, f.lote && 'Lote ' + f.lote, f.mz && 'Mz ' + f.mz, [f.mun, f.depto].filter(Boolean).join(', ')].filter(x => (x||'').trim()).join(' · ');
   return [
     ['Propietario / cliente', v(f.prop, emp ? 'Razón social' : 'Nombre completo')],
     [esc(f.docTipo || (emp ? 'NIT' : 'C.C.')), v(f.doc, 'Número de identificación')],
     ...(emp ? [['Representante legal', v(f.rep, 'Nombre del representante')]] : []),
-    ['Dirección de correspondencia', v(f.dirCorr, 'Dirección')],
-    ['Teléfono · correo', v(f.tel, 'Teléfono') + ' · ' + v(f.mail, 'Correo')],
+    ...(rev ? [] : [['Dirección de correspondencia', v(f.dirCorr, 'Dirección')], ['Teléfono · correo', v(f.tel, 'Teléfono') + ' · ' + v(f.mail, 'Correo')]]),
     ['Proyecto', v(f.proyecto, 'Nombre exacto del proyecto')],
     ['Ubicación', ub ? esc(ub) : v('', 'Dirección, lote, manzana, municipio')],
-    ['Matrícula inmobiliaria · N° predial', v(f.matricula, 'Matrícula') + ' · ' + v(f.predial, 'N° predial')],
+    ...(rev ? [] : [['Matrícula inmobiliaria · N° predial', v(f.matricula, 'Matrícula') + ' · ' + v(f.predial, 'N° predial')]]),
   ];
 }
 function filasRevision(){

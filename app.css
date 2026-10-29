@@ -661,3 +661,11 @@ table.t td{border-bottom:1px solid #edf1f6}
   .d-lista.abierta .d-drop{display:block;position:absolute;left:0;right:0;top:calc(100% - 2px);max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:8px}
 }
 @media print{.d-sel{display:none!important}}
+/* Revisión de cubierta impresa compacta (pedido de Amo 29-oct): sin saltos forzados, gráficos junto a sus tablas */
+.ax.rv-print section{break-before:auto;margin-top:10px}
+.rv-print .rv-pr-row{gap:10px}.rv-print .rv-pr-row .ax-kv{flex:1 1 auto;width:100%}.rv-print .rv-pr-row figure{margin:0}
+.rv-print .rv-kv-full{width:100%}
+.rv-print figure.rv-pr-v{width:auto;max-width:5.6in;margin:6px auto 2px}.rv-print figure.rv-pr-v svg{max-height:2.1in}
+.rv-print table{break-inside:avoid}
+.rv-print .rv-pr-row{display:grid;grid-template-columns:minmax(0,1fr) 1.6in;align-items:start}.rv-print .rv-pr-row figure{width:auto}
+.rv-print figure.rv-pr-v svg{max-height:1.75in}

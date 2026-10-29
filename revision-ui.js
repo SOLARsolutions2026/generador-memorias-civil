@@ -53,10 +53,9 @@ function datosProyRev(m, F, inpF, ro){
     <div class="ct" style="font-size:13.5px;margin-top:10px">Propietario / cliente</div>
     <div class="fg g3">${sel('tipo', 'Tipo', [['empresa', 'Empresa / persona jurídica'], ['natural', 'Persona natural']])}${inpF('prop', emp ? 'Razón social' : 'Nombre completo')}
       <div class="f"><label>Identificación</label><div class="docrow"><select data-fk="docTipo" aria-label="Tipo de documento" ${ro}>${['NIT', 'C.C.', 'C.E.'].map(x => `<option ${x === (F.docTipo || 'NIT') ? 'selected' : ''}>${x}</option>`).join('')}</select><input data-fk="doc" value="${esc(F.doc || '')}" ${ro}/></div></div>
-      ${emp ? inpF('rep', 'Representante legal') : ''}${inpF('dirCorr', 'Dirección de correspondencia')}${inpF('tel', 'Teléfono')}${inpF('mail', 'Correo electrónico')}</div>
+      ${emp ? inpF('rep', 'Representante legal') : ''}</div>
     <div class="ct" style="font-size:13.5px;margin-top:10px">Ubicación del predio</div>
-    <div class="fg g3">${inpF('dir', 'Dirección del predio')}${inpF('lote', 'Lote')}${inpF('mz', 'Manzana')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}${inpF('coord', 'Coordenadas', '8.311705, -73.597054')}
-      ${inpF('matricula', 'Matrícula inmobiliaria')}${inpF('predial', 'Número predial')}</div>
+    <div class="fg g3">${inpF('dir', 'Dirección del predio')}${inpF('lote', 'Lote')}${inpF('mz', 'Manzana')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}${inpF('coord', 'Coordenadas', '8.311705, -73.597054')}</div>
     <details class="d-opc" style="margin-top:10px"><summary>Documento: membrete, estado y título</summary>
       <div class="fg g3" style="margin-top:8px">
         <div class="f"><label>Membrete y pie de página</label><select id="rvPerfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id === perfilDe(m).id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
@@ -177,6 +176,8 @@ function svgVientoRev(R, ctx, cor, imp){
     ${cota(X, Y + rh + 6, X + rw, Y + rh + 6, `L = ${t(L)}`)}${cota(X - 10, Y, X - 10, Y + rh, `W = ${t(W)}`, true)}
     <text x="${px + pw / 2}" y="${py - 6}" font-size="10" font-weight="700" fill="${tx}" text-anchor="middle">Planta — zonas de viento</text>
     <text x="${px + pw / 2}" y="${py + ph + 30}" font-size="8.5" fill="${gr}" text-anchor="middle">a = ${ok ? fR(a, 2) + ' m' : '?'} · <tspan fill="#b45309">■</tspan> zona ${zSel}${cor ? ` (${esc(cor.nom)})` : ''}</text>`;
+  if(imp) return `<svg viewBox="0 0 480 170" class="rv-vsvg" role="img" aria-label="Geometría de la cubierta para el viento: alzado y planta con zonas">
+    <defs><marker id="rva" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,2 L5,5 L0,8" fill="none" stroke="${gr}" stroke-width="1.5"/></marker></defs><g transform="translate(10,4)">${alz}</g><g transform="translate(250,-158)">${pl}</g></svg>`;
   return `<svg viewBox="0 0 230 320" class="rv-vsvg" role="img" aria-label="Geometría de la cubierta para el viento: alzado y planta con zonas">
     <defs><marker id="rva" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,2 L5,5 L0,8" fill="none" stroke="${gr}" stroke-width="1.5"/></marker></defs>${alz}${pl}</svg>`;
 }
@@ -419,14 +420,14 @@ async function revisionPrintHTML(){
   <table class="ax-tb"><thead><tr><th>Carga muerta por área</th><th>Fuente</th><th>kg/m²</th></tr></thead><tbody>${ctx.area.items.map(i => `<tr><td>${esc(i.n)}</td><td>${esc(i.fuente || '')}</td><td class="c">${fR(i.kg, 2)}</td></tr>`).join('')}
     <tr class="tot"><td colspan="2">Total (sin peso propio de la correa)</td><td class="c">${fR(ctx.area.kg, 2)} kg/m² = ${fR(ctx.area.qD, 3)} kN/m²</td></tr></tbody></table>
   <p>Carga viva de cubierta Lr = ${fR(R.Lr !== '' && R.Lr != null ? Correas.num(R.Lr) : Correas.LrMin(ctx.g.ok ? ctx.g.theta : 0), 2)} kN/m² sobre la proyección horizontal (Tabla B.4.2.1-2).</p>
-  ${w0?.ok ? `<h4>Viento (B.6.5, componentes y revestimiento)</h4><div class="rv-pr-row"><table class="ax-kv">
+  ${w0?.ok ? `<h4>Viento (B.6.5, componentes y revestimiento)</h4><table class="ax-kv rv-kv-full">
     <tr><td>Tipo de edificación</td><td>${{ cerrada:'Cerrada', parcial:'Parcialmente cerrada', libre:'Cubierta libre' }[w0.tipo]}</td></tr>
     <tr><td>Velocidad básica V / grupo / I</td><td>${w0.V} m/s · ${esc((AnexoA.GRUPOS[R.viento.grupo] || {}).nombre || '')} · I = ${w0.I}</td></tr>
     <tr><td>Geometría</td><td>${fR(w0.g.L, 2)} × ${fR(w0.g.W, 2)} m, cornisa ${fR(w0.g.He, 2)} m, cumbrera ${fR(w0.g.Hr, 2)} m, θ = ${fR(w0.g.theta, 1)}°, h = ${fR(w0.g.hm, 2)} m</td></tr>
     <tr><td>Exposición / Kz / Kd</td><td>${w0.ex.usada} · ${fR(w0.Kz, 3)} · ${w0.Kd}</td></tr>
     <tr><td>qh = 0.613·Kz·Kzt·Kd·V²·I</td><td>${fR(w0.qh, 3)} kN/m²</td></tr>
     <tr><td>Coeficientes</td><td>${w0.tipo === 'libre' ? 'CN de la Figura B.6.5-19A según zona y área' : `GCp de la ${w0.fig}, GCpi = ±${w0.GCpi}`}</td></tr>
-    <tr><td>Presión de diseño</td><td>p = ${w0.tipo === 'libre' ? 'qh·G·CN' : 'qh·[(GCp) − (GCpi)]'}, mínimo 0.40 kN/m²; se calcula para cada correa con su zona y área efectiva</td></tr></table><figure class="ax-fig rv-pr-v">${svgVientoRev(R, ctx, R.correas[0], true)}</figure></div>` : ''}
+    <tr><td>Presión de diseño</td><td>p = ${w0.tipo === 'libre' ? 'qh·G·CN' : 'qh·[(GCp) − (GCpi)]'}, mínimo 0.40 kN/m²; se calcula para cada correa con su zona y área efectiva</td></tr></table><figure class="ax-fig rv-pr-v">${svgVientoRev(R, ctx, R.correas[0], true)}<figcaption>Geometría de la cubierta: alzado y planta con las zonas de viento.</figcaption></figure>` : ''}
   </section>`;
   rs.forEach((x, k) => {
     const cr = x.c, r = x.r, n = `3.${k + 1}`;
