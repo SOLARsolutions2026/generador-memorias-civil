@@ -16,8 +16,8 @@ const S = { user:null, rol:'consulta', cfg:null, perfiles:[], mems:[], m:null, r
 const esIng = () => S.rol === 'ingeniero';
 
 // ─── Utilidades ───
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Nombre del programa de análisis que sale en lo impreso (Configuración; por licencia no se nombra el programa)
 const SW_DEF = 'software de análisis estructural';
@@ -174,6 +174,7 @@ async function renderLista(){
   <div class="card"><div class="ct">Espacio de archivos en la app${pill(pct>=80?'no':pct>=60?'pend':'ok', `${usado.toFixed(1)} MB de 1 GB · ${pct.toFixed(1)} %`)}</div>
     <div class="store"><div class="bar2">${S.mems.map((m,k)=> tam[k] ? `<i style="width:${MB(tam[k])/CAP_MB*100}%;background:${cols[k%4]}" title="${esc(m.consecutivo)}"></i>` : '').join('')}</div></div>
     <div class="hint" style="margin-top:6px">Al llegar al 80 % archiva en el NAS las memorias aprobadas para liberar espacio.</div></div>
+  ${tarjetaRespaldo(usado)}
   <div class="mlist">${S.mems.length ? S.mems.map((m,k) => {
       const f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', ');
@@ -181,7 +182,7 @@ async function renderLista(){
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(tam[k]).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}</div></div>
         <div class="acts">${acts(m)}</div></div>`; }).join('')
     : '<div class="card empty">Todavía no hay memorias. Crea la primera con <b>+ Nueva memoria</b>.</div>'}</div>`;
-  $('#nueva').onclick = nuevaMemoria;
+  $('#nueva').onclick = nuevaMemoria; activarRespaldo(usado);
   $$('[data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
   $$('[data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
 }
@@ -275,7 +276,7 @@ function renderWS(cur){
   const s = pasos.find(x => x.id === cur), activos = pasos.filter(x => !x.off), i = activos.indexOf(s);
   $('#app').innerHTML = `
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
-    <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span><span class="sp" style="flex:1"></span><span class="saved" id="saved"></span></div>
+    <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span><span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>${esIng() ? '<button class="btn sm" type="button" id="btnHist" title="Copias anteriores de esta memoria">🕘 Historial</button>' : ''}</div>
   <div class="mbar"><div class="mi2"><small>Paso ${s.n}</small><b>${s.t}</b></div>
     <button type="button" class="hamb" id="openSteps" aria-label="Ver todos los pasos"><span class="ln"><i></i><i></i><i></i></span>Pasos</button></div>
   <div class="scrim" id="scrim" hidden></div>
@@ -286,7 +287,7 @@ function renderWS(cur){
     <div id="pane"></div></section></div>
   ${esIng() ? `<button type="button" class="notas-tab" id="notasTab" aria-label="Observaciones"><span>📝 Observaciones</span><b id="notasN"></b></button>
   <aside class="notas-dr" id="notasDr" aria-label="Observaciones" hidden></aside>` : ''}`;
-  $('#back').onclick = () => ir('#/');
+  $('#back').onclick = () => ir('#/'); if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
   const nav = $('#stepsNav'), scr = $('#scrim');
   const abrir = () => { nav.classList.add('open'); scr.hidden = false; }, cerrar = () => { nav.classList.remove('open'); scr.hidden = true; };
   $('#openSteps').onclick = abrir; $('#closeSteps').onclick = cerrar; scr.onclick = cerrar;

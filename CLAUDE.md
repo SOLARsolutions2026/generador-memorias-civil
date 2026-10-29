@@ -146,6 +146,15 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 Bloque al final de `app.css`: títulos de tarjeta 16 px azul oscuro sin mayúsculas; subtítulos 12.5 px gris oscuro; totales `.wtot` en franja gris con raya azul oscuro (roja si no cumple);
 cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra a la izquierda; verde/rojo solo en Cumple / No cumple; botones azul oscuro liso.
 
+## Seguridad de la información (29-oct, pedido de Amo: A con 5 copias + B) — `respaldo-ui.js`
+- A. Historial: tabla `mem_versiones(id, memoria_id, creada, autor, motivo, datos jsonb)` (RLS: solo ingeniero lee; nadie escribe directo).
+  Disparador `mem_memorias_version` (BEFORE UPDATE, `mem_priv.version_auto`): si cambian ficha/anexos/estado y no hay copia de los últimos 30 min, guarda la fila VIEJA; `mem_priv.podar_versiones` deja las 5 más nuevas.
+  RPC `mem_guardar_version(mid, motivo)` (botón «Guardar una copia ahora») y `mem_restaurar_version(vid)` (guarda antes el estado actual = deshacer). Botón «🕘 Historial» en la barra de la memoria (`abrirHistorial`). Las copias no incluyen archivos de Storage.
+- B. Respaldo (tarjeta en la lista, `tarjetaRespaldo`/`activarRespaldo`): .zip con `datos.json` {app:'generador-memorias-civil', formato:1, config, perfiles, memorias (select *), revisiones, archivos[]} + `archivos/<ruta>` (completo) + LEEME.txt; `vendor/fflate.min.js` (0.8.2, MIT, carga diferida).
+  `mem_config.ultimo_respaldo` (aviso si > 7 días). Restaurar: escoger memorias (las que existen se reemplazan tras `mem_guardar_version(…,'antes de restaurar respaldo')`), upsert de la fila, revisiones borradas y reinsertadas, archivos subidos con upsert; opcional configuración y perfiles.
+- `$`/`$$` aceptan una raíz opcional: `$(sel, raiz)`.
+- Regla de actualizaciones: los cambios solo AGREGAN campos/columnas; nunca borrar ni renombrar datos existentes; el código nuevo debe leer memorias viejas (defaults).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
