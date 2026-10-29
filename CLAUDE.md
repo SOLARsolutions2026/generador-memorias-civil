@@ -184,6 +184,9 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 ## Convención de ejes (29-oct, pedido de Amo) — `ejes-ui.js`
 - Dibujos que aparecen al escoger cargas a mano: `ejesCim()` (zapata + pedestal: x = b/B, y = h/L, z arriba; P, Vx, Vy, Mx, My), `ejesMiembro()` (ejes locales 1-2-3 del perfil: V2/M3 fuerte, V3/M2 débil, T, P), `ejesPlaca()` (N, B, Mn, Mb, Vn, Vb), `ejesVC()` (viga–columna: M, V, P), `ejesSold()` (plano de la soldadura). Fuerzas naranja, momentos morados con doble flecha (mano derecha). `ejesMini()` pone x/y en `svgPedestal`.
 
+## Listas en el celular (29-oct, opción A de Amo) — app.js `armarListaMovil`
+- En pantallas ≤ 900 px cada `.d-lista` (D metálicos/zapatas/pedestales, E, memoria general) se convierte sola (MutationObserver) en una línea fija `.d-sel` con el elemento abierto ▾; al tocarla se despliega `.d-drop` con la lista y sus botones. En el computador no cambia.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

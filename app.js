@@ -831,3 +831,23 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange', () => { if(habia && !recargado){ recargado = true; guardarPendientes().finally(() => location.reload()); } });
 }
 if(/type=recovery/.test(location.hash)) { /* lo maneja onAuthStateChange */ } else boot();
+
+/* Listas de elementos en el celular (opción A de Amo, 29-oct): una línea fija con el elemento abierto;
+   al tocarla se despliega la lista completa con sus botones. En el computador la lista sigue igual. */
+function armarListaMovil(L){
+  let t = L.querySelector(':scope > .d-sel'), d = L.querySelector(':scope > .d-drop');
+  if(!t){
+    d = document.createElement('div'); d.className = 'd-drop';
+    while(L.firstChild) d.appendChild(L.firstChild);
+    t = document.createElement('button'); t.type = 'button'; t.className = 'd-sel';
+    L.append(t, d);
+    t.onclick = e => { e.stopPropagation(); L.classList.toggle('abierta'); };
+    d.addEventListener('click', e => { if(e.target.closest('.d-el, .btn')) L.classList.remove('abierta'); });
+  }
+  const on = d.querySelector('.d-el.on');
+  const h = (on ? on.innerHTML : '<span>Escoger…</span>') + '<i class="d-car" aria-hidden="true">▾</i>';
+  if(t._h !== h){ t._h = h; t.innerHTML = h; }
+}
+new MutationObserver(() => document.querySelectorAll('.d-lista').forEach(armarListaMovil))
+  .observe(document.body, { childList:true, subtree:true });
+document.addEventListener('click', e => document.querySelectorAll('.d-lista.abierta').forEach(L => { if(!L.contains(e.target)) L.classList.remove('abierta'); }));

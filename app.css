@@ -649,3 +649,15 @@ table.t td{border-bottom:1px solid #edf1f6}
 .ejes-box{margin:8px 0;display:flex;justify-content:center}
 .ejes-fig{margin:0;max-width:420px;border:1px solid #d5dbe5;border-radius:10px;padding:8px 10px;background:#fafbfd}
 .ejes-fig svg{width:100%;height:auto;display:block}.ejes-fig figcaption{font-size:11.5px;color:#475569;line-height:1.45;margin-top:4px}
+/* Lista de elementos en el celular (opción A de Amo, 29-oct) */
+.d-sel{display:none}
+@media (max-width:900px){
+  .d-lista{position:sticky;top:0;z-index:30;background:var(--bg,#f4f6f9);padding:6px 0 8px;margin:0 -2px}
+  .d-sel{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:#fff;border:1.5px solid var(--navy,#0f2b4c);border-radius:9px;padding:8px 10px;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08);color:inherit}
+  .d-sel>span:first-child{flex:1;min-width:0}.d-sel small{display:block;color:var(--muted);font-size:11px}
+  .d-sel .d-car{font-style:normal;margin-left:2px;transition:transform .15s}
+  .d-lista.abierta .d-car{transform:rotate(180deg)}
+  .d-drop{display:none}
+  .d-lista.abierta .d-drop{display:block;position:absolute;left:0;right:0;top:calc(100% - 2px);max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:8px}
+}
+@media print{.d-sel{display:none!important}}
