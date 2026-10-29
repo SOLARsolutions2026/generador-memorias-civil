@@ -71,7 +71,7 @@ function renderRevision(){
       ${inpR('cub.wManual', 'Peso manual (kg/m²)', { n:1, ph:'vacío = de tabla' })}
       ${inpR('otras', 'Otras cargas permanentes (kg/m²)', { n:1, ph:'0' })}</div>
     <div style="margin:4px 0 8px">${chkR('cielo.aplica', 'Tiene cielo raso colgado de las correas')}</div>
-    ${R.cielo.aplica ? `<div class="fg g4">${selR('cielo.tipo', 'Tipo de cielo raso', Object.keys(AnexoA.CIELOS).map(k => [k, `${k} — ${AnexoA.CIELOS[k]} kg/m²`]))}${inpR('cielo.w', 'Peso (kg/m²)', { n:1 })}</div>` : ''}
+    ${R.cielo.aplica ? `<div class="fg g4">${selR('cielo.tipo', 'Tipo de cielo raso', Object.keys(AnexoA.CIELOS).map(k => [k, `${k} — ${AnexoA.CIELOS[k]} kg/m²`]))}${inpR('cielo.w', 'Peso del cielo raso (kg/m²)', { n:1, h:'Se llena con el tipo elegido; cámbielo si el cielo real pesa distinto.' })}</div>` : ''}
     <div style="margin:4px 0 8px">${chkR('paneles', 'La cubierta lleva paneles solares')}</div>
     ${R.paneles ? `<div class="fg g4"><div class="f"><label>Panel solar</label><select id="rvPanel" ${ro}>${(bib.paneles || []).map((p, i) => `<option value="${i}" ${p.nombre === R.panel?.nombre ? 'selected' : ''}>${esc(p.nombre)} — ${p.peso} kg</option>`).join('')}</select></div>
       <div class="f"><label>Riel de montaje</label><select id="rvRiel" ${ro}>${(bib.rieles || []).map((r, i) => `<option value="${i}" ${r.nombre === R.riel?.nombre ? 'selected' : ''}>${esc(r.nombre)} — ${r.peso} kg/m</option>`).join('')}</select></div>
@@ -312,7 +312,8 @@ function activarRevision(R){
   const valor = el => el.type === 'checkbox' ? el.checked : el.value;
   $$('[data-fk]').forEach(el => el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); });
   $$('[data-rv]').forEach(el => {
-    const set = () => { let v = valor(el); if(el.dataset.rv === 'viento.V') v = Number(v); rvSet(R, el.dataset.rv, v); guardarMemoria(); };
+    const set = () => { let v = valor(el); if(el.dataset.rv === 'viento.V') v = Number(v); rvSet(R, el.dataset.rv, v);
+      if(el.dataset.rv === 'cielo.tipo') R.cielo.w = AnexoA.CIELOS[v] ?? R.cielo.w; /* peso típico del tipo elegido, como en el Anexo A */ guardarMemoria(); };
     if(el.tagName === 'SELECT' || el.type === 'checkbox') el.onchange = () => { set(); re(); }; else el.oninput = () => { set(); refresca(); };
   });
   $$('[data-rc]').forEach(el => {
