@@ -496,3 +496,43 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .e-gr .e-ck{padding-left:6px}
 .e-ed .f .hint b{color:#1e40af}
 .ax-tb tr.ax-gr td{background:#e8eef7;font-size:9pt;padding-top:3px;padding-bottom:3px}
+
+/* ═══ Estilo sobrio (opción A de Amo, 29-oct): el tamaño ordena, el color solo dice si cumple ═══ */
+:root{--navy:#0f2d5e;--ink:#1e293b;--line:#dbe2ec}
+/* Título de tarjeta: grande, azul oscuro, sin mayúsculas */
+.card>.ct{font-size:16px;font-weight:800;text-transform:none;letter-spacing:-.1px;color:var(--navy);border-bottom:1px solid var(--line);padding-bottom:9px;margin-bottom:14px}
+.ct .hint,.ct small{text-transform:none;font-weight:500}
+/* Subtítulos: gris oscuro, tamaño medio */
+h4.sub,.e-grh{font-size:12.5px;font-weight:700;color:#334155;text-transform:none;letter-spacing:0;margin:16px 0 7px;background:none;padding:0}
+.e-grh{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eef2f6;padding-bottom:4px}
+/* Total / resultado: franja gris clara con borde oscuro a la izquierda */
+.wtot{background:#f1f5f9!important;color:var(--navy);border-left:4px solid var(--navy);border-radius:6px;font-weight:600;font-size:13px;padding:9px 14px;align-items:center}
+.wtot>span:first-child{color:#475569}
+.wtot>span:last-child{font-size:15px;font-weight:800}
+.wtot[style*="b91c1c"]{background:#fef2f2!important;border-left-color:#b91c1c;color:#991b1b}
+.wtot[style*="b91c1c"]>span:first-child{color:#991b1b}
+/* Ecuaciones y cálculo detallado: letra de máquina en caja clara */
+.d-opc table.t td:first-child{font-family:Consolas,'Cascadia Mono',monospace;font-size:11.5px;color:#334155}
+.d-opc table.t{background:#fafbfc;border:1px solid #eef2f6;border-radius:6px}
+.d-opc>summary{color:var(--navy);font-weight:600}
+/* Pestañas: subrayado discreto */
+.tabs{gap:2px;border-bottom:1px solid var(--line)}
+.tabs button{border:none;border-bottom:2.5px solid transparent;border-radius:0;background:none;color:#64748b;font-weight:600;padding:8px 12px;margin-bottom:-1px}
+.tabs button.on{border-bottom-color:var(--navy);background:none;color:var(--navy)}
+/* Tablas: encabezado suave */
+table.t th{background:#f6f8fb;color:#475569;font-weight:700;border-bottom:1px solid var(--line)}
+table.t td{border-bottom:1px solid #edf1f6}
+/* Avisos: barra a la izquierda */
+.note{border:none!important;border-left:3px solid;border-radius:0 6px 6px 0}
+.note.amber{background:#fffbeb;border-left-color:#d97706;color:#78350f}
+.note.blue{background:#f6f8fb;border-left-color:#64748b;color:#334155}
+.note.green{background:#f0fdf4;border-left-color:#057a55}
+/* Cumple / no cumple: el único color fuerte */
+.pill{font-weight:700;border-radius:4px}
+.pill.ok{background:#dcfce7;color:#166534}.pill.no{background:#fee2e2;color:#991b1b}.pill.pend{background:#fef3c7;color:#92400e}
+.bar-d{height:5px!important}
+/* Selección y botones en azul oscuro liso */
+.d-el.on{outline:none;box-shadow:inset 3px 0 0 var(--navy);background:#f6f8fb}
+.btn.pri{background:var(--navy)}
+.seg button.on{background:var(--navy)}
+.chip-c.on{background:#f1f5f9;border-color:var(--navy);color:var(--navy)}

@@ -125,6 +125,10 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Soldaduras: formas según el elemento soldado (decisión de Amo 28-oct, `FORMAS_EL`): perfil I → I contorno, Ia solo alas, Iw solo alma, T; tubo → O, Hd/Hb dos lados, T; barra → c, T; platina (sin perfil, `de` vacío) → 1, 2, 3, L, C, U, O, T con b, d editables. Medidas del perfil con `segPerfil`; a tope = esfuerzos de la línea / t (metal base). Formas (`FORMAS`) por segmentos (`propLineas`: A, centroide, Ix, Iy, J); f = √(fx²+fy²+fz²) en cada extremo; NSR-10 φ·0.6·FEXX sobre 0.707w, metal base, tamaños mín./máx.
   Verificado: J del L 100×150 = 852 083 y G (20, 45) del ejemplo del PDF; flexión local del ala HEA 200 = 194 kN (Excel 192). Impresión `imprimirE` (E-1 resumen + E-1.n con dibujos, datos, chequeos y cálculo).
 
+## Estilo (opción A de Amo, 29-oct: sobrio, «el tamaño ordena, el color solo dice si cumple»)
+Bloque al final de `app.css`: títulos de tarjeta 16 px azul oscuro sin mayúsculas; subtítulos 12.5 px gris oscuro; totales `.wtot` en franja gris con raya azul oscuro (roja si no cumple);
+cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra a la izquierda; verde/rojo solo en Cumple / No cumple; botones azul oscuro liso.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
