@@ -71,25 +71,28 @@ const TIPOS = { pdf:'application/pdf', jpg:'image/jpeg', jpeg:'image/jpeg', png:
 const tipoDe = r => TIPOS[(r.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
 const diasDesde = s => s ? (Date.now() - new Date(s).getTime()) / 86400000 : Infinity;
 
-function tarjetaRespaldo(usadoMB){
+// Botón «🛡 Respaldo» junto a Configuración (pedido de Amo 29-oct: que no ocupe espacio en la lista); punto amarillo si pasó más de una semana
+function pintarAvisoResp(){ const d = $('#respDot'); if(d) d.hidden = diasDesde(S.cfg.ultimo_respaldo) <= 7; }
+function modalRespaldo(){
   const u = S.cfg.ultimo_respaldo, d = diasDesde(u);
-  return `<div class="card"><div class="ct">Respaldo de la información${pill(d <= 7 ? 'ok' : 'pend', u ? `último: ${fechaHora(u)}` : 'nunca se ha hecho')}</div>
-    <p class="hint" style="margin-bottom:8px">Descarga un archivo .zip con todas las memorias (y, si quieres, todos sus PDF e imágenes) y guárdalo en el NAS.
-      Recomendado: una vez por semana y antes de cada actualización grande de la app.${d > 7 ? ' <b>Ya pasó más de una semana desde el último.</b>' : ''}</p>
-    <div class="nav-btns"><button class="btn pri" type="button" id="respDesc">⬇ Descargar respaldo</button><button class="btn" type="button" id="respRest">⬆ Restaurar desde respaldo</button></div></div>`;
-}
-function activarRespaldo(usadoMB){
-  $('#respDesc').onclick = () => modalDescargar(usadoMB);
-  $('#respRest').onclick = modalRestaurar;
+  const { md, cerrar } = abrirModal(`${hdModal('Respaldo de la información')}
+    <p class="lead">Último respaldo: <b>${u ? fechaHora(u) : 'nunca'}</b>${d > 7 ? ' · <span style="color:#b45309">ya pasó más de una semana</span>' : ''}.
+      Recomendado: uno por semana y antes de cada actualización grande; guárdalo en el NAS.</p>
+    <div class="nav-btns" style="margin-top:10px"><button class="btn pri" type="button" id="respDesc">⬇ Descargar respaldo</button><button class="btn" type="button" id="respRest">⬆ Restaurar desde respaldo</button></div>`);
+  $('#respDesc', md).onclick = () => { cerrar(); modalDescargar(); };
+  $('#respRest', md).onclick = () => { cerrar(); modalRestaurar(); };
 }
 
-function modalDescargar(usadoMB){
+function modalDescargar(){
   const { md, cerrar } = abrirModal(`${hdModal('Descargar respaldo')}
-    <div class="f"><label class="chk"><input type="radio" name="rtipo" value="todo" checked/> <b>Completo</b>: datos + archivos (PDF, imágenes, modelos) · unos ${Math.max(1, Math.round(usadoMB))} MB</label>
+    <div class="f"><label class="chk"><input type="radio" name="rtipo" value="todo" checked/> <b>Completo</b>: datos + archivos (PDF, imágenes, modelos)<span id="respMB"></span></label>
       <label class="chk"><input type="radio" name="rtipo" value="datos"/> <b>Solo datos</b>: memorias, revisiones, configuración y perfiles · rápido y liviano</label></div>
     <p class="hint">Con el completo puedes recuperar todo aunque se pierda la cuenta de la base de datos. El de solo datos sirve para el día a día.</p>
     <div class="doc-log" id="respLog" hidden></div>
     <div class="nav-btns" style="margin-top:10px"><button class="btn pri" type="button" id="respIr">Descargar</button></div>`);
+  (async () => { try{ const ids = S.mems?.length ? S.mems.map(m => m.id) : ((await sb.from('mem_memorias').select('id')).data || []).map(m => m.id);
+    let t = 0; for(const p of [...ids, 'config', 'biblioteca']) t += await tamanoCarpeta(p);
+    const el = $('#respMB', md); if(el) el.textContent = ` · unos ${Math.max(1, Math.round(t / 1048576))} MB`; }catch(e){} })();
   $('#respIr', md).onclick = async () => {
     const todo = $('input[name=rtipo]:checked', md).value === 'todo', lg = $('#respLog', md), b = $('#respIr', md);
     lg.hidden = false; lg.textContent = ''; b.disabled = true;
@@ -128,7 +131,7 @@ async function descargarRespaldo(todo, log){
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type:'application/zip' })); a.download = nombre; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
   const ahora = new Date().toISOString();
-  const { error } = await sb.from('mem_config').update({ ultimo_respaldo:ahora }).eq('id', 1); if(!error) S.cfg.ultimo_respaldo = ahora;
+  const { error } = await sb.from('mem_config').update({ ultimo_respaldo:ahora }).eq('id', 1); if(!error){ S.cfg.ultimo_respaldo = ahora; pintarAvisoResp(); }
   log(`Listo: ${nombre} (${(u8.length / 1048576).toFixed(1)} MB). Guárdalo en el NAS.`);
   toast('Respaldo descargado.');
 }

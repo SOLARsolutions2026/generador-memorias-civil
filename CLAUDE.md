@@ -150,8 +150,9 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - A. Historial: tabla `mem_versiones(id, memoria_id, creada, autor, motivo, datos jsonb)` (RLS: solo ingeniero lee; nadie escribe directo).
   Disparador `mem_memorias_version` (BEFORE UPDATE, `mem_priv.version_auto`): si cambian ficha/anexos/estado y no hay copia de los últimos 30 min, guarda la fila VIEJA; `mem_priv.podar_versiones` deja las 5 más nuevas.
   RPC `mem_guardar_version(mid, motivo)` (botón «Guardar una copia ahora») y `mem_restaurar_version(vid)` (guarda antes el estado actual = deshacer). Botón «🕘 Historial» en la barra de la memoria (`abrirHistorial`). Las copias no incluyen archivos de Storage.
-- B. Respaldo (tarjeta en la lista, `tarjetaRespaldo`/`activarRespaldo`): .zip con `datos.json` {app:'generador-memorias-civil', formato:1, config, perfiles, memorias (select *), revisiones, archivos[]} + `archivos/<ruta>` (completo) + LEEME.txt; `vendor/fflate.min.js` (0.8.2, MIT, carga diferida).
+- B. Respaldo (botón «🛡 Respaldo» `#btnResp` junto a Configuración → `modalRespaldo()`; punto amarillo `#respDot` si pasó más de una semana; pedido de Amo 29-oct: no ocupar espacio en la lista): .zip con `datos.json` {app:'generador-memorias-civil', formato:1, config, perfiles, memorias (select *), revisiones, archivos[]} + `archivos/<ruta>` (completo) + LEEME.txt; `vendor/fflate.min.js` (0.8.2, MIT, carga diferida).
   `mem_config.ultimo_respaldo` (aviso si > 7 días). Restaurar: escoger memorias (las que existen se reemplazan tras `mem_guardar_version(…,'antes de restaurar respaldo')`), upsert de la fila, revisiones borradas y reinsertadas, archivos subidos con upsert; opcional configuración y perfiles.
+- Aviso de conexión (Amo: sin modo fuera de línea, solo avisar): barra roja `#offbar` (`pintarConexion`) con `offline`/`online` o si un guardado falla; al volver la red reintenta `guardarMemoria`.
 - `$`/`$$` aceptan una raíz opcional: `$(sel, raiz)`.
 - Regla de actualizaciones: los cambios solo AGREGAN campos/columnas; nunca borrar ni renombrar datos existentes; el código nuevo debe leer memorias viejas (defaults).
 

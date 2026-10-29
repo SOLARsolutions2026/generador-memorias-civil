@@ -103,7 +103,7 @@ async function boot(){
   S.user = session.user;
   try{ await cargarBase(); }catch(e){ return err(e, 'No se pudieron cargar los datos'); }
   $('#userbox').hidden = false;
-  $('#btnCfg').hidden = !esIng();
+  $('#btnCfg').hidden = !esIng(); $('#btnResp').hidden = !esIng(); pintarAvisoResp(); pintarConexion();
   route();
 }
 async function cargarBase(){
@@ -174,7 +174,6 @@ async function renderLista(){
   <div class="card"><div class="ct">Espacio de archivos en la app${pill(pct>=80?'no':pct>=60?'pend':'ok', `${usado.toFixed(1)} MB de 1 GB · ${pct.toFixed(1)} %`)}</div>
     <div class="store"><div class="bar2">${S.mems.map((m,k)=> tam[k] ? `<i style="width:${MB(tam[k])/CAP_MB*100}%;background:${cols[k%4]}" title="${esc(m.consecutivo)}"></i>` : '').join('')}</div></div>
     <div class="hint" style="margin-top:6px">Al llegar al 80 % archiva en el NAS las memorias aprobadas para liberar espacio.</div></div>
-  ${tarjetaRespaldo(usado)}
   <div class="mlist">${S.mems.length ? S.mems.map((m,k) => {
       const f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', ');
@@ -182,7 +181,7 @@ async function renderLista(){
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(tam[k]).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}</div></div>
         <div class="acts">${acts(m)}</div></div>`; }).join('')
     : '<div class="card empty">Todavía no hay memorias. Crea la primera con <b>+ Nueva memoria</b>.</div>'}</div>`;
-  $('#nueva').onclick = nuevaMemoria; activarRespaldo(usado);
+  $('#nueva').onclick = nuevaMemoria;
   $$('[data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
   $$('[data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
 }
@@ -308,6 +307,7 @@ const guardarMemoria = debounce(async () => {
   const { error } = await sb.from('mem_memorias').update({ ficha:m.ficha, anexos:m.anexos || {}, titulo:(m.ficha.proyecto||'').trim() || 'Sin nombre', perfil_id:m.perfil_id, estado:m.estado }).eq('id', m.id);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
   else m.titulo = (m.ficha.proyecto||'').trim() || 'Sin nombre';
+  S.errGuardar = !!error; S.sinRed = !!error && /fetch|network|red|conex/i.test(error.message || ''); pintarConexion();
   pintarListo();
 }, 700);
 async function guardarPendientes(){ for(const d of [guardarMemoria, guardarPerfil, guardarCfg]) if(d.pend) await d.pend(); }
@@ -611,6 +611,7 @@ revisiones(){
     r[c] = val; marcaGuardado('...');
     const { error } = await sb.from('mem_revisiones').update({ [c]:val }).eq('id', id);
     marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
+  S.errGuardar = !!error; S.sinRed = !!error && /fetch|network|red|conex/i.test(error.message || ''); pintarConexion();
     if(c === 'rev') S.revs.sort((a,b) => (a.rev??0) - (b.rev??0));
     prev();
   }));
@@ -658,12 +659,14 @@ const guardarPerfil = debounce(async p => {
   marcaGuardado('...');
   const { error } = await sb.from('mem_perfiles_pie').update({ nombre:p.nombre, l1:p.l1, l2:p.l2, correo:p.correo, dir:p.dir, ciudad:p.ciudad, tel:p.tel }).eq('id', p.id);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
+  S.errGuardar = !!error; S.sinRed = !!error && /fetch|network|red|conex/i.test(error.message || ''); pintarConexion();
 }, 700);
 const guardarCfg = debounce(async () => {
   marcaGuardado('...');
   const c = S.cfg;
   const { error } = await sb.from('mem_config').update({ nombre_firma:c.nombre_firma, matricula:c.matricula, iniciales:c.iniciales, prefijo:c.prefijo, software:(c.software || '').trim() || SW_DEF }).eq('id', 1);
   marcaGuardado(error ? 'err' : 'ok'); if(error) console.error(error);
+  S.errGuardar = !!error; S.sinRed = !!error && /fetch|network|red|conex/i.test(error.message || ''); pintarConexion();
 }, 700);
 
 async function renderConfig(){
@@ -737,6 +740,18 @@ async function renderConfig(){
 
 // ═══ ARRANQUE ═══
 $('#btnCfg').onclick = () => ir('#/config');
+$('#btnResp').onclick = () => modalRespaldo();
+// ─── Aviso de conexión (pedido de Amo 29-oct): barra roja arriba si no hay internet o si un guardado falló ───
+function pintarConexion(){
+  const b = $('#offbar'); if(!b) return;
+  const sin = !navigator.onLine || S.sinRed;
+  b.hidden = !(sin || S.errGuardar);
+  b.innerHTML = sin ? '⚠ <b>Sin conexión a internet.</b> Lo que escribas no se está guardando. No cierres la app: cuando vuelva la señal se guarda solo.'
+    : '⚠ <b>No se pudo guardar el último cambio.</b> La app lo vuelve a intentar con el próximo cambio o cuando vuelva la conexión.';
+}
+window.addEventListener('offline', pintarConexion);
+window.addEventListener('online', () => { S.sinRed = false; pintarConexion(); if(S.user) toast('Conexión recuperada.');
+  if(S.errGuardar && S.m) guardarMemoria(); });
 $('#btnSalir').onclick = async () => { await guardarPendientes(); await sb.auth.signOut(); S.user = null; S.m = null; $('#toast').hidden = true; location.hash = ''; renderLogin(); };
 sb.auth.onAuthStateChange(ev => { if(ev === 'PASSWORD_RECOVERY') setTimeout(renderNuevaClave, 0); });
 if('serviceWorker' in navigator){

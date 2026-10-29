@@ -583,3 +583,7 @@ table.t td{border-bottom:1px solid #edf1f6}
 .m-fig-n{border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;min-width:260px}
 .m-fig-v{border:1px dashed #cbd5e1;border-radius:8px;padding:24px;color:#94a3b8;font-family:'Segoe UI',system-ui,sans-serif;font-size:12px}
 .doc-log{white-space:pre-line}
+/* Respaldo en la barra superior y aviso de conexión (29-oct) */
+#btnResp{position:relative}
+.rdot{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#f59e0b;border:2px solid #1f3a60}
+.offbar{position:sticky;top:0;z-index:55;background:#b91c1c;color:#fff;font-size:13px;line-height:1.4;padding:8px 16px;text-align:center}
