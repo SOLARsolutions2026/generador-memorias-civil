@@ -135,7 +135,7 @@ const ir = h => { if(location.hash === h) route(); else location.hash = h; };
 
 // ═══ LISTA DE MEMORIAS (ingeniero) ═══
 async function cargarMemorias(){
-  const { data, error } = await sb.from('mem_memorias').select('id,consecutivo,titulo,estado,ficha,imagen_path,paquete,archivada_en,created_at,updated_at,variante_de,variante_nom,variante_origen,definitiva').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('mem_memorias').select('id,consecutivo,titulo,estado,ficha,imagen_path,paquete,archivada_en,created_at,updated_at,variante_de,variante_nom,variante_origen,definitiva,tipo').order('created_at', { ascending:false });
   if(error) throw error;
   S.mems = data;
 }
@@ -168,7 +168,8 @@ async function renderLista(){
     const m = g.def, [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
     let b = (g.vs.length ? `<button class="chev" type="button" data-chev="${g.r.id}" aria-label="Ver diseños" aria-expanded="false">▾</button>` : '')
       + `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>` + pill(c, t);
-    if(m.estado === 'wip') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/ficha">Continuar</button>`;
+    const p1 = m.tipo === 'revision' ? 'R' : 'ficha';
+    if(m.estado === 'wip') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/${p1}">Continuar</button>`;
     else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Portada</button><button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;
     else b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Ver ficha</button>`;
     return b;
@@ -179,7 +180,7 @@ async function renderLista(){
     <div class="acts"><button class="btn sm" type="button" data-renvar="${m.id}" title="Cambiar el nombre interno">✎</button>
       ${m === g.def ? '' : `<button class="btn sm" type="button" data-defvar="${m.id}">★ Volver definitiva</button>`}
       ${m.variante_de ? `<button class="btn sm danger" type="button" data-borvar="${m.id}">Eliminar</button>` : ''}
-      <button class="btn sm pri" type="button" data-go="#/m/${m.id}/ficha">Abrir</button></div></div>`;
+      <button class="btn sm pri" type="button" data-go="#/m/${m.id}/${m.tipo === 'revision' ? 'R' : 'ficha'}">Abrir</button></div></div>`;
   $('#app').innerHTML = `
   <div class="main-hd"><div><h2>Memorias de cálculo</h2><p class="lead">Las memorias en ejecución viven en la app. Cuando una esté aprobada, la archivas en el NAS y se libera su espacio; su ficha queda en la lista.</p></div>
     <div class="nav-btns"><button class="btn pri" type="button" id="nueva">+ Nueva memoria</button></div></div>
@@ -189,7 +190,7 @@ async function renderLista(){
   <div class="mlist">${grupos.length ? grupos.map(g => {
       const m = g.def, f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
-      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}</div>
+      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : ''}</div>
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div></div>
         <div class="acts">${acts(g)}</div></div>
         ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; }).join('')
@@ -216,7 +217,15 @@ async function borrarMemoria(m){
   }catch(e){ err(e, 'No se pudo eliminar'); }
 }
 
-async function nuevaMemoria(){
+// Al crear: escoger el tipo de memoria (pedido de Amo 29-oct)
+function nuevaMemoria(){
+  const { md, cerrar } = abrirModal(`${hdModal('Nueva memoria')}
+    <div class="tipo-mem">
+      <button type="button" class="tcard" data-tipo="completo"><span class="ic">🏗️</span><b>Diseño completo</b><span>Estructura metálica nueva: cargas, sismo, modelo, elementos, conexiones y cimentación.</span><small>Anexos A a G · sismo opcional</small></button>
+      <button type="button" class="tcard" data-tipo="revision"><span class="ic">🔍</span><b>Revisión de cubierta</b><span>Verificar si la cubierta existente soporta los paneles solares u otra carga. Una sola página para llenar en campo.</span><small>Correas metálicas y de madera · viento · fotos</small></button></div>`);
+  $$('[data-tipo]', md).forEach(b => b.onclick = () => { cerrar(); crearMemoria(b.dataset.tipo); });
+}
+async function crearMemoria(tipo){
   const btn = $('#nueva'); btn.disabled = true;
   try{
     const d = new Date(), p2 = n => String(n).padStart(2,'0');
@@ -228,13 +237,13 @@ async function nuevaMemoria(){
     const perfil = S.perfiles.find(x => x.predeterminado) || S.perfiles[0];
     const hoy = hoyISO();
     const { data:m, error } = await sb.from('mem_memorias').insert({
-      consecutivo:cons, titulo:'Nueva memoria', perfil_id:perfil?.id || null,
-      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:TITULO_DEF },
+      consecutivo:cons, titulo:tipo === 'revision' ? 'Nueva revisión de cubierta' : 'Nueva memoria', perfil_id:perfil?.id || null, tipo,
+      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:tipo === 'revision' ? 'MEMORIA DE CÁLCULO REVISIÓN DE CUBIERTA' : TITULO_DEF },
     }).select().single();
     if(error) throw error;
     await sb.from('mem_revisiones').insert({ memoria_id:m.id, rev:0, fecha:hoy, descripcion:'Emisión inicial', elaboro:S.cfg.iniciales || '', reviso:'', aprobo:'' });
     toast(`Memoria ${cons} creada.`);
-    ir(`#/m/${m.id}/ficha`);
+    ir(`#/m/${m.id}/${tipo === 'revision' ? 'R' : 'ficha'}`);
   }catch(e){ err(e, 'No se pudo crear'); btn.disabled = false; }
 }
 
@@ -283,10 +292,13 @@ async function abrirMemoria(id, paso){
     S.m = m.data; S.m.ficha = S.m.ficha || {}; S.revs = r.data || [];
   }
   if(!esIng()) paso = 'portada';
+  if(S.m.tipo === 'revision'){ if(!['ficha','revisiones','portada'].includes(paso)) return renderRevision(); return renderWS(paso); }
   renderWS(STEPS.some(s => s.id === paso && !s.off) ? paso : 'ficha');
 }
+// Revisión de cubierta: solo los pasos del proyecto y la página única «R» (pedido de Amo 29-oct)
+const STEPS_REV = () => [...STEPS.filter(s => ['ficha','revisiones','portada'].includes(s.id)), { id:'R', ph:'Revisión', n:'R', t:'Revisión de cubierta', s:'Correas, viento y fotos' }];
 function renderWS(cur){
-  const m = S.m, pasos = esIng() ? STEPS : STEPS.filter(s => s.id === 'portada');
+  const m = S.m, pasos = esIng() ? (m.tipo === 'revision' ? STEPS_REV() : STEPS) : STEPS.filter(s => s.id === 'portada');
   const st = estadoPaso;
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
@@ -449,6 +461,7 @@ function estadoAnexo(id){
 function estadoPaso(s){
   if(s.off) return '';
   if(s.id === 'ficha') return fichaCompleta() ? 'ok' : 'wip';
+  if(s.id === 'R') return S.m.anexos?.R?.correas?.some(c => c.res) ? (S.m.anexos.R.correas.every(c => c.res?.cumple) ? 'ok' : 'wip') : '';
   if(s.id === 'revisiones') return S.revs.length ? 'ok' : 'wip';
   if(s.id === 'MG') return S.m.anexos?.M ? 'wip' : '';
   if(s.id === 'FG') return S.m.anexos?.F || S.m.anexos?.G ? estadoFG() : '';
@@ -535,6 +548,7 @@ function pintarNotas(){
 
 // ═══ PANELES DE CADA PASO ═══
 const PANES = {
+R(){ renderRevision(); },
 A(){ paneAnexoA(); },
 B(){ paneAnexoB(); },
 K(){ paneCombos(); },

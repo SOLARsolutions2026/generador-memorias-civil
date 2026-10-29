@@ -163,6 +163,15 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - `crearVariante`: copia fila, revisiones y archivos (`storage.copy` a `<nuevo id>/…`) y reescribe en ficha/anexos/imagen_path las rutas `<id viejo>/` → `<id nuevo>/`. Eliminar la fila del grupo borra todas (y sus archivos). Consulta solo ve definitivas.
 - En la barra de la memoria abierta: chip `.vchip` «⧉ <nombre> ★» para saber qué diseño se edita.
 
+## Revisión de cubierta (29-oct, pedido de Amo) — `revision-ui.js` + `calc/correas.js`
+- `mem_memorias.tipo` = 'completo' | 'revision' (check). «+ Nueva memoria» abre `nuevaMemoria()` → modal con dos tarjetas → `crearMemoria(tipo)`.
+- Revisión = UNA página (`renderRevision`, paso `R`, sin barra de pasos; Amo la llena en campo): datos del proyecto (campos de la ficha), ① cubierta y cargas (LAMINAS/CIELOS del Anexo A, panel y riel de la biblioteca, n rieles por fila de largo Lp, Lr vacío = mínimo B.4.2.1-2 según θ), ② viento, ③ correas en pestañas (CR-n, metálica o madera, botón «⚡ Calcular»: `huella` de los datos; si cambian, pide recalcular), ④ fotos (`<id>/revision-foto-*.jpg`), ⑤ conclusión (vacía = automática). «📋 Portada y revisiones» abre ficha/revisiones/portada con `STEPS_REV()`.
+- Datos `anexos.R` = `Correas.defaults()` {cub, cielo, otras, paneles, panel, riel, nRieles, Lr, viento{tipoEd cerrada|parcial|libre, grupo, V, L, W, He, Hr, rug, distRug, expManual, zona}, correas[], fotos[], obs, activa}.
+- Viento (decisión de Amo: escoger tipo): cerrada GCpi ±0.18 / parcial ±0.55 con GCp de cubiertas h ≤ 18 m (Figuras B.6.5-11B/C/D, interpolación log entre 0.93 y 9.3 m²; a ≥ 0.9 m), p = qh[(GCp) − (GCpi)], qh con Kz caso 1; libre = `AnexoA.viento` (CyR, Figura B.6.5-19A). Área efectiva L·max(s, L/3); mínimo 0.40 kN/m².
+- Correcciones aprobadas (M1–M12 metálicas, W1–W12 madera) frente a las calculadoras HTML de Amo: ángulo F.2.6.10 (1.5My módulo menor, pandeo local, sin arriostre → ejes principales y Me = 0.46Eb²t²Cb/L), esfuerzos en 5 puntos (H2), tubo F.2.6.7 con 0.93t y ancho efectivo, combinaciones B.2.4 con 1.6W (presión y succión), coeficientes de vigas continuas (2 vanos wL²/8, V 0.625wL; 3 vanos wL²/10, V 0.6wL), deflexión L/240 y L/180 (con cielo raso L/360 y L/240), peso propio; madera: biaxial amplificada (fb1 ≥ FbE = inestable), le en 3 tramos, diafragma (componente tangencial a la cubierta), E0.5/E0.05 para deflexión y Emin para estabilidad, deflexión diferida ×1.8 seca / ×2.0 húmeda (Tabla G.3.2-5, POR CONFIRMAR con la norma), Cr solo Fb y S ≤ 0.61 m, humedad interpolada 12–19 %, Cl continuo, desviación del grano > 1/8 = no cumple. Verificado: ángulo L38.1×6.35 Iw 90 915 / Iz 24 401 mm⁴.
+- 💡 `Correas.sugerir`: sección más liviana que cumple (catálogos CAT_L, CAT_HSS, CAT_MAD), separación máxima (bisección), apoyo intermedio; «Aplicar» cambia y recalcula.
+- Impresión `imprimirRevision()`: portada de la app + `revisionPrintHTML()` (1 generalidades, normas; 2 cargas y viento; 3.n cada correa con paso a paso y tabla; 4 conclusión y firma; 5 fotos). Rótulo con cajas de margen de @page (consecutivo y nombre arriba, pie del perfil, «X / Y»); la portada en `@page portada` sin rótulo. Ojo: el salto de línea dentro de `content:` va como `\A` (un salto real rompe el CSS y se pierde `@page portada`).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -178,6 +187,7 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: Anexo E conexiones (placa base, viga–columna, soldaduras).
 - Hecho: Anexos F y G (PDF) y PDF final en dos pasos (índice, fichas, rótulos, numeración).
 - Hecho: memoria general (capítulos 1–10) con tabla de contenido y listas.
+- Hecho: revisión de cubierta (correas metálicas y de madera) en una página.
 - Siguiente: archivo ZIP para el NAS.
 
 ## Pruebas

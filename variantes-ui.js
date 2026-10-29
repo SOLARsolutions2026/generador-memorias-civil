@@ -26,7 +26,7 @@ function modalVariante(g){
     const orig = $('#vOrig', md)?.value || g.r.id, b = $('#vIr', md), lg = $('#vLog', md);
     b.disabled = true; lg.hidden = false; lg.textContent = '';
     const log = t => { lg.textContent += t + '\n'; };
-    try{ const nid = await crearVariante(g, orig, nom, log); cerrar(); toast(`Variante «${nom}» creada.`); S.m = null; ir(`#/m/${nid}/ficha`); }
+    try{ const nid = await crearVariante(g, orig, nom, log); cerrar(); toast(`Variante «${nom}» creada.`); S.m = null; ir(`#/m/${nid}/${g.r.tipo === 'revision' ? 'R' : 'ficha'}`); }
     catch(e){ log('⚠ ' + (e.message || e)); b.disabled = false; }
   };
   inp.onkeydown = e => { if(e.key === 'Enter') $('#vIr', md).click(); };
@@ -45,7 +45,7 @@ async function crearVariante(g, origenId, nombre, log){
   for(const f of arch){ k++; log(`Copiando archivo ${k} de ${arch.length}…`);
     const { error } = await sb.storage.from(BUCKET).copy(f.ruta, nid + f.ruta.slice(src.id.length)); if(error) throw new Error(`No se pudo copiar ${f.ruta.split('/').pop()}: ${error.message}`); }
   log('Guardando la variante…');
-  const { error:e3 } = await sb.from('mem_memorias').insert({ id:nid, consecutivo:src.consecutivo, titulo:src.titulo, estado:'wip', perfil_id:src.perfil_id,
+  const { error:e3 } = await sb.from('mem_memorias').insert({ id:nid, consecutivo:src.consecutivo, titulo:src.titulo, estado:'wip', perfil_id:src.perfil_id, tipo:src.tipo || 'completo',
     ficha:cambia(src.ficha), anexos:cambia(src.anexos) || {}, imagen_path:cambia(src.imagen_path),
     variante_de:g.r.id, variante_nom:nombre, variante_origen:nomDiseno(src), definitiva:false });
   if(e3){ if(arch.length) await sb.storage.from(BUCKET).remove(arch.map(f => nid + f.ruta.slice(src.id.length))); throw e3; }
