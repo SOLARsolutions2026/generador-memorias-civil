@@ -26,7 +26,7 @@ function cargasManCimHTML(el, M){
   let h = M?.reac?.n ? `<label class="chk" style="margin:6px 0"><input type="checkbox" data-cman ${el.cargas === 'manual' ? 'checked' : ''} ${ro_}/> Escribir las cargas a mano (en vez de las reacciones del modelo)</label>` : '';
   if(!usaManCim(el)) return h;
   const rows = el.man || [], c = (i, k, w) => `<td><input data-mc="${i}|${k}" value="${esc(rows[i][k] ?? '')}" inputmode="decimal" style="width:${w || 70}px" ${ro_}/></td>`;
-  return h + `<h4 class="sub">Cargas sobre ${esc(el.nom)} (escritas a mano)</h4>
+  return h + `<h4 class="sub">Cargas sobre ${esc(el.nom)} (escritas a mano)</h4><div class="ejes-box">${ejesCim()}</div>
     <div class="tw"><table class="t man-cim"><thead><tr><th>Tipo</th><th>Nombre</th><th>P (kN)</th><th>Vx (kN)</th><th>Vy (kN)</th><th>Mx (kN·m)</th><th>My (kN·m)</th><th></th></tr></thead><tbody>
     ${rows.map((r, i) => `<tr><td><select data-mc="${i}|tipo" ${ro_}><option value="serv" ${r.tipo !== 'res' ? 'selected' : ''}>Servicio</option><option value="res" ${r.tipo === 'res' ? 'selected' : ''}>Resistencia</option></select></td>
       <td><input data-mc="${i}|n" value="${esc(r.n || '')}" placeholder="Ej.: D + L" style="width:110px" ${ro_}/></td>${c(i, 'P')}${c(i, 'Vx')}${c(i, 'Vy')}${c(i, 'Mx')}${c(i, 'My')}
@@ -272,7 +272,7 @@ function svgPedestal(X){
     + PY.pares.map(([a, b], k) => rectXY(Math.min(a, b), Math.max(a, b), ymin, ymax, k + 1)).join('');                // verticales: de cara inferior a superior
   const re = X.rec*s, ex = x0 + re, ey = y0 + re, ew = w - 2*re, eh = h - 2*re;
   const nIs = yH.length + xV.length, pz = [nRect ? `${nRect} estribo${nRect > 1 ? 's' : ''} interior${nRect > 1 ? 'es' : ''}` : '', nIs ? `${nIs} fleje${nIs > 1 ? 's' : ''} en S` : ''].filter(Boolean).join(' + ');
-  return `<svg viewBox="0 0 ${W} ${h + 72}" class="ped-svg" role="img" aria-label="Sección del pedestal con refuerzo"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#e5e7eb" stroke="#475569"/>
+  return `<svg viewBox="0 0 ${W} ${h + 72}" class="ped-svg" role="img" aria-label="Sección del pedestal con refuerzo"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#e5e7eb" stroke="#475569"/>${ejesMini(Math.max(4, x0 - 30), y0 + h, 'x', 'y', 18)}
     <rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" rx="3" fill="none" stroke="${az}" stroke-width="1.6"/>
     <path d="M${ex + 3},${ey + 12} L${ex + 12},${ey + 3} M${ex + 7},${ey + 14} L${ex + 14},${ey + 7}" stroke="${az}" stroke-width="1.4"/>
     ${rect}${yH.map(sH).join('')}${xV.map(sV).join('')}

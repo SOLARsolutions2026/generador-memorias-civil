@@ -391,7 +391,7 @@ function cargasE(c, D){
     const k = c.tipo === 'placa' ? [['P','Pu [kN] (+ compresión)'],['Mn','Mu sentido N [kN·m]'],['Mb','Mu sentido B [kN·m]'],['Vn','Vu sentido N [kN]'],['Vb','Vu sentido B [kN]']]
       : c.tipo === 'vc' ? [['M','Mu [kN·m]'],['V','Vu [kN]'],['P','Pu axial de la viga [kN]']]
       : [['V','V (en el plano, eje y) [kN]'],['H','H (en el plano, eje x) [kN]'],['T','T torsión en el plano [kN·m]'],['N','N normal al plano [kN]'],['Mx','Mx (alrededor de x) [kN·m]'],['My','My (alrededor de y) [kN·m]']];
-    return seg + `<div class="fg g4">${k.map(([a, l]) => fIn(c, 'man.' + a, l)).join('')}</div><p class="hint">Cargas mayoradas (resistencia).</p>`;
+    return seg + `<div class="fg g4">${k.map(([a, l]) => fIn(c, 'man.' + a, l)).join('')}</div><p class="hint">Cargas mayoradas (resistencia).</p><div class="ejes-box">${c.tipo === 'placa' ? ejesPlaca() : c.tipo === 'vc' ? ejesVC() : ejesSold()}</div>`;
   }
   if(c.tipo === 'placa'){
     const p = pedDe(D, c.a);

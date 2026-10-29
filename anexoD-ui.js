@@ -211,7 +211,7 @@ function detMetHTML(e){
         <div class="f"><label>Tipo de perno</label><select data-a="pernos.tipo" ${ro_}>${Object.keys(AnexoD.PERNOS).map(k => opt(k, k, e.pernos.tipo)).join('')}</select></div>${fIn(e,'pernos.tpl','Espesor menor conectado [mm]')}</div>` : ''}</details>
     <h4 class="sub">Fuerzas</h4>
     <div class="seg" role="group" style="margin-bottom:8px"><button type="button" data-fz="grupo" class="${e.fuerzas !== 'manual' ? 'on' : ''}" ${ro_}>Del modelo (Anexo C)</button><button type="button" data-fz="manual" class="${e.fuerzas === 'manual' ? 'on' : ''}" ${ro_}>Escribir a mano</button></div>
-    ${e.fuerzas === 'manual' ? `<div class="fg g4">${['P','V2','V3','T','M2','M3'].map(k => fIn(e,'manual.' + k, `${k} [${k[0] === 'M' || k === 'T' ? 'kN·m' : 'kN'}]`, {ph: k === 'P' ? '− compresión' : ''})).join('')}</div>`
+    ${e.fuerzas === 'manual' ? `<div class="fg g4">${['P','V2','V3','T','M2','M3'].map(k => fIn(e,'manual.' + k, `${k} [${k[0] === 'M' || k === 'T' ? 'kN·m' : 'kN'}]`, {ph: k === 'P' ? '− compresión' : ''})).join('')}</div><div class="ejes-box">${ejesMiembro()}</div>`
       : Fz?.grupos?.length ? `<div class="f"><label>Grupo de elementos del modelo</label><select data-a="grupo" ${ro_}>${opt('', '— escoge —', e.grupo)}${Fz.grupos.map(g => opt(g.sec + '|' + g.fun, `${g.sec} · ${g.fun} (${g.n} elem.)`, e.grupo)).join('')}</select>
           <div class="hint">Se revisan todas las filas del grupo en las combinaciones de resistencia del Anexo C y se toma la que controla en cada chequeo.</div></div>`
       : '<div class="note amber">No hay fuerzas del modelo: súbelo con resultados en el Anexo C o escríbelas a mano.</div>'}

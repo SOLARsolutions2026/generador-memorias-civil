@@ -181,6 +181,9 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Todo con datos a mano: D metálicos `fuerzas:'manual'` sin modelo, zapatas/pedestales con `cargasManCimHTML` (`el.man[]` servicio/resistencia; `usaManCim`), E `cargas:'manual'`. Pestañas del D y galería del E filtradas por las herramientas.
 - PDF: paso gen sin memoria general ni F/G; R con separador «ANEXO R — Verificación de correas» y marca `@@SR@@` (las expresiones de `unirPDF` aceptan R).
 
+## Convención de ejes (29-oct, pedido de Amo) — `ejes-ui.js`
+- Dibujos que aparecen al escoger cargas a mano: `ejesCim()` (zapata + pedestal: x = b/B, y = h/L, z arriba; P, Vx, Vy, Mx, My), `ejesMiembro()` (ejes locales 1-2-3 del perfil: V2/M3 fuerte, V3/M2 débil, T, P), `ejesPlaca()` (N, B, Mn, Mb, Vn, Vb), `ejesVC()` (viga–columna: M, V, P), `ejesSold()` (plano de la soldadura). Fuerzas naranja, momentos morados con doble flecha (mano derecha). `ejesMini()` pone x/y en `svgPedestal`.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
