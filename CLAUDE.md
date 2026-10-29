@@ -28,7 +28,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
 - Biblioteca de paneles y rieles: `mem_config.biblioteca` = { paneles:[{nombre,L,W,H,peso,cargaF,cargaP}] (6 paneles de la tabla de Amo, cargas en Pa), rieles:[{nombre,alto,ancho,peso,material?,vmax?,luzMax}] (sin inercias, decisión de Amo); todos con `ficha` (ruta del PDF) } (Alurack 0.906 kg/m; CHIKO 537 0.73 kg/m = 14 kg ÷ 8 piezas ÷ 2.4 m).
 - Fichas técnicas: las de la biblioteca base están en el repo `fichas/*.pdf` (públicas, comprimidas con qpdf); las que sube Amo van a
   Supabase `<memoria_id>/fichas/{panel|riel}.pdf` y, al "Guardar en biblioteca", se copian a `biblioteca/<lista>-<nombre>.pdf`. `urlFicha()` resuelve ambas.
-  Se unirán al PDF final después de las páginas del Anexo A (pendiente).
+  Se unen al PDF final después de las páginas del Anexo A (paso «Generar PDF final»).
 - Separación máxima de apoyos del riel (`riel.luzMax`): CHIKO 1.5 m, Alurack 2.0 m (fichas técnicas). La separación de apoyos del riel = `lamina.sep` si hay cubierta (solo lectura), si no `viento.luz` (`luzRiel()`); la correa usa `viento.luzCorrea`. Aviso en pantalla y nota impresa.
 - Correcciones acordadas frente a los Excel originales (26-oct-2026): D de lámina multiplica por la separación (el Excel dividía);
   peso de lámina kg/m ÷ ancho útil; ancho aferente del riel = L/2 (editable) en muerta, viva y viento; g = 9.81;
@@ -125,6 +125,15 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Soldaduras: formas según el elemento soldado (decisión de Amo 28-oct, `FORMAS_EL`): perfil I → I contorno, Ia solo alas, Iw solo alma, T; tubo → O, Hd/Hb dos lados, T; barra → c, T; platina (sin perfil, `de` vacío) → 1, 2, 3, L, C, U, O, T con b, d editables. Medidas del perfil con `segPerfil`; a tope = esfuerzos de la línea / t (metal base). Formas (`FORMAS`) por segmentos (`propLineas`: A, centroide, Ix, Iy, J); f = √(fx²+fy²+fz²) en cada extremo; NSR-10 φ·0.6·FEXX sobre 0.707w, metal base, tamaños mín./máx.
   Verificado: J del L 100×150 = 852 083 y G (20, 45) del ejemplo del PDF; flexión local del ala HEA 200 = 194 kN (Excel 192). Impresión `imprimirE` (E-1 resumen + E-1.n con dibujos, datos, chequeos y cálculo).
 
+## Documentos (29-oct, decisiones de Amo: F = planos, G = estudio de suelos, PDF final en dos pasos) — `documentos-ui.js`
+- Paso `FG`: `anexos.F` / `anexos.G` = {aplica, desc, nota, archivos[{nombre,path,kb,pags,fecha}]}; PDF en Supabase `<id>/anexoF|G/<ts>-<nombre>.pdf` (máx. 50 MB c/u), orden ↑↓, ver, quitar.
+- Paso `gen`: revisión de todos los pasos → Paso 1 `imprimirCompleta()` (portada + anexos A–E con `htmlAnexo()` + portadas de F y G `portadaFG()`; `@page` .85/.75/1.05 in y `@page portada{margin:0}`; B sin sismo = página con la nota de alcance)
+  → Paso 2 `unirPDF()`: pdf.js lee el texto y ubica «ANEXO X - »; pdf-lib arma: portada, índice (Garamond TTF, puntos guía), anexos, fichas técnicas del Anexo A después de A, archivos de F/G detrás de su portada;
+  rótulo en cada página (consecutivo y nombre arriba; pie del perfil y «X / Y» abajo, como la portada) y solo el número en la esquina de los PDF anexos. Opciones `gen.op` {indice, fichas, rotulo, numExt}. `gen.impreso`, `gen.unido`.
+- Librerías locales (se cargan solo en este paso): `vendor/pdf-lib.min.js` (1.17.1, MIT), `vendor/fontkit.min.js` (@pdf-lib/fontkit 1.1.1, MIT), `vendor/pdf.min.mjs` + `pdf.worker.min.mjs` (pdfjs-dist 4.10.38, Apache-2.0, `isEvalSupported:false`);
+  fuentes `fonts/ebg-400.ttf`, `ebg-600.ttf`, `ebg-400i.ttf` (EB Garamond OFL, convertidas de woff2 porque pdf-lib no incrusta woff2).
+- Pendiente: memoria general (Amo enviará ejemplo; irá entre el índice y el Anexo A), ZIP para el NAS.
+
 ## Estilo (opción A de Amo, 29-oct: sobrio, «el tamaño ordena, el color solo dice si cumple»)
 Bloque al final de `app.css`: títulos de tarjeta 16 px azul oscuro sin mayúsculas; subtítulos 12.5 px gris oscuro; totales `.wtot` en franja gris con raya azul oscuro (roja si no cumple);
 cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra a la izquierda; verde/rojo solo en Cumple / No cumple; botones azul oscuro liso.
@@ -142,7 +151,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: Anexo D elementos metálicos.
 - Hecho: Anexo D concreto (zapatas y pedestales).
 - Hecho: Anexo E conexiones (placa base, viga–columna, soldaduras).
-- Siguiente: memoria general (plantilla de Amo), F/G (PDF), archivo ZIP y PDF final con índice, rótulos y numeración.
+- Hecho: Anexos F y G (PDF) y PDF final en dos pasos (índice, fichas, rótulos, numeración).
+- Siguiente: memoria general (plantilla de Amo) y archivo ZIP para el NAS.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.

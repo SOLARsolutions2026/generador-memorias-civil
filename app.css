@@ -536,3 +536,13 @@ table.t td{border-bottom:1px solid #edf1f6}
 .btn.pri{background:var(--navy)}
 .seg button.on{background:var(--navy)}
 .chip-c.on{background:#f1f5f9;border-color:var(--navy);color:var(--navy)}
+/* ═══ Documentos: anexos F y G, PDF final ═══ */
+.doc-blk{break-before:page}
+.doc-cover{break-after:page}
+.cov-mid{text-align:center;margin-top:1.6in}
+.cov-l{font-size:30pt;font-weight:700;letter-spacing:2px;color:#1f3a60}
+.cov-t{font-size:18pt;font-weight:600;letter-spacing:1px;margin-top:6px;border-top:1.5px solid #1f3a60;border-bottom:1.5px solid #1f3a60;display:inline-block;padding:6px 18px}
+.ax .cov-p,.cov-p{text-align:center;max-width:5.2in;margin:22px auto 0;font-size:11pt;line-height:1.45}
+.doc-ol{margin:4px 0 0 20px;line-height:1.7}
+.doc-ops{display:flex;flex-direction:column;gap:6px}
+.doc-log{margin-top:10px;background:#f6f8fb;border-left:3px solid #64748b;padding:8px 12px;font-size:12px;line-height:1.6;max-height:200px;overflow:auto}

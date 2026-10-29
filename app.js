@@ -249,8 +249,8 @@ const STEPS = [
   { id:'C',  ph:'Cálculos',   n:'C', t:'Anexo C — Modelo',        s:'Datos y resultados' },
   { id:'D',  ph:'Cálculos',   n:'D', t:'Anexo D — Elementos',     s:'Metálicos y concreto' },
   { id:'E',  ph:'Cálculos',   n:'E', t:'Anexo E — Conexiones',    s:'Placas base, momento y soldaduras' },
-  { id:'FG', ph:'Documentos', n:'F', t:'Planos y suelos',         s:'Próximamente', off:1 },
-  { id:'gen',ph:'Documentos', n:'✓', t:'Generar PDF final',       s:'Próximamente', off:1 },
+  { id:'FG', ph:'Documentos', n:'F', t:'Anexos F y G',            s:'Planos y estudio de suelos (PDF)' },
+  { id:'gen',ph:'Documentos', n:'✓', t:'Generar PDF final',       s:'Índice, rótulos y numeración' },
 ];
 async function abrirMemoria(id, paso){
   if(!S.m || S.m.id !== id){
@@ -428,6 +428,8 @@ function estadoPaso(s){
   if(s.off) return '';
   if(s.id === 'ficha') return fichaCompleta() ? 'ok' : 'wip';
   if(s.id === 'revisiones') return S.revs.length ? 'ok' : 'wip';
+  if(s.id === 'FG') return S.m.anexos?.F || S.m.anexos?.G ? estadoFG() : '';
+  if(s.id === 'gen') return S.m.anexos?.gen?.unido ? 'ok' : S.m.anexos?.gen?.impreso ? 'wip' : '';
   return ANEXOS_LISTO[s.id] ? estadoAnexo(s.id) : '';
 }
 // Botones de la cabecera de cada anexo: «Imprimir anexo» y «Marcar terminado» (siempre arriba, en el mismo sitio)
@@ -516,6 +518,8 @@ K(){ paneCombos(); },
 C(){ paneAnexoC(); },
 D(){ paneAnexoD(); },
 E(){ paneAnexoE(); },
+FG(){ paneFG(); },
+gen(){ paneGen(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;
