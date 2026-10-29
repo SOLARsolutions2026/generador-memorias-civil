@@ -214,7 +214,7 @@ function pedestal(p, resistencia){
   const relV = Math.max(gobV.cx.rel, gobV.cy.rel);
   const sOk = sConf > 0 ? sConf <= sConfMax + 0.5 : null, sfOk = sFuera > 0 ? sFuera <= sFueraMax + 0.5 : null;
   const ratio = Math.max(gob.rel, relV);
-  return { ok:true, b, h, Hp, rec, fc, fy, Ag, ...B, rho, dgx, dgy, esbX, esbY, esbOk:Math.max(esbX, esbY) <= 22, dX, dY, so, Lo, bcX, bcY, Ach, ashX:ashS(bcY), ashY:ashS(bcX),
+  return { ok:true, b, h, Hp, rec, fc, fy, Ag, ...B, rho, rx, ry, est:p.est, dgx, dgy, esbX, esbY, esbOk:Math.max(esbX, esbY) <= 22, dX, dY, so, Lo, bcX, bcY, Ach, ashX:ashS(bcY), ashY:ashS(bcX),
     sAshX, sAshY, sConfMax, sFueraMax, sConf, sFuera, sOk, sfOk, anc, filas, gob, gobV, relV, ratio, rhoOk, AstMin:0.01*Ag,
     cumple: ratio <= 1 && rhoOk && Math.max(esbX, esbY) <= 22 && sOk !== false && sfOk !== false && (hz > 0 ? anc.ok : true) };
 }
