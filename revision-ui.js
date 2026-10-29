@@ -57,8 +57,8 @@ function renderRevision(){
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
     <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span>${m.variante_de || m.variante_nom ? `<span class="vchip">⧉ ${esc(m.variante_nom || 'Variante')}${m.definitiva !== false ? ' ★' : ''}</span>` : ''}
     <span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>
-    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}<button class="btn sm" type="button" id="rvFicha" title="Datos completos de la portada y control de revisiones">📋 Portada y revisiones</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>
-  <div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">Revisión de cubierta · ${pill(...(ESTADOS[m.estado] || ESTADOS.wip))}</div><h2>Verificación de correas — NSR-10</h2></div></div>
+    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}${m.tipo === 'verificacion' ? '<button class="btn sm" type="button" id="rvFicha">☰ Pasos de la verificación</button><button class="btn sm pri" type="button" id="rvImp">Generar PDF →</button></div>' : '<button class="btn sm" type="button" id="rvFicha" title="Datos completos de la portada y control de revisiones">📋 Portada y revisiones</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>'}
+  <div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">${m.tipo === 'verificacion' ? 'Verificación puntual' : 'Revisión de cubierta'} · ${pill(...(ESTADOS[m.estado] || ESTADOS.wip))}</div><h2>Verificación de correas — NSR-10</h2></div></div>
 
   <div class="card"><div class="ct">Datos del proyecto</div>
     <div class="fg g3">${inpF('proyecto', 'Proyecto', 'Ej.: Revisión cubierta Casa López')}${inpF('prop', 'Propietario / cliente')}${inpF('doc', 'Identificación (NIT / C.C.)')}
@@ -305,7 +305,7 @@ function activarRevision(R){
   $('#back').onclick = () => ir('#/');
   if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/ficha`);
-  $('#rvImp').onclick = imprimirRevision;
+  $('#rvImp').onclick = m.tipo === 'verificacion' ? () => ir(`#/m/${m.id}/gen`) : imprimirRevision;
   const cor = () => R.correas.find(c => c.id === R.activa);
   const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); $('#rvVdib').innerHTML = svgVientoRev(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx);
     if($('#rvCdg') && c.mat === 'mad'){ const k = Correas.coefMadera(c); $('#rvCdg').className = 'rv-cdg' + (k.fuera ? ' no' : ''); $('#rvCdg').textContent = `Pendiente = ${fR(k.pend, 3)} → CDG flexión ${fR(k.cdgB, 2)}${k.fuera ? ' · fuera de tabla (> 1/8): no apta' : ''}`; } };

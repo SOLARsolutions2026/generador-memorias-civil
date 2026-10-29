@@ -143,6 +143,10 @@ function activarOrdenar(D){
 function paneAnexoD(){
   const D = datosD(), C = S.m.anexos?.C, Fz = C?.modelo?.fuerzas;
   const tabs = { met:`Elementos metálicos (${D.met.length})`, zap:`Concreto: zapatas (${D.zap.length})`, ped:`Concreto: pedestales (${D.ped.length})` };
+  if(S.m.tipo === 'verificacion' && S.m.anexos?.her){   // verificación puntual: solo las pestañas de las herramientas escogidas
+    const h = S.m.anexos.her; if(!h.some(k => ['metal','placa','vc'].includes(k))) delete tabs.met; if(!h.some(k => ['zapata','placa'].includes(k))){ delete tabs.zap; if(!h.includes('placa')) delete tabs.ped; }
+    if(h.includes('placa') && !h.includes('zapata')) delete tabs.zap;
+    if(!tabs[tabD]) tabD = Object.keys(tabs)[0] || 'met'; }
   let h = `<div class="tabs" role="tablist">${Object.entries(tabs).map(([k, v]) => `<button type="button" role="tab" data-tabd="${k}" class="${tabD === k ? 'on' : ''}">${v}</button>`).join('')}</div>`;
   // Aviso de derivas (se revisan en el Anexo C antes de diseñar; pedido de Amo 29-oct)
   const dr = C?.der?.res, bOn = S.m.anexos?.B?.aplica !== false && S.m.anexos?.B;
@@ -165,7 +169,7 @@ function paneAnexoD(){
   $$('[data-sel]').forEach(b => b.onclick = () => { selMet = b.dataset.sel; paneAnexoD(); });
   if(!esIng()){ if(sel) pintarResMet(sel); return; }
   activarOrdenar(D);
-  if($('#dNuevo')) $('#dNuevo').onclick = () => { const e = nuevoMet(D.met.length + 1); D.met.push(e); selMet = e.id; guardarMemoria(); paneAnexoD(); };
+  if($('#dNuevo')) $('#dNuevo').onclick = () => { const e = nuevoMet(D.met.length + 1, S.m.anexos?.C?.modelo ? {} : { fuerzas:'manual' }); D.met.push(e); selMet = e.id; guardarMemoria(); paneAnexoD(); };
   if($('#dDesdeC')) $('#dDesdeC').onclick = async () => {
     const usados = new Set(D.met.map(e => e.grupo)), omit = [];
     let G = null; try{ toast('Leyendo el modelo…', 15000); G = await filasModelo(); }catch(e){ console.warn(e); }

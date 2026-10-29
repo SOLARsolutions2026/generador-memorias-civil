@@ -113,7 +113,7 @@ async function htmlAnexo(id){
   if(id === 'E'){ const E = datosE(), D = datosD(); if(!E.con.length) return null; const ctx = await ctxE(); return anexoEPrintHTML(E.con.map(c => ({ c, X:calcE(c, D, ctx) })), D); }
   return null;
 }
-const TIT_AX = { A:'Análisis de cargas', B:'Fuerza horizontal equivalente', C:'Modelo estructural', D:'Diseño de elementos', E:'Diseño de conexiones', F:'Planos estructurales', G:'Estudio de suelos' };
+const TIT_AX = { A:'Análisis de cargas', B:'Fuerza horizontal equivalente', C:'Modelo estructural', D:'Diseño de elementos', E:'Diseño de conexiones', F:'Planos estructurales', G:'Estudio de suelos', R:'Verificación de correas' };
 // Página separadora antes de cada anexo (como en la memoria de Amo); la marca @@S<letra>@@ le dice al paso 2 dónde empieza
 const sepAnexo = L => `<div class="doc-blk doc-sep"><span class="mk">@@S${L}@@</span><div class="sep-l">ANEXO ${L}</div><div class="sep-t">${esc(TIT_AX[L])}</div></div>`;
 async function imprimirCompleta(){
@@ -122,13 +122,14 @@ async function imprimirCompleta(){
   try{
     const [uImg, uFirma] = await Promise.all([urlDe(m.imagen_path), urlDe(S.cfg.firma_path)]);
     partes.push(portadaHTML(true, uImg, uFirma));
-    let mem = null; try{ mem = await htmlMemoria(); partes.push(mem.html); }catch(e){ console.warn(e); omit.push('memoria general'); }
-    for(const L of ['A','B','C','D','E']){
+    let mem = null; if(!esVer()) try{ mem = await htmlMemoria(); partes.push(mem.html); }catch(e){ console.warn(e); omit.push('memoria general'); }
+    for(const L of ['A','B','C','D','E'].filter(L => !esVer() || modsDe(m).includes(L))){
       let h = null; try{ h = await htmlAnexo(L); }catch(e){ console.warn(e); }
       if(h){ if(op.sep !== false) partes.push(sepAnexo(L)); partes.push(`<div class="doc-blk">${h}</div>`); incl.push(L); } else omit.push('Anexo ' + L);
     }
+    if(esVer() && modsDe(m).includes('R')){ try{ const h = await revisionPrintHTML(); if(op.sep !== false) partes.push(sepAnexo('R')); partes.push(`<div class="doc-blk"><span class="mk">@@SR@@</span>${h}</div>`); incl.push('R'); }catch(e){ console.warn(e); omit.push('correas'); } }
     // F o G con «No» no llevan hoja; con «Sí» sí, aunque no tengan PDF (Amo puede unirlo por fuera) — pedido de Amo 29-oct
-    for(const k of ['F','G']){ const X = datosFG(k); if(X.aplica === false){ omitNA.push('Anexo ' + k); continue; } partes.push(portadaFG(k)); incl.push(k); }
+    for(const k of esVer() ? [] : ['F','G']){ const X = datosFG(k); if(X.aplica === false){ omitNA.push('Anexo ' + k); continue; } partes.push(portadaFG(k)); incl.push(k); }
     const gen = m.anexos.gen = m.anexos.gen || {};
     gen.impreso = { fecha:new Date().toISOString(), incl, toc:mem?.toc || [], tabs:mem?.tabs || [], figs:mem?.figs || [] }; guardarMemoria();
     // la portada va sola (margen 0); el resto dentro de .doc-cuerpo con los márgenes laterales como relleno, para que nada
@@ -159,8 +160,8 @@ async function unirPDF(file, op, log){
   const ini = {}, sep = {}, pH = {}, pT = {}, pF = {};
   for(let i = 1; i <= n; i++){
     const tc = await (await doc.getPage(i)).getTextContent(), raw = tc.items.map(x => x.str).join(''), t = tc.items.map(x => x.str).join(' ').replace(/\s+/g, ' ');
-    const mm = t.match(/ANEXO ([A-G]) - /); if(mm && ini[mm[1]] == null) ini[mm[1]] = i - 1;
-    for(const x of raw.replace(/\s+/g, '').matchAll(/@@([HTFS])([A-G]|\d+)@@/g)){ const tb = { H:pH, T:pT, F:pF, S:sep }[x[1]]; if(tb[x[2]] == null) tb[x[2]] = i - 1; }
+    const mm = t.match(/ANEXO ([A-GR]) - /); if(mm && ini[mm[1]] == null) ini[mm[1]] = i - 1;
+    for(const x of raw.replace(/\s+/g, '').matchAll(/@@([HTFS])([A-GR]|\d+)@@/g)){ const tb = { H:pH, T:pT, F:pF, S:sep }[x[1]]; if(tb[x[2]] == null) tb[x[2]] = i - 1; }
   }
   for(const L of Object.keys(sep)) if(ini[L] == null || sep[L] < ini[L]) ini[L] = sep[L];
   const letras = Object.keys(ini).sort((a, b) => ini[a] - ini[b]);
@@ -265,6 +266,7 @@ async function unirPDF(file, op, log){
 }
 
 // ═══ Paso «Generar PDF final» ═══
+const esVer = () => S.m?.tipo === 'verificacion';   // verificación puntual: sin memoria general ni anexos F/G, solo los módulos escogidos
 function paneGen(){
   const an = S.m.anexos || {}, gen = an.gen = an.gen || {}, op = gen.op = gen.op || { indice:true, rotulo:true, fichas:true, numExt:true };
   const est = s => s === 'ok' ? pill('ok', 'Listo') : s === 'wip' ? pill('pend', 'En proceso') : pill('gray', 'Sin datos');
@@ -272,16 +274,16 @@ function paneGen(){
     ['Ficha del proyecto', fichaCompleta() ? 'ok' : 'wip', 'ficha'],
     ['Control de revisiones', S.revs.length ? 'ok' : 'wip', 'revisiones'],
     ['Imagen de portada y firma', S.m.imagen_path && S.cfg.firma_path ? 'ok' : 'wip', 'portada'],
-    ...['A','B','K','C','D','E'].map(id => [STEPS.find(s => s.id === id).t, estadoPaso(STEPS.find(s => s.id === id)) || '', id]),
-    ['Memoria general (capítulos 1 a 10)', S.m.anexos?.M ? 'ok' : '', 'MG'],
-    ['Anexos F y G — planos y suelos', estadoFG(), 'FG'],
+    ...['A','B','K','C','D','E'].filter(id => !esVer() || modsDe(S.m).includes(id)).map(id => [STEPS.find(s => s.id === id).t, estadoPaso(STEPS.find(s => s.id === id)) || '', id]),
+    ...(esVer() && modsDe(S.m).includes('R') ? [['Correas', estadoPaso(STEP_R) || '', 'R']] : []),
+    ...(esVer() ? [] : [['Memoria general (capítulos 1 a 10)', S.m.anexos?.M ? 'ok' : '', 'MG'], ['Anexos F y G — planos y suelos', estadoFG(), 'FG']]),
   ];
   const falt = filas.filter(f => f[1] !== 'ok').length, fic = fichasTec();
   pane(`<div class="card"><div class="ct"><span>Revisión antes de generar</span>${falt ? pill('pend', `${falt} por revisar`) : pill('ok', 'Todo listo')}</div>
       <div class="tw"><table class="t"><tbody>${filas.map(([t, s, id]) => `<tr><td>${esc(t)}</td><td>${est(s)}</td><td style="text-align:right"><button class="btn sm" type="button" data-irp="${id}">Ir</button></td></tr>`).join('')}</tbody></table></div>
       <p class="hint" style="margin-top:6px">No es obligatorio que todo esté listo: lo que falte simplemente no sale o sale incompleto.</p></div>
     <div class="card"><div class="ct"><span>Paso 1 · Imprimir la memoria completa</span>${gen.impreso ? `<span class="hint">última vez: ${new Date(gen.impreso.fecha).toLocaleString('es-CO', { dateStyle:'short', timeStyle:'short' })}</span>` : ''}</div>
-      <p style="margin-bottom:8px">Sale en una sola impresión: la portada, el cuerpo de la memoria (capítulos 1 a 10), los anexos A a E con su página separadora y las portadas de los anexos F y G.</p>
+      <p style="margin-bottom:8px">${esVer() ? 'Sale en una sola impresión: la portada y los módulos de la verificación, cada uno con su página separadora.' : 'Sale en una sola impresión: la portada, el cuerpo de la memoria (capítulos 1 a 10), los anexos A a E con su página separadora y las portadas de los anexos F y G.'}</p>
       <ol class="doc-ol"><li>Toca <b>Imprimir memoria completa</b>.</li><li>En el cuadro de impresión escoge <b>Guardar como PDF</b>, tamaño <b>Carta</b> y márgenes <b>Predeterminados</b>.</li>
         <li>En «Más opciones» <b>quita</b> «Encabezados y pies de página» y <b>marca</b> «Gráficos de fondo».</li><li>Guarda el archivo (por ejemplo en Descargas).</li></ol>
       <button class="btn pri" type="button" id="genImp" style="margin-top:8px">🖨 Imprimir memoria completa</button></div>

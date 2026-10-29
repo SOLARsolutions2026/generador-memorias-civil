@@ -190,7 +190,7 @@ async function renderLista(){
   <div class="mlist">${grupos.length ? grupos.map(g => {
       const m = g.def, f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
-      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : ''}</div>
+      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : ''}</div>
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div></div>
         <div class="acts">${acts(g)}</div></div>
         ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; }).join('')
@@ -223,9 +223,43 @@ function nuevaMemoria(){
     <div class="tipo-mem">
       <button type="button" class="tcard" data-tipo="completo"><span class="ic">🏗️</span><b>Diseño completo</b><span>Estructura metálica nueva: cargas, sismo, modelo, elementos, conexiones y cimentación.</span><small>Anexos A a G · sismo opcional</small></button>
       <button type="button" class="tcard" data-tipo="revision"><span class="ic">🔍</span><b>Revisión de cubierta</b><span>Verificar si la cubierta existente soporta los paneles solares u otra carga. Una sola página para llenar en campo.</span><small>Correas metálicas y de madera · viento · fotos</small></button></div>`);
-  $$('[data-tipo]', md).forEach(b => b.onclick = () => { cerrar(); crearMemoria(b.dataset.tipo); });
+  $('.tipo-mem', md).insertAdjacentHTML('beforeend', `<button type="button" class="tcard" data-tipo="verificacion"><span class="ic">🧰</span><b>Verificación puntual</b><span>Solo los módulos que necesites, con datos escritos a mano: un FHE, una conexión, un elemento…</span><small>Consecutivo, portada y PDF</small></button>`);
+  $('.tipo-mem', md).insertAdjacentHTML('afterend', `<div class="ver-mods" id="verMods" hidden><h4 class="sub" style="margin-top:14px">Herramientas — verificaciones puntuales</h4>${herrHTML([])}
+    <div class="nav-btns" style="margin-top:10px"><button class="btn pri" type="button" id="verCrear">Crear verificación</button></div></div>`);
+  activarHerr(md);
+  $$('[data-tipo]', md).forEach(b => b.onclick = () => {
+    if(b.dataset.tipo !== 'verificacion'){ cerrar(); return crearMemoria(b.dataset.tipo); }
+    $$('[data-tipo]', md).forEach(x => x.classList.toggle('on', x === b)); $('#verMods', md).hidden = false; });
+  $('#verCrear', md).onclick = () => { const her = $$('[data-her].on', md).map(b => b.dataset.her); if(!her.length) return toast('Escoge al menos una herramienta.'); cerrar(); crearMemoria('verificacion', her); };
 }
-async function crearMemoria(tipo){
+// ─── Verificación puntual (pedido de Amo 29-oct, opción B con la cuadrícula de herramientas de la opción A) ───
+// Cada herramienta abre los pasos (módulos) que necesita; los datos se escriben a mano.
+const HERR = [
+  { k:'viento', ic:'🌬️', n:'Viento y cargas', s:'Cargas muerta, viva y viento B.6.5 de una cubierta', m:['A'] },
+  { k:'fhe',    ic:'🏢', n:'Fuerza horizontal equivalente', s:'FHE con el peso W y la altura escritos a mano', m:['B'] },
+  { k:'metal',  ic:'📏', n:'Elemento metálico', s:'Perfil I, tubo o barra con P, V y M a mano', m:['D'] },
+  { k:'placa',  ic:'🔩', n:'Placa base', s:'Placa, anclajes y soldadura sobre un pedestal', m:['D','E'] },
+  { k:'vc',     ic:'🔗', n:'Conexión viga–columna', s:'Pernada con platinas cubrejuntas y cartela', m:['D','E'] },
+  { k:'sold',   ic:'🔥', n:'Soldadura', s:'Cualquier forma de cordón, filete o a tope', m:['E'] },
+  { k:'zapata', ic:'🧱', n:'Zapata / pedestal', s:'Cimentación con cargas escritas a mano', m:['D'] },
+  { k:'correa', ic:'🪵', n:'Correa', s:'Correa de cubierta metálica o de madera', m:['R'] },
+  { k:'modelo', ic:'🖥️', n:'Modelo del software', s:'Si tienes el archivo del modelo (fuerzas y reacciones)', m:['C'] },
+  { k:'combos', ic:'∑', n:'Combinaciones', s:'Irregularidades y combinaciones NSR-10 B.2', m:['K'] },
+];
+const ORDEN_MODS = ['A','B','K','C','D','E','R'];
+const modsDeHer = her => ORDEN_MODS.filter(id => HERR.some(h => her.includes(h.k) && h.m.includes(id)));
+const herDe = m => m.anexos?.her || (m.anexos?.mods || []).flatMap(id => ({ A:['viento'], B:['fhe'], K:['combos'], C:['modelo'], D:['metal'], E:['vc'], R:['correa'] }[id] || []));
+const herrHTML = sel => `<div class="her-grid">${HERR.map(h => `<button type="button" class="her ${sel.includes(h.k) ? 'on' : ''}" data-her="${h.k}" aria-pressed="${sel.includes(h.k)}"><i>${h.ic}</i><b>${h.n}</b><span>${h.s}</span></button>`).join('')}</div>
+  <p class="hint">Toca las herramientas que necesites (puedes escoger varias). Cada una abre su pantalla de cálculo con los datos escritos a mano.</p>`;
+function activarHerr(root, alCambiar){
+  $$('[data-her]', root).forEach(b => b.onclick = () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on'));
+    alCambiar && alCambiar($$('[data-her].on', root).map(x => x.dataset.her)); });
+}
+const modsDe = m => m.anexos?.her ? modsDeHer(m.anexos.her) : (m.anexos?.mods || []);
+const STEP_R = { id:'R', ph:'Cálculos', n:'R', t:'Correas', s:'Metálicas o de madera' };
+const STEPS_VER = m => { const md = modsDe(m);
+  return [...STEPS.filter(s => ['ficha','revisiones','portada'].includes(s.id)), ...STEPS.filter(s => md.includes(s.id)), ...(md.includes('R') ? [STEP_R] : []), STEPS.find(s => s.id === 'gen')]; };
+async function crearMemoria(tipo, her){
   const btn = $('#nueva'); btn.disabled = true;
   try{
     const d = new Date(), p2 = n => String(n).padStart(2,'0');
@@ -237,13 +271,14 @@ async function crearMemoria(tipo){
     const perfil = S.perfiles.find(x => x.predeterminado) || S.perfiles[0];
     const hoy = hoyISO();
     const { data:m, error } = await sb.from('mem_memorias').insert({
-      consecutivo:cons, titulo:tipo === 'revision' ? 'Nueva revisión de cubierta' : 'Nueva memoria', perfil_id:perfil?.id || null, tipo,
-      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:tipo === 'revision' ? 'MEMORIA DE CÁLCULO REVISIÓN DE CUBIERTA' : TITULO_DEF },
+      consecutivo:cons, titulo:tipo === 'revision' ? 'Nueva revisión de cubierta' : tipo === 'verificacion' ? 'Nueva verificación puntual' : 'Nueva memoria', perfil_id:perfil?.id || null, tipo,
+      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:tipo === 'revision' ? 'MEMORIA DE CÁLCULO REVISIÓN DE CUBIERTA' : tipo === 'verificacion' ? 'MEMORIA DE CÁLCULO — VERIFICACIÓN ESTRUCTURAL' : TITULO_DEF },
+      ...(tipo === 'verificacion' ? { anexos:{ her:her || [], mods:modsDeHer(her || []) } } : {}),
     }).select().single();
     if(error) throw error;
     await sb.from('mem_revisiones').insert({ memoria_id:m.id, rev:0, fecha:hoy, descripcion:'Emisión inicial', elaboro:S.cfg.iniciales || '', reviso:'', aprobo:'' });
     toast(`Memoria ${cons} creada.`);
-    ir(`#/m/${m.id}/${tipo === 'revision' ? 'R' : 'ficha'}`);
+    ir(`#/m/${m.id}/${tipo === 'revision' ? 'R' : tipo === 'verificacion' ? (modsDeHer(her || [])[0] || 'ficha') : 'ficha'}`);
   }catch(e){ err(e, 'No se pudo crear'); btn.disabled = false; }
 }
 
@@ -293,12 +328,13 @@ async function abrirMemoria(id, paso){
   }
   if(!esIng()) paso = 'portada';
   if(S.m.tipo === 'revision'){ if(!['ficha','revisiones','portada'].includes(paso)) return renderRevision(); return renderWS(paso); }
+  if(S.m.tipo === 'verificacion'){ if(paso === 'R' && modsDe(S.m).includes('R')) return renderRevision(); return renderWS(STEPS_VER(S.m).some(s => s.id === paso) ? paso : 'ficha'); }
   renderWS(STEPS.some(s => s.id === paso && !s.off) ? paso : 'ficha');
 }
 // Revisión de cubierta: solo los pasos del proyecto y la página única «R» (pedido de Amo 29-oct)
 const STEPS_REV = () => [...STEPS.filter(s => ['ficha','revisiones','portada'].includes(s.id)), { id:'R', ph:'Revisión', n:'R', t:'Revisión de cubierta', s:'Correas, viento y fotos' }];
 function renderWS(cur){
-  const m = S.m, pasos = esIng() ? (m.tipo === 'revision' ? STEPS_REV() : STEPS) : STEPS.filter(s => s.id === 'portada');
+  const m = S.m, pasos = esIng() ? (m.tipo === 'revision' ? STEPS_REV() : m.tipo === 'verificacion' ? STEPS_VER(m) : STEPS) : STEPS.filter(s => s.id === 'portada');
   const st = estadoPaso;
   let ph = '', side = '';
   pasos.forEach(s => { if(s.ph !== ph){ ph = s.ph; side += `<div class="ph">${ph}</div>`; }
@@ -561,7 +597,7 @@ gen(){ paneGen(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;
-  pane(`
+  pane(`${m.tipo === 'verificacion' ? `<div class="card"><div class="ct">Herramientas de esta verificación</div>${herrHTML(herDe(m))}<p class="hint">Al quitar una herramienta sus datos no se borran: solo deja de verse en los pasos y en el PDF.</p></div>` : ''}
   <div class="card"><div class="ct">Identificación del documento</div>
     <div class="fg g4">
       <div class="f"><label>Consecutivo</label><input value="${esc(m.consecutivo)}" readonly/><div class="hint">Automático: ${esc(S.cfg.prefijo||'DOC-MEM')}-DD-MM-AA</div></div>
@@ -601,6 +637,7 @@ ficha(){
   }));
   $('#f_perfil').onchange = e => { m.perfil_id = e.target.value; prev(); guardarMemoria(); };
   $('#f_estado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado==='apr' ? 'Aprobada: ya la puede ver el resto de la empresa.' : 'En proceso: solo tú la ves.'); };
+  if(m.tipo === 'verificacion') activarHerr($('#pane'), her => { if(!her.length) return toast('Deja al menos una herramienta.'), PANES.ficha(); m.anexos = m.anexos || {}; m.anexos.her = her; m.anexos.mods = modsDeHer(her); guardarMemoria(); renderWS('ficha'); });
   $$('[data-tipo]').forEach(b => b.onclick = () => {
     F.tipo = b.dataset.tipo;
     if(F.tipo === 'natural' && (F.docTipo||'NIT') === 'NIT') F.docTipo = 'C.C.';

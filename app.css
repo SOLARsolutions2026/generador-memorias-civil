@@ -637,3 +637,11 @@ table.t td{border-bottom:1px solid #edf1f6}
 .rv-ref-img img{max-height:150px;max-width:100%;object-fit:contain}.rv-ref-img svg{height:140px;width:auto;max-width:100%}
 .rv-ref-b{padding:10px 12px;font-size:12.5px}.rv-ref-b>b{color:var(--navy,#1f3a60);font-size:13px}.rv-ref-b .f{margin:8px 0 4px}.rv-ref-b p{color:#475569;line-height:1.45;margin:6px 0 0}
 .rv-cdg{margin-top:8px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12.5px}.rv-cdg.no{border-color:#fecaca;background:#fef2f2;color:#991b1b}
+/* Verificación puntual: cuadrícula de herramientas (opción A dentro de la opción B, pedido de Amo 29-oct) */
+.her-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:6px}
+.her{display:flex;flex-direction:column;gap:3px;text-align:left;border:2px solid #d5dbe5;border-radius:12px;padding:11px 12px;background:#fff;cursor:pointer;font:inherit;color:#334155;position:relative}
+.her:hover{border-color:#94a3b8}.her.on{border-color:var(--navy,#1f3a60);background:#f4f7fc}.her.on::after{content:'✓';position:absolute;top:8px;right:10px;color:var(--navy,#1f3a60);font-weight:800}
+.her i{font-style:normal;font-size:22px}.her b{font-size:13.5px;color:var(--navy,#1f3a60)}.her span{font-size:11.5px;color:#64748b;line-height:1.35}
+.modal .box2:has(.her-grid){max-width:900px}
+.tipo-mem{grid-template-columns:repeat(3,minmax(0,1fr))}.tcard.on{border-color:var(--navy,#1f3a60);background:#f4f7fc}
+@media (max-width:760px){.tipo-mem{grid-template-columns:1fr}}

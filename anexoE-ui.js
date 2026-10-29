@@ -21,7 +21,7 @@ const numE = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); ret
 function sigNom(E, tipo){ const pre = TIPOS_E[tipo].pre, ns = E.con.filter(c => c.tipo === tipo).map(c => parseInt(String(c.nom).split('-')[1]) || 0); return `${pre}-${Math.max(0, ...ns) + 1}`; }
 function sigPL(E){ const ns = E.con.map(c => parseInt(String(c.plN || '').split('-')[1]) || 0); return `PL-${Math.max(0, ...ns) + 1}`; }
 function nuevaCon(tipo, E, D){
-  const base = { id:'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), tipo, nom:sigNom(E, tipo), etiqueta:'', desc:'', cargas:'modelo', extremo:'ambos', nudos:[], res:null };
+  const base = { id:'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), tipo, nom:sigNom(E, tipo), etiqueta:'', desc:'', cargas:S.m.anexos?.C?.modelo ? 'modelo' : 'manual', extremo:'ambos', nudos:[], res:null };
   const col = D.met.find(e => e.tipo === 'I' && /col/i.test(e.desc || '')) || D.met.find(e => e.tipo === 'I'), viga = D.met.find(e => e.tipo === 'I' && /viga/i.test(e.desc || '') && e !== col);
   if(tipo === 'placa') return { ...base, de:col?.id || '', a:D.ped[0]?.id || '', plN:sigPL(E), ori:'y', N:300, B:300, tp:12.7, aceroPlaca:'A36', Lp:400, Wp:400, ha:1180, fc:21,
     perno:'5/8"', anclaje:'A36', nB:2, S1:220, S2:200, hef:300, arandela:50, cabeza:'tuerca', eh:'', fisurado:true, mortero:false, w:6, electrodo:'E70XX',
@@ -302,7 +302,7 @@ function paneAnexoE(){
   const E = datosE(), D = datosD(), ing = esIng();
   const sel = E.con.find(c => c.id === selE) || E.con[0]; selE = sel?.id || null;
   const gal = ing ? `<div class="card"><div class="ct">Agregar conexión <span class="hint" style="text-transform:none;letter-spacing:0">toca el tipo</span></div>
-    <div class="e-gal">${Object.entries(TIPOS_E).map(([k, t]) => `<button type="button" class="e-tc" data-nueva="${k}">${miniE(k)}<b>${t.n}</b><span>${t.s}</span></button>`).join('')}</div>
+    <div class="e-gal">${Object.entries(TIPOS_E).filter(([k]) => S.m.tipo !== 'verificacion' || !S.m.anexos?.her || S.m.anexos.her.includes(k)).map(([k, t]) => `<button type="button" class="e-tc" data-nueva="${k}">${miniE(k)}<b>${t.n}</b><span>${t.s}</span></button>`).join('')}</div>
     ${!D.met.length ? '<div class="note amber" style="margin-top:8px">Primero crea los perfiles y pedestales en el Anexo D: las conexiones toman de ahí sus medidas y sus fuerzas.</div>' : ''}</div>` : '';
   const lista = `${E.con.map(c => `<button type="button" class="d-el ${c.id === selE ? 'on' : ''}" data-sele="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(TIPOS_E[c.tipo].n)}
       <small class="e-lbl">${esc(etiquetaE(c, D))}</small>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span>${pillRes(c.res)}</button>`).join('')}

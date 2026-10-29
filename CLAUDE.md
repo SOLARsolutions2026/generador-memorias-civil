@@ -175,6 +175,12 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Sin imagen de portada en las revisiones (pedido de Amo 29-oct: en campo no hay tiempo): `portadaHTML` omite el recuadro y la ficha oculta esa tarjeta si `tipo === 'revision'`.
 - Impresión `imprimirRevision()`: portada de la app + `revisionPrintHTML()` (1 generalidades, normas; 2 cargas y viento; 3.n cada correa con paso a paso y tabla; 4 conclusión y firma; 5 fotos). Rótulo con cajas de margen de @page (consecutivo y nombre arriba, pie del perfil, «X / Y»); la portada en `@page portada` sin rótulo. Ojo: el salto de línea dentro de `content:` va como `\A` (un salto real rompe el CSS y se pierde `@page portada`).
 
+## Verificación puntual (29-oct, opción B de Amo con la cuadrícula de herramientas de la opción A) — app.js
+- `tipo = 'verificacion'` (check ampliado). Al tocar la tarjeta en «Nueva memoria» aparece la cuadrícula `HERR` (viento, FHE, elemento metálico, placa base, viga–columna, soldadura, zapata/pedestal, correa, modelo, combinaciones; varias a la vez) → `crearMemoria('verificacion', her)`.
+- `anexos.her` (herramientas) → `modsDeHer` = pasos en orden A, B, K, C, D, E, R; `anexos.mods` se guarda igual (compatibilidad). `STEPS_VER(m)` = ficha, revisiones, portada + pasos + `STEP_R` (correas = página `renderRevision`, con botones «☰ Pasos» y «Generar PDF →») + gen. Las herramientas se cambian en la ficha (sus datos no se borran).
+- Todo con datos a mano: D metálicos `fuerzas:'manual'` sin modelo, zapatas/pedestales con `cargasManCimHTML` (`el.man[]` servicio/resistencia; `usaManCim`), E `cargas:'manual'`. Pestañas del D y galería del E filtradas por las herramientas.
+- PDF: paso gen sin memoria general ni F/G; R con separador «ANEXO R — Verificación de correas» y marca `@@SR@@` (las expresiones de `unirPDF` aceptan R).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
@@ -191,6 +197,7 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: Anexos F y G (PDF) y PDF final en dos pasos (índice, fichas, rótulos, numeración).
 - Hecho: memoria general (capítulos 1–10) con tabla de contenido y listas.
 - Hecho: revisión de cubierta (correas metálicas y de madera) en una página.
+- Hecho: verificación puntual (herramientas con datos a mano).
 - Siguiente: archivo ZIP para el NAS.
 
 ## Pruebas

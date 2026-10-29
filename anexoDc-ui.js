@@ -17,6 +17,23 @@ async function reacModelo(){
   if(_reac?.clave === C.archivo.fecha) return _reac.R;
   const R = AnexoC.reacciones(await textoModelo(C)); _reac = { clave:C.archivo.fecha, R }; return R;
 }
+// Cargas escritas a mano en zapatas y pedestales (verificación puntual o sin reacciones del modelo; pedido de Amo 29-oct)
+const usaManCim = el => !(S.m.anexos?.C?.modelo?.reac?.n) || el.cargas === 'manual';
+const filasManCim = el => (el.man || []).map((r, i) => ({ j:'—', c:(r.n || '').trim() || `${r.tipo === 'res' ? 'Resistencia' : 'Servicio'} ${i + 1}`, tipo:r.tipo || 'serv',
+  F1:num0(r.Vx), F2:num0(r.Vy), F3:num0(r.P), M1:num0(r.Mx), M2:num0(r.My), M3:0 }));
+function cargasManCimHTML(el, M){
+  const ro_ = esIng() ? '' : 'disabled';
+  let h = M?.reac?.n ? `<label class="chk" style="margin:6px 0"><input type="checkbox" data-cman ${el.cargas === 'manual' ? 'checked' : ''} ${ro_}/> Escribir las cargas a mano (en vez de las reacciones del modelo)</label>` : '';
+  if(!usaManCim(el)) return h;
+  const rows = el.man || [], c = (i, k, w) => `<td><input data-mc="${i}|${k}" value="${esc(rows[i][k] ?? '')}" inputmode="decimal" style="width:${w || 70}px" ${ro_}/></td>`;
+  return h + `<h4 class="sub">Cargas sobre ${esc(el.nom)} (escritas a mano)</h4>
+    <div class="tw"><table class="t man-cim"><thead><tr><th>Tipo</th><th>Nombre</th><th>P (kN)</th><th>Vx (kN)</th><th>Vy (kN)</th><th>Mx (kN·m)</th><th>My (kN·m)</th><th></th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr><td><select data-mc="${i}|tipo" ${ro_}><option value="serv" ${r.tipo !== 'res' ? 'selected' : ''}>Servicio</option><option value="res" ${r.tipo === 'res' ? 'selected' : ''}>Resistencia</option></select></td>
+      <td><input data-mc="${i}|n" value="${esc(r.n || '')}" placeholder="Ej.: D + L" style="width:110px" ${ro_}/></td>${c(i, 'P')}${c(i, 'Vx')}${c(i, 'Vy')}${c(i, 'Mx')}${c(i, 'My')}
+      <td>${esIng() ? `<button class="btn sm danger" type="button" data-mdel="${i}" aria-label="Quitar">✕</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">Agrega al menos una carga de servicio y una de resistencia.</td></tr>'}</tbody></table></div>
+    ${esIng() ? '<div class="nav-btns" style="margin-top:6px"><button class="btn sm" type="button" data-madd="serv">+ Carga de servicio</button><button class="btn sm" type="button" data-madd="res">+ Carga de resistencia (mayorada)</button></div>' : ''}
+    <p class="hint">P = compresión sobre el apoyo (positiva). Vx y My actúan en la dirección x; Vy y Mx en la dirección y. Servicio = sin mayorar (presión sobre el suelo); resistencia = mayoradas (diseño del concreto).</p>`;
+}
 const combosD = (D, M) => ({ serv: D.cServ || M?.reac?.serv || [], res: D.cRes || M?.reac?.res || [] });
 const filasReac = (R, nudos, casos) => !R ? [] : R.filas.filter(f => nudos.includes(f.j) && casos.includes(f.c));
 const filaReacTxt = f => !f ? '' : `nudo ${esc(f.j)} · ${esc(f.c)}${f.step ? ' (' + esc(f.step) + ')' : ''}`;
@@ -25,6 +42,7 @@ const BAR_OPC = (cur, ro_) => Object.keys(Concreto.BARRAS).map(k => `<option val
 // Barra superior común: combinaciones de servicio / resistencia para la cimentación
 function combosCimHTML(D, M){
   const ro_ = esIng() ? '' : 'disabled', casos = M?.reac?.casos || [], c = combosD(D, M);
+  if(!S.m.anexos?.C?.modelo) return '<div class="note blue">Sin modelo del software: escribe las cargas de servicio y de resistencia de cada elemento a mano.</div>';
   if(!M?.reac?.n) return `<div class="note amber">El archivo del modelo no trae reacciones. Al exportar marca <b>Analysis Results → Joint Output → Reactions</b> con las combinaciones de servicio y de resistencia, y usa «Reemplazar» en el Anexo C.</div>`;
   const chips = (k, sel) => `<div class="chips-c">${casos.map(x => `<label class="chip-c ${sel.includes(x) ? 'on' : ''}"><input type="checkbox" data-cc="${k}" value="${esc(x)}" ${sel.includes(x) ? 'checked' : ''} ${ro_}/> ${esc(x)}</label>`).join('')}</div>`;
   return `<details class="d-opc" style="margin-bottom:10px"><summary>Combinaciones usadas (servicio ${c.serv.length} · resistencia ${c.res.length})</summary>
@@ -57,6 +75,12 @@ function paneConcreto(tipo, h){
     $$('[data-cc]').forEach(i => i.onchange = () => { const c = combosD(D, M), k = i.dataset.cc, s = new Set(c[k]); i.checked ? s.add(i.value) : s.delete(i.value);
       if(k === 'serv') D.cServ = [...s]; else D.cRes = [...s]; guardarMemoria(); paneAnexoD(); });
     activarOrdenar(D);
+    if(sel){
+      $$('[data-mc]').forEach(i => i.onchange = () => { const [k, c] = i.dataset.mc.split('|'); sel.man[+k][c] = i.value; guardarMemoria(); paneAnexoD(); });
+      $$('[data-madd]').forEach(b => b.onclick = () => { sel.man = sel.man || []; sel.man.push({ tipo:b.dataset.madd, n:'', P:'', Vx:'', Vy:'', Mx:'', My:'' }); guardarMemoria(); paneAnexoD(); });
+      $$('[data-mdel]').forEach(b => b.onclick = () => { sel.man.splice(+b.dataset.mdel, 1); guardarMemoria(); paneAnexoD(); });
+      if($('[data-cman]')) $('[data-cman]').onchange = e => { sel.cargas = e.target.checked ? 'manual' : ''; guardarMemoria(); paneAnexoD(); };
+    }
     $('#cNuevo').onclick = () => { const e = tipo === 'zap' ? nuevoZap(D.zap.length + 1) : nuevoPed(D.ped.length + 1);
       if(M?.reac?.nudos?.length && !lista.length) e.nudos = [...M.reac.nudos];
       if(tipo === 'zap' && D.ped[0]) e.ped = D.ped[0].id; if(tipo === 'ped' && D.zap[0]) e.zap = D.zap[0].id;
@@ -70,7 +94,7 @@ function detZapHTML(z, D, M){
   return `<div class="card"><div class="ct">${esc(z.nom)} · zapata ${esc(z.pos)}${esIng() ? '<button class="btn sm danger" type="button" id="cBorrar">Borrar</button>' : ''}</div>
     <div class="fg g4">${fIn(z,'nom','Nombre',{num:false})}${fIn(z,'desc','Descripción',{num:false,cls:'span2'})}
       <div class="f"><label>Posición del pedestal</label><select data-a="pos" ${ro_}>${opt('centrada','Centrada (αs = 40)',z.pos)}${opt('medianera','Medianera: en un borde (αs = 30)',z.pos)}${opt('esquinera','Esquinera: en una esquina (αs = 20)',z.pos)}</select></div></div>
-    ${nudosHTML(z, M)}
+    ${usaManCim(z) ? '' : nudosHTML(z, M)}${cargasManCimHTML(z, M)}
     <h4 class="sub">Geometría [m]</h4>
     <div class="fg g4">${fIn(z,'B','B (dirección x)')}${fIn(z,'L','L (dirección y)')}${fIn(z,'h','Espesor h')}${fIn(z,'Df','Profundidad de la base Df')}</div>
     <div class="fg g4"><div class="f"><label>Pedestal</label><select data-a="ped" ${ro_}>${opt('','— medidas a mano —',z.ped)}${D.ped.map(p => opt(p.id, `${p.nom} (${p.b}×${p.h} mm)`, z.ped)).join('')}</select></div>
@@ -89,7 +113,7 @@ function detPedHTML(p, D, M){
   const ro_ = esIng() ? '' : 'disabled', opt = (v, t, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(t)}</option>`;
   return `<div class="card"><div class="ct">${esc(p.nom)} · pedestal${esIng() ? '<button class="btn sm danger" type="button" id="cBorrar">Borrar</button>' : ''}</div>
     <div class="fg g4">${fIn(p,'nom','Nombre',{num:false})}${fIn(p,'desc','Descripción',{num:false,cls:'span2'})}<div class="f"><label>Zapata (para el anclaje)</label><select data-a="zap" ${ro_}>${opt('','—',p.zap)}${D.zap.map(z => opt(z.id, z.nom, p.zap)).join('')}</select></div></div>
-    ${nudosHTML(p, M)}
+    ${usaManCim(p) ? '' : nudosHTML(p, M)}${cargasManCimHTML(p, M)}
     <h4 class="sub">Sección y materiales</h4>
     <div class="fg g4">${fIn(p,'b','b (dirección x) [mm]')}${fIn(p,'h','h (dirección y) [mm]')}${fIn(p,'Hp','Altura Hp [m]')}${fIn(p,'rec','Recubrimiento [mm]')}</div>
     <div class="fg g4">${fIn(p,'fc',"f'c [MPa]")}${fIn(p,'fy','fy [MPa]')}${fIn(p,'k','k (esbeltez)',{h:'2.0 = voladizo'})}</div>
@@ -109,7 +133,8 @@ const num0 = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); ret
 
 function calcCim(el, tipo, D, R){
   const M = S.m.anexos?.C?.modelo, c = combosD(D, M);
-  const fr = filasReac(R, el.nudos, c.res), fs = filasReac(R, el.nudos, c.serv);
+  const man = usaManCim(el), fm = man ? filasManCim(el) : null;
+  const fr = man ? fm.filter(f => f.tipo === 'res') : filasReac(R, el.nudos, c.res), fs = man ? fm.filter(f => f.tipo === 'serv') : filasReac(R, el.nudos, c.serv);
   const obj = tipo === 'zap' ? zapEf(el, D) : pedEf(el, D);
   const X = tipo === 'zap' ? Concreto.zapata(obj, fs, fr) : Concreto.pedestal(obj, fr);
   if(X.ok) X._in = { obj, fs, fr };
@@ -119,8 +144,9 @@ function calcCim(el, tipo, D, R){
 async function pintarResCim(el, tipo, D){
   let R = null; try{ R = await reacModelo(); }catch(e){ console.warn(e); }
   const box = $('#cRes'); if(!box) return;
-  if(!R){ box.innerHTML = '<div class="note amber">Sin reacciones del modelo.</div>'; return; }
-  if(!el.nudos.length){ box.innerHTML = '<div class="note amber">Escoge los nudos de apoyo.</div>'; el.res = { ok:false, error:'sin nudos' }; return; }
+  const man = usaManCim(el);
+  if(!man && !R){ box.innerHTML = '<div class="note amber">Sin reacciones del modelo.</div>'; return; }
+  if(!man && !el.nudos.length){ box.innerHTML = '<div class="note amber">Escoge los nudos de apoyo.</div>'; el.res = { ok:false, error:'sin nudos' }; return; }
   const X = calcCim(el, tipo, D, R);
   if(!X.ok){ box.innerHTML = `<div class="note amber">${esc(X.error)}</div>`; return; }
   const sg = esIng() && typeof Sugerir !== 'undefined' ? (k => bulbHTML(tipo === 'zap' ? Sugerir.zapata(X._in.obj, X._in.fs, X._in.fr, k) : Sugerir.pedestal(X._in.obj, X._in.fr, k))) : null;
