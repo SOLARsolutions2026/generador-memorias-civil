@@ -132,7 +132,12 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   rótulo en cada página (consecutivo y nombre arriba; pie del perfil y «X / Y» abajo, como la portada) y solo el número en la esquina de los PDF anexos. Opciones `gen.op` {indice, fichas, rotulo, numExt}. `gen.impreso`, `gen.unido`.
 - Librerías locales (se cargan solo en este paso): `vendor/pdf-lib.min.js` (1.17.1, MIT), `vendor/fontkit.min.js` (@pdf-lib/fontkit 1.1.1, MIT), `vendor/pdf.min.mjs` + `pdf.worker.min.mjs` (pdfjs-dist 4.10.38, Apache-2.0, `isEvalSupported:false`);
   fuentes `fonts/ebg-400.ttf`, `ebg-600.ttf`, `ebg-400i.ttf` (EB Garamond OFL, convertidas de woff2 porque pdf-lib no incrusta woff2).
-- Pendiente: memoria general (Amo enviará ejemplo; irá entre el índice y el Anexo A), ZIP para el NAS.
+- Memoria general (paso `MG`, `memoria-ui.js`, 29-oct; ejemplo de Amo DOC-MEM-18-08-26 La Brasa, 296 págs.): «automático + editable», figuras «ambas», las cuatro listas.
+  `anexos.M` = {txt{clave: texto propio (vacío = automático)}, img{clave:{path,nota}} (`<id>/memoria-<clave>-<ts>.jpg`), dat{uso, zona, nPisos, ejesL, ejesN, impF, impH}}.
+  `memDoc(ctx, ed)` arma los capítulos 1–10 (generalidades, introducción, planta, ubicación, materiales, cargas A/B, R y irregularidades K, combinaciones K, análisis: derivas y torsión con `K.tor.res`, resumen de cada PF (CHK), pedestales, zapatas, conexiones con `descCon`) numerando títulos, tablas y figuras;
+  en la impresión cada uno lleva una marca invisible `.mk` «@@H<id>@@ / @@T<i>@@ / @@F<i>@@»; `gen.impreso` guarda toc/tabs/figs. Separadores «ANEXO X» (`sepAnexo`, marca @@S<L>@@, `gen.op.sep`).
+  Paso 2: tabla de contenido (capítulos + anexos + A-1 fichas + archivos F/G), lista de tablas, de figuras y de anexos, paginadas con puntos guía; numeración final = posición + páginas de las listas.
+- Pendiente: ZIP para el NAS.
 
 ## Estilo (opción A de Amo, 29-oct: sobrio, «el tamaño ordena, el color solo dice si cumple»)
 Bloque al final de `app.css`: títulos de tarjeta 16 px azul oscuro sin mayúsculas; subtítulos 12.5 px gris oscuro; totales `.wtot` en franja gris con raya azul oscuro (roja si no cumple);
@@ -152,7 +157,8 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: Anexo D concreto (zapatas y pedestales).
 - Hecho: Anexo E conexiones (placa base, viga–columna, soldaduras).
 - Hecho: Anexos F y G (PDF) y PDF final en dos pasos (índice, fichas, rótulos, numeración).
-- Siguiente: memoria general (plantilla de Amo) y archivo ZIP para el NAS.
+- Hecho: memoria general (capítulos 1–10) con tabla de contenido y listas.
+- Siguiente: archivo ZIP para el NAS.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.

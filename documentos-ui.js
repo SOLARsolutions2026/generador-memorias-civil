@@ -114,24 +114,27 @@ async function htmlAnexo(id){
   return null;
 }
 const TIT_AX = { A:'Análisis de cargas', B:'Fuerza horizontal equivalente', C:'Modelo estructural', D:'Diseño de elementos', E:'Diseño de conexiones', F:'Planos estructurales', G:'Estudio de suelos' };
+// Página separadora antes de cada anexo (como en la memoria de Amo); la marca @@S<letra>@@ le dice al paso 2 dónde empieza
+const sepAnexo = L => `<div class="doc-blk doc-sep"><span class="mk">@@S${L}@@</span><div class="sep-l">ANEXO ${L}</div><div class="sep-t">${esc(TIT_AX[L])}</div></div>`;
 async function imprimirCompleta(){
-  const m = S.m, partes = [], incl = [], omit = [];
-  toast('Preparando la memoria completa…', 60000);
+  const m = S.m, partes = [], incl = [], omit = [], op = m.anexos.gen?.op || {};
+  toast('Preparando la memoria completa…', 90000);
   try{
     const [uImg, uFirma] = await Promise.all([urlDe(m.imagen_path), urlDe(S.cfg.firma_path)]);
     partes.push(portadaHTML(true, uImg, uFirma));
+    let mem = null; try{ mem = await htmlMemoria(); partes.push(mem.html); }catch(e){ console.warn(e); omit.push('memoria general'); }
     for(const L of ['A','B','C','D','E']){
       let h = null; try{ h = await htmlAnexo(L); }catch(e){ console.warn(e); }
-      if(h){ partes.push(`<div class="doc-blk">${h}</div>`); incl.push(L); } else omit.push(L);
+      if(h){ if(op.sep !== false) partes.push(sepAnexo(L)); partes.push(`<div class="doc-blk">${h}</div>`); incl.push(L); } else omit.push('Anexo ' + L);
     }
     for(const k of ['F','G']){ partes.push(portadaFG(k)); incl.push(k); }
     const gen = m.anexos.gen = m.anexos.gen || {};
-    gen.impreso = { fecha:new Date().toISOString(), incl }; guardarMemoria();
+    gen.impreso = { fecha:new Date().toISOString(), incl, toc:mem?.toc || [], tabs:mem?.tabs || [], figs:mem?.figs || [] }; guardarMemoria();
     const pa = $('#print-area'); pa.innerHTML = partes.join('');
     await Promise.all([...pa.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
     try{ await Promise.all(['400','italic 400','600','italic 600','700','italic 700'].map(v => document.fonts.load(`${v} 12px EBG`))); }catch(e){}
     await document.fonts.ready;
-    if(omit.length) toast(`No se incluyeron (faltan datos): Anexo ${omit.join(', ')}.`, 6000); else toast('Listo.', 800);
+    if(omit.length) toast(`No se incluyeron (faltan datos): ${omit.join(', ')}.`, 6000); else toast('Listo.', 800);
     // márgenes con espacio para el rótulo que se agrega en el paso 2; la portada sin márgenes
     const st = document.createElement('style'); st.textContent = '@page{size:letter;margin:.85in .75in 1.05in}@page portada{margin:0}#print-area .pg{page:portada}';
     document.head.appendChild(st); const t = document.title; document.title = `${m.consecutivo}_MEMORIA_SIN_UNIR`;
@@ -146,62 +149,85 @@ function fichasTec(){
   return [['Ficha técnica del panel', A.panel?.nombre, A.panel?.ficha], ['Ficha técnica del riel', A.riel?.nombre, A.riel?.ficha]].filter(x => x[2]).map(([t, n, path]) => ({ t:`${t}${n ? ' ' + n : ''}`, path }));
 }
 async function unirPDF(file, op, log){
-  const PDFLib = await libPDF(), pdfjs = await libPDFjs(), m = S.m;
+  const PDFLib = await libPDF(), pdfjs = await libPDFjs(), m = S.m, imp = m.anexos.gen?.impreso || {};
   const bytes = await file.arrayBuffer();
   log('Leyendo el PDF impreso…');
   const doc = await pdfjs.getDocument({ data:new Uint8Array(bytes.slice(0)), isEvalSupported:false }).promise, n = doc.numPages;
-  const ini = {};
+  const ini = {}, sep = {}, pH = {}, pT = {}, pF = {};
   for(let i = 1; i <= n; i++){
-    const tc = await (await doc.getPage(i)).getTextContent(), t = tc.items.map(x => x.str).join(' ').replace(/\s+/g, ' ');
+    const tc = await (await doc.getPage(i)).getTextContent(), raw = tc.items.map(x => x.str).join(''), t = tc.items.map(x => x.str).join(' ').replace(/\s+/g, ' ');
     const mm = t.match(/ANEXO ([A-G]) - /); if(mm && ini[mm[1]] == null) ini[mm[1]] = i - 1;
+    for(const x of raw.replace(/\s+/g, '').matchAll(/@@([HTFS])([A-G]|\d+)@@/g)){ const tb = { H:pH, T:pT, F:pF, S:sep }[x[1]]; if(tb[x[2]] == null) tb[x[2]] = i - 1; }
   }
+  for(const L of Object.keys(sep)) if(ini[L] == null || sep[L] < ini[L]) ini[L] = sep[L];
   const letras = Object.keys(ini).sort((a, b) => ini[a] - ini[b]);
-  if(!letras.length) throw new Error('No encontré los anexos en el PDF. ¿Es el PDF de «Imprimir memoria completa»?');
-  log(`Encontré ${letras.length} anexos: ${letras.join(', ')} (${n} páginas).`);
+  if(!letras.length && !Object.keys(pH).length) throw new Error('No encontré la memoria ni los anexos en el PDF. ¿Es el PDF de «Imprimir memoria completa»?');
+  log(`Encontré ${Object.keys(pH).length ? 'el cuerpo de la memoria y ' : ''}${letras.length} anexos (${letras.join(', ')}) en ${n} páginas.`);
   const src = await PDFLib.PDFDocument.load(bytes), out = await PDFLib.PDFDocument.create();
   out.registerFontkit(window.fontkit);
   const [fR, fB] = await Promise.all(['fonts/ebg-400.ttf', 'fonts/ebg-600.ttf'].map(async u => out.embedFont(await (await fetch(u)).arrayBuffer(), { subset:true })));
-  const cs = new Set(fR.getCharacterSet()), limpio = s => [...String(s ?? '')].map(ch => cs.has(ch.codePointAt(0)) ? ch : '?').join('');
-  // Segmentos en orden: [portada], índice, luego cada anexo (A + fichas; F/G + sus archivos)
-  const seg = [];
-  if(ini[letras[0]] > 0) seg.push({ tipo:'imp', de:0, a:ini[letras[0]], ent:null });
+  const cs = new Set(fR.getCharacterSet()), limpio = s => [...String(s ?? '')].map(ch => cs.has(ch.codePointAt(0)) ? ch : ch === '–' || ch === '—' ? '-' : '?').join('');
+  // Segmentos: portada (1 página), cuerpo de la memoria, cada anexo (A + fichas; F/G + sus archivos)
+  const portadaN = 1, seg = [];
+  const fin0 = letras.length ? ini[letras[0]] : n;
+  if(fin0 > portadaN) seg.push({ tipo:'imp', de:portadaN, a:fin0, ent:null });
   letras.forEach((L, j) => {
-    seg.push({ tipo:'imp', de:ini[L], a:j < letras.length - 1 ? ini[letras[j + 1]] : n, ent:{ t:`Anexo ${L} — ${TIT_AX[L]}`, niv:0 } });
-    if(L === 'A' && op.fichas) for(const f of fichasTec()) seg.push({ tipo:'ext', path:f.path, ent:{ t:f.t, niv:1 } });
-    if((L === 'F' || L === 'G') && datosFG(L).aplica !== false) for(const a of datosFG(L).archivos) seg.push({ tipo:'ext', path:a.path, ent:{ t:a.nombre.replace(/\.pdf$/i, ''), niv:1 } });
+    seg.push({ tipo:'imp', de:ini[L], a:j < letras.length - 1 ? ini[letras[j + 1]] : n, ent:{ t:`ANEXO ${L} — ${mayus(TIT_AX[L])}`, niv:2, L } });
+    if(L === 'A' && op.fichas && fichasTec().length){ seg.push({ tipo:'mark', ent:{ t:'ANEXO A-1 — FICHAS TÉCNICAS DE LOS ELEMENTOS FOTOVOLTAICOS', niv:3, L:'A-1' } }); fichasTec().forEach(f => seg.push({ tipo:'ext', path:f.path, ent:{ t:f.t, niv:4 } })); }
+    if((L === 'F' || L === 'G') && datosFG(L).aplica !== false) for(const a of datosFG(L).archivos) seg.push({ tipo:'ext', path:a.path, ent:{ t:a.nombre.replace(/\.pdf$/i, ''), niv:3 } });
   });
-  // Copia de páginas (el índice se inserta después de la portada)
-  const marcas = [], extPag = new Set(); let nIndice = op.indice ? 1 : 0;
+  // Copia de páginas; idxImp[i] = posición (sin las listas del inicio) de la página impresa i
+  const marcas = [], extPag = new Set(), idxImp = {};
+  out.addPage((await out.copyPages(src, [0]))[0]); idxImp[0] = 0;
   for(const s of seg){
+    if(s.tipo === 'mark'){ marcas.push({ ...s.ent, pag:out.getPageCount(), n:0 }); continue; }
     let pags = [];
-    if(s.tipo === 'imp'){ const idx = []; for(let i = s.de; i < s.a; i++) idx.push(i); pags = await out.copyPages(src, idx); }
+    if(s.tipo === 'imp'){ const idx = []; for(let i = s.de; i < s.a; i++) idx.push(i); pags = await out.copyPages(src, idx); idx.forEach((i, k) => idxImp[i] = out.getPageCount() + k); }
     else { log(`Agregando «${s.ent.t}»…`); try{ const d = await PDFLib.PDFDocument.load(await bytesDe(s.path), { ignoreEncryption:true }); pags = await out.copyPages(d, d.getPageIndices()); }catch(e){ log(`⚠ No se pudo agregar «${s.ent.t}»: ${e.message}`); continue; } }
     const p0 = out.getPageCount();
     pags.forEach(p => { out.addPage(p); if(s.tipo === 'ext') extPag.add(out.getPageCount() - 1); });
     if(s.ent) marcas.push({ ...s.ent, pag:p0, n:pags.length });
   }
-  const portadaN = seg[0]?.ent === null ? seg[0].a - seg[0].de : 0;
-  // Índice (página nueva después de la portada)
-  const gris = PDFLib.rgb(.45, .45, .45), negro = PDFLib.rgb(.07, .07, .07);
+  // ── Listas del inicio: tabla de contenido, tablas, figuras y anexos ──
+  const W = 612, Hh = 792, X0 = 72, X1 = W - 72, Y0 = Hh - 140, YMIN = 96, gris = PDFLib.rgb(.45, .45, .45), negro = PDFLib.rgb(.07, .07, .07);
+  const listas = [];
   if(op.indice){
-    const [w, h] = [612, 792], pg = out.insertPage(portadaN, [w, h]);
-    pg.drawText('ÍNDICE', { x:w/2 - fB.widthOfTextAtSize('ÍNDICE', 16)/2, y:h - 110, size:16, font:fB, color:negro });
-    let y = h - 150;
-    const fila = (txt, num, niv) => {
-      const sz = niv ? 10.5 : 12, f = niv ? fR : fB, x0 = 72 + niv*18, t = limpio(txt).slice(0, 80), ns = String(num);
-      const xn = w - 72 - f.widthOfTextAtSize(ns, sz), xt = x0 + f.widthOfTextAtSize(t, sz) + 4;
-      pg.drawText(t, { x:x0, y, size:sz, font:f, color:negro });
-      const pt = fR.widthOfTextAtSize('.', sz); let s = ''; while(xt + fR.widthOfTextAtSize(s + '.', sz) < xn - 4) s += '.';
-      pg.drawText(s, { x:xt, y, size:sz, font:fR, color:gris }); pg.drawText(ns, { x:xn, y, size:sz, font:f, color:negro });
-      y -= niv ? 17 : 22;
-    };
-    fila('Portada', 1, 0);
-    for(const mk of marcas){ if(y < 110) break; fila(mk.t, mk.pag + 1 + nIndice, mk.niv); }
+    const toc = (imp.toc || []).filter(t => pH[t.id] != null).map(t => ({ t:`${t.n} ${t.t}`, niv:t.niv, imp:pH[t.id] }));
+    const anx = marcas.filter(mk => mk.niv >= 2).map(mk => ({ t:mk.t, niv:mk.niv, pos:mk.pag }));
+    // los anexos van debajo de «10. ANEXOS» (último capítulo)
+    listas.push({ tit:'TABLA DE CONTENIDO', filas:[...toc, ...anx] });
+    const tb = (imp.tabs || []).filter((t, i) => pT[i] != null).map((t, i) => ({ t:`Tabla ${t.n}. ${t.t}`, niv:9, imp:pT[i] }));
+    const fg = (imp.figs || []).filter((t, i) => pF[i] != null).map((t, i) => ({ t:`Figura ${t.n}. ${t.t}`, niv:9, imp:pF[i] }));
+    if(tb.length) listas.push({ tit:'LISTA DE TABLAS', filas:tb });
+    if(fg.length) listas.push({ tit:'LISTA DE FIGURAS', filas:fg });
+    const la = marcas.filter(mk => mk.L).map(mk => ({ t:mk.t, niv:8 }));
+    if(la.length) listas.push({ tit:'LISTA DE ANEXOS', filas:la, sinNum:true });
   }
+  const alto = f => f.niv === 1 ? 21 : f.niv === 8 ? 22 : 16.5;
+  const paginar = L => { const pp = [[]]; let y = Y0; for(const f of L.filas){ const h = alto(f); if(y - h < YMIN){ pp.push([]); y = Y0; } pp[pp.length - 1].push(f); y -= h; } return pp; };
+  listas.forEach(L => L.pags = paginar(L));
+  const nFront = listas.reduce((s, L) => s + L.pags.length, 0);
+  const pagFinal = f => (f.imp != null ? idxImp[f.imp] : f.pos) + 1 + nFront;   // número de página en el PDF final (1 = portada)
+  let ins = portadaN;
+  for(const L of listas) L.pags.forEach((filas, k) => {
+    const pg = out.insertPage(ins++, [W, Hh]), tit = k ? L.tit + ' (continuación)' : L.tit;
+    pg.drawText(tit, { x:W/2 - fB.widthOfTextAtSize(tit, 14)/2, y:Hh - 100, size:14, font:fB, color:negro });
+    let y = Y0;
+    for(const f of filas){
+      const sz = f.niv === 1 || f.niv === 2 ? 11 : 10, fnt = f.niv <= 2 || f.niv === 8 ? fB : fR, x = X0 + ({ 1:0, 2:14, 3:28, 4:42 }[f.niv] || 0);
+      if(L.sinNum){ const [a, b] = f.t.split(' — '); pg.drawText(limpio(a), { x:X0, y, size:11, font:fB, color:negro }); if(b) pg.drawText(limpio(b), { x:X0 + 120, y, size:11, font:fR, color:negro }); y -= alto(f); continue; }
+      const ns = String(pagFinal(f)), xn = X1 - fnt.widthOfTextAtSize(ns, sz);
+      let t = limpio(f.t); while(t.length > 4 && x + fnt.widthOfTextAtSize(t, sz) > xn - 24) t = t.slice(0, -2).trimEnd() + '…';
+      pg.drawText(t, { x, y, size:sz, font:fnt, color:negro });
+      const xt = x + fnt.widthOfTextAtSize(t, sz) + 4; let d = ''; while(xt + fR.widthOfTextAtSize(d + ' .', sz) < xn - 4) d += ' .';
+      pg.drawText(d, { x:xt, y, size:sz, font:fR, color:gris }); pg.drawText(ns, { x:xn, y, size:sz, font:fnt, color:negro });
+      y -= alto(f);
+    }
+  });
   // Rótulo y numeración
   const Y = out.getPageCount(), per = perfilDe(m), ta = limpio(tituloArchivo(m.ficha)), con = limpio(m.consecutivo);
   const pie = [per.l1, per.l2, per.correo && 'CORREO: ' + per.correo, per.dir && 'DIR: ' + per.dir, per.tel && 'TEL: ' + per.tel, per.ciudad].filter(x => (x||'').trim()).map(limpio);
-  const ext = new Set([...extPag].map(i => i >= portadaN ? i + nIndice : i));
+  const ext = new Set([...extPag].map(i => i >= portadaN ? i + nFront : i));
   out.getPages().forEach((p, i) => {
     if(i < portadaN) return;
     const { width:w, height:h } = p.getSize(), num = `${i + 1} / ${Y}`;
@@ -222,7 +248,9 @@ async function unirPDF(file, op, log){
   });
   out.setTitle(`${m.consecutivo} ${tituloArchivo(m.ficha)}`); out.setAuthor(S.cfg.nombre_firma || ''); out.setCreator('Generador de Memorias de Cálculo — P. Electric S.A.S.');
   const blob = new Blob([await out.save()], { type:'application/pdf' });
-  const filas = [['Portada', 1, portadaN], ...(op.indice ? [['Índice', portadaN + 1, 1]] : []), ...marcas.map(mk => [(mk.niv ? '  ' : '') + mk.t, mk.pag + 1 + nIndice, mk.n])];
+  let pp = portadaN + 1; const filas = [['Portada', 1, portadaN], ...listas.map(L => { const r = [L.tit.charAt(0) + L.tit.slice(1).toLowerCase(), pp, L.pags.length]; pp += L.pags.length; return r; })];
+  if(fin0 > portadaN) filas.push(['Cuerpo de la memoria (capítulos 1 a 10)', idxImp[portadaN] + 1 + nFront, fin0 - portadaN]);
+  filas.push(...marcas.map(mk => [(mk.niv > 2 ? '  ' : '') + mk.t, mk.pag + 1 + nFront, mk.n]));
   return { blob, nombre:`${m.consecutivo}_${slugArch(tituloArchivo(m.ficha))}.pdf`, filas, Y };
 }
 
@@ -235,6 +263,7 @@ function paneGen(){
     ['Control de revisiones', S.revs.length ? 'ok' : 'wip', 'revisiones'],
     ['Imagen de portada y firma', S.m.imagen_path && S.cfg.firma_path ? 'ok' : 'wip', 'portada'],
     ...['A','B','K','C','D','E'].map(id => [STEPS.find(s => s.id === id).t, estadoPaso(STEPS.find(s => s.id === id)) || '', id]),
+    ['Memoria general (capítulos 1 a 10)', S.m.anexos?.M ? 'ok' : '', 'MG'],
     ['Anexos F y G — planos y suelos', estadoFG(), 'FG'],
   ];
   const falt = filas.filter(f => f[1] !== 'ok').length, fic = fichasTec();
@@ -242,14 +271,15 @@ function paneGen(){
       <div class="tw"><table class="t"><tbody>${filas.map(([t, s, id]) => `<tr><td>${esc(t)}</td><td>${est(s)}</td><td style="text-align:right"><button class="btn sm" type="button" data-irp="${id}">Ir</button></td></tr>`).join('')}</tbody></table></div>
       <p class="hint" style="margin-top:6px">No es obligatorio que todo esté listo: lo que falte simplemente no sale o sale incompleto.</p></div>
     <div class="card"><div class="ct"><span>Paso 1 · Imprimir la memoria completa</span>${gen.impreso ? `<span class="hint">última vez: ${new Date(gen.impreso.fecha).toLocaleString('es-CO', { dateStyle:'short', timeStyle:'short' })}</span>` : ''}</div>
-      <p style="margin-bottom:8px">Sale en una sola impresión: la portada, los anexos A a E y las portadas de los anexos F y G.</p>
+      <p style="margin-bottom:8px">Sale en una sola impresión: la portada, el cuerpo de la memoria (capítulos 1 a 10), los anexos A a E con su página separadora y las portadas de los anexos F y G.</p>
       <ol class="doc-ol"><li>Toca <b>Imprimir memoria completa</b>.</li><li>En el cuadro de impresión escoge <b>Guardar como PDF</b>, tamaño <b>Carta</b> y márgenes <b>Predeterminados</b>.</li>
         <li>En «Más opciones» <b>quita</b> «Encabezados y pies de página» y <b>marca</b> «Gráficos de fondo».</li><li>Guarda el archivo (por ejemplo en Descargas).</li></ol>
       <button class="btn pri" type="button" id="genImp" style="margin-top:8px">🖨 Imprimir memoria completa</button></div>
     <div class="card"><div class="ct"><span>Paso 2 · Unir, numerar y descargar</span></div>
       <p style="margin-bottom:8px">Escoge el PDF que guardaste en el paso 1. La app le agrega:</p>
       <div class="doc-ops">
-        <label class="chk"><input type="checkbox" data-gop="indice" ${op.indice ? 'checked' : ''}/> Índice con el número de página de cada anexo (después de la portada)</label>
+        <label class="chk"><input type="checkbox" data-gop="indice" ${op.indice ? 'checked' : ''}/> Tabla de contenido, lista de tablas, lista de figuras y lista de anexos, con sus números de página (después de la portada)</label>
+        <label class="chk"><input type="checkbox" data-gop="sep" ${op.sep !== false ? 'checked' : ''}/> Página separadora «ANEXO X» antes de cada anexo (se aplica al imprimir en el paso 1)</label>
         <label class="chk"><input type="checkbox" data-gop="fichas" ${op.fichas ? 'checked' : ''} ${fic.length ? '' : 'disabled'}/> Fichas técnicas después del Anexo A ${fic.length ? `(${fic.map(f => esc(f.t)).join(' y ')})` : '(no hay fichas en el Anexo A)'}</label>
         <label class="chk"><input type="checkbox" data-gop="rotulo" ${op.rotulo ? 'checked' : ''}/> Rótulo en cada página: consecutivo y nombre del documento arriba; pie de página y número «X / Y» abajo (igual a la portada)</label>
         <label class="chk"><input type="checkbox" data-gop="numExt" ${op.numExt ? 'checked' : ''}/> Número de página en la esquina de los planos, el estudio de suelos y las fichas</label></div>
