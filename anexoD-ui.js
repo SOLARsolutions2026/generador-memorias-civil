@@ -401,7 +401,7 @@ function anexoDPrintHTML(Rs, conc=''){
     <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]${R.Fc ? ` (elemento ${esc(R.Fc)}, el que controla)` : ''}</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
       ${R.s.tipo !== 'BAR' ? `<tr><td>Kx · Ky · Kz · Cb</td><td>${R.Kx} · ${R.Ky} · ${R.Kz} · ${R.Cb}</td></tr>` : ''}
       <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados${e.res?.porEl?.length > 1 ? `, ${e.res.porEl.length} elementos revisados uno por uno` : ''}`}</td></tr>
-      ${e.res?.porEl ? `<tr><td>Longitudes y Cb</td><td>${e.res.fuente === 'programa' ? `los del diseño del ${esc(swNom())} para cada elemento${e.res.porEl.some(x => Object.keys(x.ed || {}).length) ? ' (con ajustes del diseñador)' : ''}` : 'definidas por el diseñador'}</td></tr>` : ''}</table>
+      ${e.res?.porEl ? `<tr><td>Longitudes arriostradas y Cb</td><td>datos de cálculo${e.res.porEl.length > 1 ? ' de cada elemento' : ''}</td></tr>` : ''}</table>
     ${swPrintHTML(e)}
     ${tb(['Chequeo','Demanda','Capacidad φRn','Relación','Fila que controla'], Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => { const ch = R.checks[k], fl = ch.f;
       return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr,3)} / ${fx(fl.mm,3)}` : `${fx(dem(fl),2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R),2)} ${u}`, fx(ch.r,3), filaTxt(fl)]; }))}
