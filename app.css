@@ -490,3 +490,4 @@ table.wtab tr.sub td{font-weight:800;background:#f8fafc}
 .e-ckr{white-space:nowrap;display:flex;align-items:center;gap:4px}
 .e-ck{flex-wrap:wrap}.e-ckn{flex:1 1 200px;min-width:0}.e-ckr{margin-left:auto}
 .e-ck .bar-d{width:46px}
+.e-graf .e-svg{width:100%;max-width:460px;height:auto;border:1px solid var(--border);border-radius:10px;background:#fff;display:block}

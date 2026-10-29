@@ -203,6 +203,54 @@ function svgVC(I, X, ed, f={}){
     ${cotaE(xc, bot + tp + 30, xc + et, bot + tp + 30, `e ${fx(numE(ct.e),0)}`, 'ct.e', { ed, col:C_SO })}
     <text x="${xc + L + 6}" y="${top - tp + 2}" font-size="9.5" fill="${f.pl ? C_RJ : '#1e40af'}">t ${fx(numE(pl.t),1)} · ${nc}×${Math.max(1, Math.round(numE(pc.nf)))} pernos ${esc(pc.d)}</text>`, 'Conexión viga – columna en alzado');
 }
+// Platinas de la conexión viga–columna vistas de frente, con medidas y agujeros (pestañas Cubrejuntas y Cartela)
+let _lastX = null;
+const dHueco = d => dPerno(d) + 1.6;   // agujero estándar = d + 1/16"
+function agujero(x, y, r, rojo){ const c = rojo ? C_RJ : '#111';
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" stroke="${c}" stroke-width="1.6"/><line x1="${x - r - 3}" y1="${y}" x2="${x + r + 3}" y2="${y}" stroke="${c}" stroke-width=".6"/><line x1="${x}" y1="${y - r - 3}" x2="${x}" y2="${y + r + 3}" stroke="${c}" stroke-width=".6"/>`; }
+function svgCubrejunta(c, f={}, ed){
+  const pl = c.pl, pc = c.pc, W = 420, H = 270, L = numE(pl.L) || 200, b = numE(pl.b) || 100;
+  const nc = Math.max(1, Math.round(numE(pc.nc))), nf = Math.max(1, Math.round(numE(pc.nf))), s = numE(pc.s), g = numE(pc.g), lu = numE(pc.lu);
+  const k = Math.min(250/L, 130/b), x0 = 56, y0 = 62, w = L*k, h = b*k, rh = Math.max(3, dHueco(pc.d)*k/2);
+  const ys = nf === 1 ? [b/2] : Array.from({ length:nf }, (_, i) => b/2 - g/2 + i*g/(nf - 1));
+  const xs = Array.from({ length:nc }, (_, i) => lu + i*s), fin = L - xs[nc - 1], lat = b/2 - g/2*(nf > 1 ? 1 : 0);
+  const rojoE = fin < numE(pc.le) - 0.5, rojoL = lat < numE(pc.le) - 0.5;
+  const huecos = ys.flatMap(y => xs.map(x => agujero(x0 + x*k, y0 + y*k, rh, f.perno))).join('');
+  return svgE(W, H, `<text x="8" y="14" font-size="10" font-weight="700" fill="#64748b">CUBREJUNTA EN PLANTA (ala de la viga)</text>
+    <rect x="${x0 - 14}" y="${y0 - 26}" width="14" height="${h + 52}" fill="#94a3b8" stroke="${C_ST}"/><text x="${x0 - 7}" y="${y0 + h + 40}" text-anchor="middle" font-size="8.5" fill="#475569">columna</text>
+    <rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="${f.pl ? '#fee2e2' : '#dbeafe'}" stroke="${f.pl ? C_RJ : '#1e40af'}" stroke-width="1.6"/>
+    <path d="M${x0},${y0} l-6,-6 v${h + 12} l6,-6 Z" fill="${f.sold ? C_RJ : C_SO}" opacity=".85"/>${huecos}
+    ${cotaE(x0, y0 - 30, x0 + w, y0 - 30, `L ${fx(L,0)}`, 'pl.L', { ed })}
+    ${cotaE(x0, y0 - 12, x0 + xs[0]*k, y0 - 12, `${fx(lu,0)}`, 'pc.lu', { ed, col:C_SO })}
+    ${nc > 1 ? cotaE(x0 + xs[0]*k, y0 - 12, x0 + xs[1]*k, y0 - 12, `s ${fx(s,0)}`, 'pc.s', { ed, col:C_SO }) : ''}
+    ${cotaE(x0 + xs[nc - 1]*k, y0 + h + 14, x0 + w, y0 + h + 14, `${fx(fin,0)}`, null, { col:rojoE ? C_RJ : C_AZ })}
+    ${cotaE(x0 + w + 16, y0, x0 + w + 16, y0 + h, `b ${fx(b,0)}`, 'pl.b', { ed })}
+    ${nf > 1 ? cotaE(x0 + w + 40, y0 + ys[0]*k, x0 + w + 40, y0 + ys[nf - 1]*k, `g ${fx(g,0)}`, 'pc.g', { ed, col:C_SO }) : ''}
+    ${nf > 1 ? cotaE(x0 + w + 64, y0, x0 + w + 64, y0 + ys[0]*k, `${fx(lat,0)}`, null, { col:rojoL ? C_RJ : C_AZ }) : ''}
+    <text x="${W/2}" y="${H - 22}" text-anchor="middle" font-size="9.5" fill="#475569">${nf}×${nc} = ${nf*nc} pernos ${esc(pc.d)} ${esc(pc.tipo)} · agujero Ø ${fx(dHueco(pc.d),1)} mm · espesor ${fx(numE(pl.t),2)} mm</text>
+    ${rojoE || rojoL ? `<text x="${W/2}" y="${H - 8}" text-anchor="middle" font-size="9.5" font-weight="700" fill="${C_RJ}">En rojo: distancia al borde menor que el mínimo (${fx(numE(pc.le),0)} mm)</text>` : ''}`, 'Cubrejunta con agujeros');
+}
+function svgCartelaE(c, f={}, ed){
+  const ct = c.ct, W = 360, H = 290, hc = numE(ct.h) || 100, bc = numE(ct.b) || 80, n = Math.max(1, Math.round(numE(ct.n))), s = numE(ct.s), e = numE(ct.e);
+  const k = Math.min(170/hc, 150/bc), x0 = 90, y0 = 40, w = bc*k, h = hc*k, rh = Math.max(3, dHueco(ct.d)*k/2);
+  const ys = Array.from({ length:n }, (_, i) => hc/2 - (n - 1)*s/2 + i*s), top = ys[0], lat = bc - e;
+  const rojoT = top < numE(ct.le) - 0.5, rojoL = lat < numE(ct.le) - 0.5;
+  return svgE(W, H, `<text x="8" y="14" font-size="10" font-weight="700" fill="#64748b">CARTELA DE FRENTE (alma de la viga)</text>
+    <rect x="${x0 - 14}" y="${y0 - 20}" width="14" height="${h + 40}" fill="#94a3b8" stroke="${C_ST}"/><text x="${x0 - 7}" y="${y0 + h + 34}" text-anchor="middle" font-size="8.5" fill="#475569">columna</text>
+    <rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="${f.ct ? '#fee2e2' : '#dbeafe'}" stroke="${f.ct ? C_RJ : '#1e40af'}" stroke-width="1.6"/>
+    <path d="M${x0},${y0} l-6,-6 v${h + 12} l6,-6 Z" fill="${f.soldCt ? C_RJ : C_SO}" opacity=".85"/>
+    ${ys.map(y => agujero(x0 + e*k, y0 + y*k, rh, f.pernoCt)).join('')}
+    ${cotaE(x0, y0 + h + 14, x0 + e*k, y0 + h + 14, `e ${fx(e,0)}`, 'ct.e', { ed, col:C_SO })}
+    ${cotaE(x0 + e*k, y0 + h + 14, x0 + w, y0 + h + 14, `${fx(lat,0)}`, null, { col:rojoL ? C_RJ : C_AZ })}
+    ${cotaE(x0, y0 - 12, x0 + w, y0 - 12, `b ${fx(bc,0)}`, 'ct.b', { ed })}
+    ${cotaE(x0 + w + 16, y0, x0 + w + 16, y0 + h, `h ${fx(hc,0)}`, 'ct.h', { ed })}
+    ${n > 1 ? cotaE(x0 + w + 42, y0 + ys[0]*k, x0 + w + 42, y0 + ys[1]*k, `s ${fx(s,0)}`, 'ct.s', { ed, col:C_SO }) : ''}
+    ${cotaE(x0 + w + 68, y0, x0 + w + 68, y0 + top*k, `${fx(top,0)}`, null, { col:rojoT ? C_RJ : C_AZ })}
+    <text x="${W/2}" y="${H - 22}" text-anchor="middle" font-size="9.5" fill="#475569">${n} pernos ${esc(ct.d)} ${esc(ct.tipo)} · agujero Ø ${fx(dHueco(ct.d),1)} mm · espesor ${fx(numE(ct.t),2)} mm</text>
+    ${rojoT || rojoL ? `<text x="${W/2}" y="${H - 8}" text-anchor="middle" font-size="9.5" font-weight="700" fill="${C_RJ}">En rojo: distancia al borde menor que el mínimo (${fx(numE(ct.le),0)} mm)</text>` : ''}`, 'Cartela con agujeros');
+}
+function grafVC(c, D, t){ const f = _lastX?.tipo === 'vc' ? fallasE(_lastX) : {}, ed = esIng();
+  return t === 1 ? svgCubrejunta(c, f, ed) : svgCartelaE(c, f, ed); }
 // Soldadura: forma a escala, centroide y punto crítico
 function svgSold(I, R, ed, falla){
   const W = 330, H = 300, fm = AnexoE.FORMAS[I.forma] || AnexoE.FORMAS.O, sc = I._sec, tp = tipoSold(sc);
@@ -268,7 +316,7 @@ function paneAnexoE(){
   }
   if(sel) activarE(sel, D);
 }
-const TABS_E = { placa:['Placa y pedestal', 'Pernos de anclaje', 'Soldadura columna–placa', 'Cargas'], vc:['Perfiles y cubrejuntas', 'Pernos', 'Cartela a cortante', 'Soldaduras', 'Cargas'], sold:['Forma y medidas', 'Cargas'] };
+const TABS_E = { placa:['Placa y pedestal', 'Pernos de anclaje', 'Soldadura columna–placa', 'Cargas'], vc:['Perfiles', 'Cubrejuntas y pernos', 'Cartela a cortante y pernos', 'Soldaduras', 'Cargas'], sold:['Forma y medidas', 'Cargas'] };
 function detEHTML(c, D){
   const ro_ = esIng() ? '' : 'disabled', tabs = TABS_E[c.tipo]; if(tabE >= tabs.length) tabE = 0;
   return `<div class="card"><div class="ct"><span>${esc(c.nom)} · ${esc(TIPOS_E[c.tipo].n)}</span>${esIng() ? '<button class="btn sm danger" type="button" id="eBorrar">Borrar</button>' : ''}</div>
@@ -301,14 +349,18 @@ function formE(c, D, t, ro_){
     return cargasE(c, D);
   }
   if(c.tipo === 'vc'){
-    if(t === 0) return `${comun}<div class="fg g4">${selE_(c,'de','Viga (Anexo D)',[['','— escoge —'], ...mets])}${selE_(c,'a','Columna (Anexo D)',[['','— escoge —'], ...mets])}</div>
-      <h4 class="sub">Cubrejuntas (arriba y abajo)</h4><div class="fg g4">${fIn(c,'pl.L','Largo [mm]')}${fIn(c,'pl.b','Ancho [mm]')}${selE_(c,'pl.t','Espesor',placas)}${selE_(c,'pl.acero','Acero',aceros)}</div>`;
-    if(t === 1) return `<div class="fg g4">${selE_(c,'pc.d','Diámetro',pernos)}${selE_(c,'pc.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'pc.nf','Filas a lo ancho')}${fIn(c,'pc.nc','Pernos por fila')}</div>
-      <div class="fg g4">${fIn(c,'pc.s','Separación s [mm]')}${fIn(c,'pc.le','Distancia al borde [mm]')}${fIn(c,'pc.g','Gramil g [mm]')}${fIn(c,'pc.lu','Cara de la columna al 1er perno [mm]')}</div>
-      <div class="fg g4">${fChk(c,'pc.rosca','Rosca en el plano de corte')}</div>`;
-    if(t === 2) return `<div class="fg g4">${fIn(c,'ct.h','Alto [mm]')}${fIn(c,'ct.b','Ancho [mm]')}${selE_(c,'ct.t','Espesor',placas)}${selE_(c,'ct.acero','Acero',aceros)}</div>
-      <div class="fg g4">${selE_(c,'ct.d','Diámetro del perno',pernos)}${selE_(c,'ct.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'ct.n','Número de pernos')}${fIn(c,'ct.s','Separación [mm]')}</div>
-      <div class="fg g4">${fIn(c,'ct.le','Distancia al borde [mm]')}${fIn(c,'ct.e','Excentricidad e (pernos a la soldadura) [mm]')}${fChk(c,'ct.rosca','Rosca en el plano de corte')}</div>`;
+    const I = entradaE(c, D);
+    if(t === 0) return `${comun}<h4 class="sub">Elementos que une</h4><div class="fg g4">${selE_(c,'de','Viga (Anexo D)',[['','— escoge —'], ...mets])}${selE_(c,'a','Columna (Anexo D)',[['','— escoge —'], ...mets])}</div>
+      <p class="hint">${I.viga && I.col ? `Viga ${esc(I.viga.n)} (d ${fx(I.viga.h,0)} · bf ${fx(I.viga.b,0)} · tf ${fx(I.viga.tf,1)} mm) contra el ala de la columna ${esc(I.col.n)} (d ${fx(I.col.h,0)} · tf ${fx(I.col.tf,1)} · tw ${fx(I.col.tw,1)} mm).` : 'Escoge la viga y la columna (perfiles I del Anexo D).'}</p>`;
+    if(t === 1) return `<h4 class="sub">Datos de la platina (una arriba y otra abajo)</h4><div class="fg g4">${fIn(c,'pl.L','Largo [mm]')}${fIn(c,'pl.b','Ancho [mm]')}${selE_(c,'pl.t','Espesor',placas)}${selE_(c,'pl.acero','Acero',aceros)}</div>
+      <h4 class="sub">Datos de los pernos</h4><div class="fg g4">${selE_(c,'pc.d','Diámetro',pernos)}${selE_(c,'pc.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'pc.nf','Filas a lo ancho')}${fIn(c,'pc.nc','Pernos por fila')}</div>
+      <div class="fg g4">${fIn(c,'pc.s','Separación s [mm]')}${fIn(c,'pc.g','Gramil g (entre filas) [mm]')}${fIn(c,'pc.lu','Cara de la columna al 1er perno [mm]')}${fIn(c,'pc.le','Distancia mínima al borde [mm]')}</div>
+      <div class="fg g4">${fChk(c,'pc.rosca','Rosca en el plano de corte')}</div>
+      <h4 class="sub">Gráfico</h4><div class="e-graf" id="eGraf">${grafVC(c, D, 1)}</div>`;
+    if(t === 2) return `<h4 class="sub">Datos de la platina</h4><div class="fg g4">${fIn(c,'ct.h','Alto [mm]')}${fIn(c,'ct.b','Ancho [mm]')}${selE_(c,'ct.t','Espesor',placas)}${selE_(c,'ct.acero','Acero',aceros)}</div>
+      <h4 class="sub">Datos de los pernos</h4><div class="fg g4">${selE_(c,'ct.d','Diámetro',pernos)}${selE_(c,'ct.tipo','Tipo',kv(AnexoE.TIPOS_PERNO))}${fIn(c,'ct.n','Número de pernos')}${fIn(c,'ct.s','Separación [mm]')}</div>
+      <div class="fg g4">${fIn(c,'ct.le','Distancia mínima al borde [mm]')}${fIn(c,'ct.e','Excentricidad e (pernos a la soldadura) [mm]')}${fChk(c,'ct.rosca','Rosca en el plano de corte')}</div>
+      <h4 class="sub">Gráfico</h4><div class="e-graf" id="eGraf">${grafVC(c, D, 2)}</div>`;
     if(t === 3) return `<div class="fg g4">${fIn(c,'wPl','Filete cubrejunta–columna [mm]')}${fIn(c,'wCt','Filete cartela–columna [mm]')}${selE_(c,'electrodo','Electrodo',elec)}</div>`;
     return cargasE(c, D);
   }
@@ -488,7 +540,10 @@ function sugE(c, D, filas, key, X){
 async function pintarResE(c, D){
   const ctx = await ctxE(), box = $('#eRes'); if(!box || selE !== c.id) return;
   const X = calcE(c, D, ctx);
-  $('#eDib').innerHTML = dibujosE(c, D, X.ok ? X : null, esIng()); activarCotas(c, D);
+  _lastX = X.ok ? X : null;
+  $('#eDib').innerHTML = dibujosE(c, D, X.ok ? X : null, esIng());
+  if($('#eGraf') && c.tipo === 'vc') $('#eGraf').innerHTML = grafVC(c, D, tabE);
+  activarCotas(c, D);
   if($('#eTag')) $('#eTag').textContent = etiquetaE(c, D);
   if(!X.ok){ box.innerHTML = `<div class="note amber">${esc(X.error)}</div>`; $('#eDet2').innerHTML = ''; }
   else {
@@ -502,7 +557,7 @@ async function pintarResE(c, D){
 // Cotas del dibujo: al tocarlas aparece una casilla para cambiar el valor
 function activarCotas(c, D){
   if(!esIng()) return;
-  $$('#eDib [data-cota]').forEach(g => { const abrir = () => {
+  $$('#eDib [data-cota], #eGraf [data-cota]').forEach(g => { const abrir = () => {
     const key = g.dataset.cota, r = g.getBoundingClientRect(), cur = getP(c, key);
     let box = $('#cotaPop'); if(box) box.remove();
     box = document.createElement('div'); box.id = 'cotaPop'; box.className = 'cota-pop';
@@ -521,7 +576,7 @@ function activarCotas(c, D){
 function activarE(c, D){
   const E = datosE();
   if(c.tipo === 'sold' && !formasSold(secSold(c, D)).includes(c.forma) && esIng()){ ajustarSold(c, D); guardarMemoria(); $('#eForm').innerHTML = formE(c, D, tabE, ''); }
-  $$('[data-tabe]').forEach(b => b.onclick = () => { tabE = +b.dataset.tabe; $$('[data-tabe]').forEach(x => x.classList.toggle('on', x === b)); $('#eForm').innerHTML = formE(c, D, tabE, esIng() ? '' : 'disabled'); activarForm(c, D); });
+  $$('[data-tabe]').forEach(b => b.onclick = () => { tabE = +b.dataset.tabe; $$('[data-tabe]').forEach(x => x.classList.toggle('on', x === b)); $('#eForm').innerHTML = formE(c, D, tabE, esIng() ? '' : 'disabled'); activarForm(c, D); activarCotas(c, D); });
   if($('#eBorrar')) $('#eBorrar').onclick = () => { if(!confirm(`¿Borrar ${c.nom}?`)) return; E.con = E.con.filter(x => x.id !== c.id); selE = null; guardarMemoria(); paneAnexoE(); };
   activarForm(c, D);
   pintarResE(c, D);
@@ -573,7 +628,7 @@ function anexoEPrintHTML(Xs, D){
     ${tb(['Conexión','Une','Tipo','Relación D/C','Resultado'], Xs.map(({ c, X }) => [`<b>${esc(c.nom)}</b>`, esc(etiquetaE(c, D)), esc(TIPOS_E[c.tipo].n), X.ok ? fx(X.ratio,3) : '—', X.ok ? (X.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}</section>
     ${ok.map(({ c, X }, i) => { const I = entradaE(c, D), fl = fallasE(X); const e = metDe(D, c.de), s = e ? secDe(e) : null;
       const figs = c.tipo === 'placa' ? `<figure>${svgPlacaPlanta(I, X, false, fl)}<figcaption>Planta</figcaption></figure><figure>${svgPlacaAlzado(I, X, false, fl)}<figcaption>Corte</figcaption></figure>`
-        : c.tipo === 'vc' ? `<figure style="grid-column:1/-1">${svgVC(I, X, false, fl)}<figcaption>Alzado</figcaption></figure>` : `<figure style="grid-column:1/-1">${svgSoldX({ ...I, _sec:s }, X, false, fl.falla)}<figcaption>Cordones de soldadura (G = centroide)</figcaption></figure>`;
+        : c.tipo === 'vc' ? `<figure style="grid-column:1/-1">${svgVC(I, X, false, fl)}<figcaption>Alzado</figcaption></figure><figure>${svgCubrejunta(c, fl, false)}<figcaption>Cubrejunta (planta)</figcaption></figure><figure>${svgCartelaE(c, fl, false)}<figcaption>Cartela (frente)</figcaption></figure>` : `<figure style="grid-column:1/-1">${svgSoldX({ ...I, _sec:s }, X, false, fl.falla)}<figcaption>Cordones de soldadura (G = centroide)</figcaption></figure>`;
       return `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(c.nom)} · ${esc(etiquetaE(c, D))} — ${esc(TIPOS_E[c.tipo].n)}${c.desc ? ' (' + esc(c.desc) + ')' : ''}</h3>
         <div class="ax-mapas">${figs}</div>
         <table class="ax-kv">${datos(c, X).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}<tr><td>Cargas</td><td>${c.cargas === 'manual' ? 'escritas por el diseñador' : `${X._filas.length} combinaciones de resistencia del modelo`}</td></tr></table>
