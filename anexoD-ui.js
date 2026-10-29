@@ -144,6 +144,10 @@ function paneAnexoD(){
   const D = datosD(), C = S.m.anexos?.C, Fz = C?.modelo?.fuerzas;
   const tabs = { met:`Elementos metálicos (${D.met.length})`, zap:`Concreto: zapatas (${D.zap.length})`, ped:`Concreto: pedestales (${D.ped.length})` };
   let h = `<div class="tabs" role="tablist">${Object.entries(tabs).map(([k, v]) => `<button type="button" role="tab" data-tabd="${k}" class="${tabD === k ? 'on' : ''}">${v}</button>`).join('')}</div>`;
+  // Aviso de derivas (se revisan en el Anexo C antes de diseñar; pedido de Amo 29-oct)
+  const dr = C?.der?.res, bOn = S.m.anexos?.B?.aplica !== false && S.m.anexos?.B;
+  if(bOn && C?.modelo) h += dr?.ok ? (dr.cumple ? '' : `<div class="note" style="background:#fef2f2;border-left:3px solid #b91c1c;color:#991b1b"><b>Las derivas no cumplen</b> (máx. ${fx(dr.max * 100, 2)} % &gt; 1 %): revisa el modelo antes de diseñar los elementos. <a href="#/m/${S.m.id}/C" data-irc>Ver C-8 Derivas</a></div>`)
+    : `<div class="note amber">Aún no revisas las derivas: hazlo en el <a href="#/m/${S.m.id}/C" data-irc>Anexo C → Resultados → C-8 Derivas</a> antes de diseñar.</div>`;
   if(tabD !== 'met') return paneConcreto(tabD, h);
   const sel = D.met.find(e => e.id === selMet) || D.met[0]; selMet = sel?.id || null;
   h += `<div class="d-grid"><div class="d-lista">

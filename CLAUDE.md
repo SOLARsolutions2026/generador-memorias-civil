@@ -62,6 +62,8 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   el Anexo D diseña con las filas concomitantes (toma la de mayor interacción) y la envolvente queda de referencia. Filas Max/Min de combinaciones envolventes = aviso.
   Pantalla con pestañas (`tabC`): archivo fijo arriba; «Información del modelo» (revisión + C-1…C-6) y «Resultados» (C-7). Impresión fuera de las pestañas.
   Ya probado con un .s2k real de Amo (v24.2.0).
+  C-8 Derivas (pedido de Amo 29-oct: revisarlas al subir el modelo, antes de diseñar; él escoge los nudos): `C.der` {nudos, casoX, casoY (por defecto las envolventes de K), h (vacío = B.h / A.Hr), res{X,Y,h,max,cumple,fecha,archivo}};
+  Δ = √(U1²+U2²) de «JOINT DISPLACEMENTS» (o tabla pegada), deriva = Δ/h ≤ 1 % (Tabla A.6.4-1), 💡 si no cumple; pestaña Resultados con «derivas ✓/✗»; aviso en el Anexo D; falta en «Marcar terminado» del C; en el PDF del C (C-8, tablas completas pasan a C-9) y en la memoria 9.1.
 
 - Cabecera de cada paso (28-oct, pedido de Amo; lo demás de la interfaz NO se reorganiza): `#hdActs` junto a Anterior/Siguiente con «🖨 Imprimir anexo» (`IMPRIME` → imprimirA/B/C/D; C abre `#hdPop` con «tablas completas»)
   y «✓ Marcar terminado» (con número de faltantes; al tocarlo muestra la lista; terminado → «Volver a abrir»). Ya no hay tarjetas «Páginas del Anexo X» ni barra `#listoBar` abajo.

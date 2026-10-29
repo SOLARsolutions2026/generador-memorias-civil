@@ -54,7 +54,7 @@ function paneAnexoC(){
         <div class="sap-acc">${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
       <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde el software?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
     const nRes = M.fuerzas?.n ? `<span class="tab-n">${M.fuerzas.grupos.length}</span>` : '<span class="tab-n vacio">sin datos</span>';
-    h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}</button></div>
+    h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}${C.der?.res?.ok ? ` <span class="pill ${C.der.res.cumple ? 'ok' : 'no'}">derivas ${C.der.res.cumple ? '✓' : '✗'}</span>` : ''}</button></div>
       <div data-tc="modelo" ${tabC === 'modelo' ? '' : 'hidden'}>`;
     h += `<div class="card"><div class="ct">Revisión con los Anexos A y B <span class="pill gray">solo en pantalla</span></div><div id="revC"></div></div>`;
     const mat = M.materiales;
@@ -83,7 +83,7 @@ function paneAnexoC(){
         <h4 class="sub">Distribuidas</h4>${M.dist.length ? cg(M.dist.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.a,3)}${d.b !== d.a ? ' → ' + fx(d.b,3) : ''} kN/m`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`])) : '<p class="muted">No hay.</p>'}
         ${M.punt.length ? `<h4 class="sub">Puntuales en elementos</h4>${cg(M.punt.map(d => [esc(d.pat), esc(dirTxt(d)), `${fx(d.P,3)} kN a ${fx(d.rel,2)} L`, String(d.n), `<span class="ids">${esc(d.ids)}</span>`]))}` : ''}
         ${M.nudosF.length ? `<h4 class="sub">En nudos (sumas por patrón)</h4>${tabla(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), `<span class="ids">${esc(o.ids)}</span>`]))}` : ''}</div>`;
-    h += `</div><div data-tc="res" ${tabC === 'res' ? '' : 'hidden'}>` + fuerzasCardHTML(C, M) + '</div>';
+    h += `</div><div data-tc="res" ${tabC === 'res' ? '' : 'hidden'}>` + derivasCardHTML(C, M) + fuerzasCardHTML(C, M) + '</div>';
   }
   pane(h);
   if(M) pintarRevC();
@@ -107,7 +107,7 @@ function paneAnexoC(){
   if($('#delImgC')) $('#delImgC').onclick = async () => { await sb.storage.from(BUCKET).remove([C.img]); C.img = ''; guardarMemoria(); renderWS('C'); };
   $('#descC').oninput = e => { C.descripcion = e.target.value.trim() === descDefC(M) ? '' : e.target.value; guardarMemoria(); };
   $('#notaImgC').oninput = e => { C.notaImg = e.target.value; guardarMemoria(); };
-  activarFuerzas(C, M);
+  activarFuerzas(C, M); activarDerivas(C, M);
   $$('[data-sp]').forEach(i => i.onchange = () => { const ex = new Set(sinPesoC(C)); i.checked ? ex.delete(i.dataset.sp) : ex.add(i.dataset.sp); C.sinPeso = [...ex]; guardarMemoria(); paneAnexoC(); });
   if($('#aB')) $('#aB').onclick = () => {
     const B = datosB(), pp = AnexoC.pesoPropio(M, sinPesoC(C));
@@ -179,7 +179,8 @@ function anexoCPrintHTML(C, M, K, url){
     ${M.nudosF.length ? `<h4>Cargas en nudos (sumas por patrón)</h4>${tb(['Patrón','ΣF1 [kN]','ΣF2 [kN]','ΣF3 [kN]','ΣM3 [kN·m]','Nudos'], M.nudosF.map(o => [esc(o.pat), fx(o.F1,2), fx(o.F2,2), fx(o.F3,2), fx(o.M3,2), esc(o.ids)]), null, 'ids')}` : ''}
   </section>
   ${M.fuerzas?.grupos?.length ? `<section><h3>${L}-7 Resultados del análisis: fuerzas en los elementos</h3>${fuerzasPrintHTML(M.fuerzas, tb)}</section>` : ''}
-  ${K ? `<section><h3>${L}-8 Tablas completas del modelo</h3>
+  ${derivasPrintHTML(C, L, tb)}
+  ${K ? `<section><h3>${L}-${C.der?.res?.ok ? 9 : 8} Tablas completas del modelo</h3>
     <h4>Coordenadas de los nudos</h4>${multi(['Nudo','X [m]','Y [m]','Z [m]'], K.nudos.map(r => [esc(r[0]), fx(r[1],3), fx(r[2],3), fx(r[3],3)]), 3)}
     <h4>Secciones asignadas a cada elemento</h4>${multi(['Elem.','Sección','L [m]'], K.secciones.map(r => [esc(r[0]), esc(r[5]), r[3] == null ? '—' : fx(r[3],2)]), 3)}
     ${K.dist.length ? `<h4>Cargas distribuidas por elemento</h4>${multi(['Elem.','Patrón','Dir.','kN/m'], K.dist.map(r => [esc(r[0]), esc(r[1]), esc(dirTxt({ sis:r[2], dir:r[4] })), fx(r[5],3) + (r[6] !== r[5] ? '→' + fx(r[6],3) : '')]), 2)}` : ''}
@@ -234,4 +235,69 @@ function fuerzasPrintHTML(Fz, tb){
       ${tb(['', ...Object.keys(FZ_U).map(k => `${k} [${FZ_U[k]}]`)], ['max','min'].map(m => [m === 'max' ? 'Máx' : 'Mín',
         ...Object.keys(FZ_U).map(k => { const f = g.env[k][m]; return f ? `${fx(f[k],2)}<br/><span style="font-size:7pt">E${esc(f.F)} · ${esc(f.c)}</span>` : '—'; })]), null, 'fz-p')}
       ${tb(['Caso','Elemento · combinación', ...Object.keys(FZ_U)], critUnicos(g).map(({ f, k }) => [k.map(x => CRIT_N[x]).join(' / '), filaCrit(f) + ` · x = ${fx(f.st,2)} m`, ...Object.keys(FZ_U).map(q => fx(f[q],2))]), null, 'fz-p')}`).join('')}`;
+}
+
+// ═══ C-8 Derivas (A.6) — pedido de Amo 29-oct: se revisan al subir el modelo, antes de diseñar; Amo escoge los nudos ═══
+// Δ = √(U1² + U2²) de la envolvente sísmica sin reducir (A.6.3.1); deriva = Δ / h (estructura de un nivel, base empotrada) ≤ 1 % h (Tabla A.6.4-1)
+function datosDer(C){ C.der = C.der || { nudos:'', casoX:'', casoY:'', h:'', res:null }; return C.der; }
+function alturaDer(C){ const d = datosDer(C), an = S.m.anexos || {}; return parseFloat(d.h) > 0 ? parseFloat(d.h) : parseFloat(an.B?.h) > 0 ? parseFloat(an.B.h) : parseFloat(an.A?.viento?.Hr) || 0; }
+function derivasCardHTML(C, M){
+  const d = datosDer(C), ro_ = esIng() ? '' : 'disabled', casos = M?.desp?.casos || [], K = S.m.anexos?.K || {};
+  const defX = casos.find(c => c === (K.nomEX || '100% X 30% Y')) || '', defY = casos.find(c => c === (K.nomEY || '30% X 100% Y')) || '';
+  const selC = (k, def) => casos.length ? `<select data-der="${k}" ${ro_}>${['', ...casos].map(c => `<option value="${esc(c)}" ${(d[k] || def) === c ? 'selected' : ''}>${c ? esc(c) : '— escoge —'}</option>`).join('')}</select>` : `<input data-der="${k}" value="${esc(d[k] || '')}" placeholder="${esc(def || 'envolvente')}" ${ro_}/>`;
+  const r = d.res, hA = alturaDer(C);
+  const tabDir = dir => { const x = r?.[dir]; if(!x) return '';
+    return `<div class="tor-dir"><b>Sismo sentido ${dir}</b> <span class="hint">(caso ${esc(x.caso)})</span>
+      ${tabla(['Nudo', 'U1 [mm]', 'U2 [mm]', 'Δ = √(U1²+U2²) [mm]', 'Deriva Δ/h', '≤ 1 %'], x.n.map(n => [esc(n.j), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? pill('ok', 'Cumple') : pill('no', 'No cumple')]))}</div>`; };
+  const sug = r?.ok && !r.cumple && typeof bulbHTML === 'function' ? bulbHTML({ tit:'deriva', por:`La deriva máxima es ${fx(r.max * 100, 2)} % de h y el límite es 1 %: la estructura es muy flexible lateralmente.`,
+    ops:[{ t:'Subir la sección de las columnas (más inercia en el sentido que no cumple) y volver a correr el modelo.' }, { t:'Agregar arriostramientos (diagonales) en los pórticos del sentido que no cumple.' }, { t:'Revisar la conexión columna–placa base: si en el modelo está articulada y en realidad es empotrada, el desplazamiento baja.' }, { t:'Confirmar que el caso usado sea la envolvente de las fuerzas sísmicas sin dividir por R y que h sea la altura correcta.' }] }) : '';
+  return `<div class="card"><div class="ct"><span>C-8 Derivas (A.6)</span>${r?.ok ? (r.cumple ? pill('ok', `Cumple · máx ${fx(r.max * 100, 2)} %`) : pill('no', `No cumple · máx ${fx(r.max * 100, 2)} %`)) : pill('pend', 'Sin revisar')}</div>
+    <p class="hint" style="margin-bottom:8px">Revísalas antes de diseñar los elementos: si no cumplen, hay que cambiar el modelo. Se usan los desplazamientos de la envolvente sísmica <b>sin dividir por R</b>; para una estructura de un nivel la deriva es Δ/h y el límite es 1 % de h (Tabla A.6.4-1).</p>
+    <div class="fg g4">
+      <div class="f span2"><label>Nudos a revisar (nivel superior)</label><input data-der="nudos" value="${esc(d.nudos || '')}" placeholder="Ej.: 18, 23, 7, 12" ${ro_}/><div class="hint">Separados por coma. Los de las esquinas y los más alejados.</div></div>
+      <div class="f"><label>Altura h [m]</label><input data-der="h" inputmode="decimal" value="${esc(d.h || '')}" placeholder="${hA ? fx(hA, 2) : 'h'}" ${ro_}/><div class="hint">Vacío = altura del Anexo B / A</div></div></div>
+    <div class="fg g4"><div class="f span2"><label>Caso para el sentido X</label>${selC('casoX', defX)}</div><div class="f span2"><label>Caso para el sentido Y</label>${selC('casoY', defY)}</div></div>
+    ${!casos.length ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> Al exportar marca también <b>Analysis Results → Joint Output → Displacements</b> con las envolventes de sismo, y usa «Reemplazar» arriba.
+      <details style="margin-top:6px"><summary><b>O pega aquí la tabla «Joint Displacements» copiada desde el software</b></summary><textarea id="derPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
+    ${esIng() ? '<button class="btn sm pri" type="button" id="derCalc" style="margin-top:8px">⚙ Revisar derivas</button>' : ''}
+    ${r?.ok ? `<div class="tor-res">${tabDir('X')}${tabDir('Y')}</div>
+      <div class="wtot" style="${r.cumple ? '' : 'background:#b91c1c'}"><span>Deriva máxima (h = ${fx(r.h, 2)} m)${sug}</span><span>${fx(r.max * 100, 3)} % ${r.cumple ? '≤' : '>'} 1.00 % — ${r.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
+      <div class="hint">Calculado el ${esc(new Date(r.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))}${r.archivo !== C.archivo?.fecha ? ' · <b>el modelo cambió después: vuelve a revisar</b>' : ''}</div>` : ''}
+    ${r?.error ? `<div class="note amber" style="margin-top:8px">${esc(r.error)}</div>` : ''}</div>`;
+}
+function activarDerivas(C, M){
+  if(!esIng()) return;
+  const d = datosDer(C), K = S.m.anexos?.K || {};
+  $$('[data-der]').forEach(i => i.addEventListener(i.tagName === 'SELECT' ? 'change' : 'input', () => { d[i.dataset.der] = i.value; guardarMemoria(); }));
+  const b = $('#derCalc'); if(!b) return;
+  b.onclick = async () => {
+    const nudos = String(d.nudos || '').split(/[,;\s]+/).filter(Boolean), h = alturaDer(C);
+    const casos = M?.desp?.casos || [];
+    const cX = d.casoX || casos.find(c => c === (K.nomEX || '100% X 30% Y')), cY = d.casoY || casos.find(c => c === (K.nomEY || '30% X 100% Y'));
+    if(!nudos.length) return toast('Escribe los nudos a revisar, separados por coma.', 3500);
+    if(!(h > 0)) return toast('Falta la altura h.', 3500);
+    if(!cX || !cY) return toast('Escoge el caso de cada sentido.', 3500);
+    try{
+      toast('Leyendo desplazamientos…', 15000);
+      const pega = $('#derPega')?.value.trim(), D = AnexoC.desplazamientos(pega || await textoModelo(C));
+      if(!D.n) throw new Error('No se encontraron desplazamientos en el archivo ni en la tabla pegada.');
+      const nor = t => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+      const dir = c0 => { const caso = D.casos.find(c => nor(c) === nor(c0)); if(!caso) throw new Error(`No encuentro el caso «${c0}». Casos en los datos: ${D.casos.join(' · ')}.`);
+        const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) })), falt = n.filter(x => x.U1 === undefined).map(x => x.j);
+        if(falt.length) throw new Error(`No hay desplazamientos del nudo ${falt.join(', ')} en el caso ${caso}.`);
+        n.forEach(x => { x.D = Math.hypot(x.U1, x.U2); x.der = x.D / h; }); return { caso, n, max:Math.max(...n.map(x => x.der)) }; };
+      const X = dir(cX), Y = dir(cY), max = Math.max(X.max, Y.max);
+      d.casoX = X.caso; d.casoY = Y.caso;
+      d.res = { ok:true, X, Y, h, max, cumple:max <= 0.01, fecha:new Date().toISOString(), archivo:C.archivo?.fecha };
+      guardarMemoria(); toast(max <= 0.01 ? 'Derivas revisadas: cumplen.' : 'Las derivas NO cumplen.', 4000); paneAnexoC();
+    }catch(e){ d.res = { error:e.message }; guardarMemoria(); paneAnexoC(); }
+  };
+}
+// Para el PDF del Anexo C
+function derivasPrintHTML(C, L, tb){
+  const r = C.der?.res; if(!r?.ok) return '';
+  const filas = ['X', 'Y'].flatMap(dir => r[dir].n.map(n => [dir, esc(r[dir].caso), esc(n.j), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
+  return `<section class="ax-cont"><h3>${L}-8 Derivas (NSR-10 A.6)</h3><p>Desplazamientos de la envolvente de las fuerzas sísmicas sin dividir por R. Para una estructura de un nivel la deriva es Δ/h, con Δ = √(U1² + U2²) (A.6.3.1) y h = ${fx(r.h, 2)} m; el límite es 1.0 % de h (Tabla A.6.4-1).</p>
+    ${tb(['Sentido','Caso','Nudo','U1 [mm]','U2 [mm]','Δ [mm]','Deriva','≤ 1 %'], filas)}
+    <div class="ax-box">Deriva máxima = ${fx(r.max * 100, 3)} % — ${r.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div></section>`;
 }

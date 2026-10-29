@@ -417,6 +417,7 @@ const ANEXOS_LISTO = {
     const C = an.C, f = [];
     if(!C?.modelo) f.push('archivo del modelo (.$2k)');
     if(!C?.img) f.push('imagen del modelo');
+    if(an.B && an.B.aplica !== false && C?.modelo){ const r = C.der?.res; if(!r?.ok) f.push('revisar las derivas (Resultados → C-8)'); else if(!r.cumple) f.push(`las derivas no cumplen (máx. ${(r.max * 100).toFixed(2)} %)`); }
     return f; } },
 };
 function estadoAnexo(id){

@@ -228,14 +228,15 @@ function memDoc(ctx, ed){
   // ══ 9. Análisis y diseño ══
   H(1, 'Análisis y diseño estructural');
   T('an', `La estructura se modela y analiza tridimensionalmente con ${swNom()}. Se definen la geometría, las secciones y los materiales; el programa calcula la matriz de rigidez considerando las deformaciones axiales y de cortante, y obtiene los desplazamientos, las fuerzas internas y las reacciones. Con los desplazamientos producidos por las fuerzas sísmicas sin reducir se verifican las derivas; luego se diseñan los elementos por el método de resistencia de la NSR-10, con las combinaciones del capítulo 8. La información del modelo (materiales, secciones, nudos, elementos y cargas) se presenta en el ANEXO C.`);
-  const tor = K?.tor?.res?.ok ? K.tor.res : null, hDer = RB?.h || num0(v.Hr);
+  const tor = K?.tor?.res?.ok ? K.tor.res : null, der = ctx.C?.der?.res?.ok ? ctx.C.der.res : null;
   if(ctx.sismo){
     H(2, 'Chequeo de derivas');
-    if(tor && hDer > 0){
-      const filas = ['X', 'Y'].flatMap(d => tor[d].n.map(x => [d, esc(tor[d].caso), esc(x.j), fx(x.U1 * 1000, 2), fx(x.U2 * 1000, 2), fx(x.D * 1000, 2), fx(hDer, 2), fx(x.D / hDer * 100, 3) + ' %', x.D / hDer <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
-      T('der', 'Las derivas se revisan con los desplazamientos de la envolvente de las fuerzas sísmicas sin reducir (A.6). Para una estructura de un nivel la deriva es el desplazamiento horizontal total dividido por la altura, y debe ser menor o igual al 1 % de la altura (Tabla A.6.4-1).');
+    T('der', 'Las derivas se revisan con los desplazamientos de la envolvente de las fuerzas sísmicas sin reducir (A.6). Para una estructura de un nivel la deriva es el desplazamiento horizontal total Δ = √(U1² + U2²) dividido por la altura, y debe ser menor o igual al 1 % de la altura (Tabla A.6.4-1).');
+    if(der){
+      const filas = ['X', 'Y'].flatMap(d => der[d].n.map(x => [d, esc(der[d].caso), esc(x.j), fx(x.U1 * 1000, 2), fx(x.U2 * 1000, 2), fx(x.D * 1000, 2), fx(der.h, 2), fx(x.der * 100, 3) + ' %', x.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
       tabla(['Sentido', 'Caso', 'Nudo', 'U1 [mm]', 'U2 [mm]', 'Δ [mm]', 'h [m]', 'Deriva', '≤ 1 %'], filas, 'Chequeo de derivas con las fuerzas sísmicas sin reducir');
-    } else T('der.no', 'Las derivas se revisan con los desplazamientos de la envolvente de las fuerzas sísmicas sin reducir (A.6), y deben ser menores o iguales al 1 % de la altura (Tabla A.6.4-1).');
+      out(`<p>La deriva máxima es ${fx(der.max * 100, 3)} % de la altura: ${der.cumple ? 'cumple' : 'NO cumple'} con el límite de 1.0 %. El detalle está en el ANEXO C.</p>`);
+    }
     fig('der', 'Puntos de la estructura usados para el análisis de derivas', '');
     H(2, 'Revisión de irregularidad torsional');
     if(tor){
