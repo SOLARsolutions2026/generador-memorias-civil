@@ -43,6 +43,28 @@ function svgSecCorrea(c, imp){
   return `<svg viewBox="0 0 ${W} ${H}" class="rv-sec" role="img" aria-label="Sección de la correa">${g}</svg>`;
 }
 
+// Datos del proyecto de la revisión de cubierta (pedido de Amo 29-oct): todo lo de la portada se llena aquí; la revisión no tiene ficha.
+function datosProyRev(m, F, inpF, ro){
+  const emp = F.tipo !== 'natural';
+  const sel = (k, l, ops) => `<div class="f"><label>${l}</label><select data-fk="${k}" ${ro}>${ops.map(([v, t]) => `<option value="${esc(v)}" ${String(F[k] || '') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const fecha = `<div class="f"><label>Fecha de emisión</label><input type="date" data-fk="fecha" value="${esc(F.fecha || '')}" ${ro}/></div>`;
+  return `<div class="card"><div class="ct">Datos del proyecto <span class="hint" style="font-weight:400">· van a la portada</span></div>
+    <div class="fg g3">${inpF('proyecto', 'Nombre del proyecto', 'Ej.: Revisión cubierta Casa López')}${fecha}${inpF('uso', 'Uso', 'Ej.: Cubierta de vivienda con paneles solares')}</div>
+    <div class="ct" style="font-size:13.5px;margin-top:10px">Propietario / cliente</div>
+    <div class="fg g3">${sel('tipo', 'Tipo', [['empresa', 'Empresa / persona jurídica'], ['natural', 'Persona natural']])}${inpF('prop', emp ? 'Razón social' : 'Nombre completo')}
+      <div class="f"><label>Identificación</label><div class="docrow"><select data-fk="docTipo" aria-label="Tipo de documento" ${ro}>${['NIT', 'C.C.', 'C.E.'].map(x => `<option ${x === (F.docTipo || 'NIT') ? 'selected' : ''}>${x}</option>`).join('')}</select><input data-fk="doc" value="${esc(F.doc || '')}" ${ro}/></div></div>
+      ${emp ? inpF('rep', 'Representante legal') : ''}${inpF('dirCorr', 'Dirección de correspondencia')}${inpF('tel', 'Teléfono')}${inpF('mail', 'Correo electrónico')}</div>
+    <div class="ct" style="font-size:13.5px;margin-top:10px">Ubicación del predio</div>
+    <div class="fg g3">${inpF('dir', 'Dirección del predio')}${inpF('lote', 'Lote')}${inpF('mz', 'Manzana')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}${inpF('coord', 'Coordenadas', '8.311705, -73.597054')}
+      ${inpF('matricula', 'Matrícula inmobiliaria')}${inpF('predial', 'Número predial')}</div>
+    <details class="d-opc" style="margin-top:10px"><summary>Documento: membrete, estado y título</summary>
+      <div class="fg g3" style="margin-top:8px">
+        <div class="f"><label>Membrete y pie de página</label><select id="rvPerfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id === perfilDe(m).id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+        <div class="f"><label>Estado</label><select id="rvEstado" ${ro || (m.estado === 'arch' ? 'disabled' : '')}><option value="wip" ${m.estado === 'wip' ? 'selected' : ''}>En proceso — solo tú la ves</option><option value="apr" ${m.estado === 'apr' ? 'selected' : ''}>Aprobada — visible para consulta</option>${m.estado === 'arch' ? '<option value="arch" selected>Archivada en NAS</option>' : ''}</select></div>
+        ${inpF('titulo_doc', 'Título en la portada', TITULO_DEF)}${inpF('titulo_archivo', 'Nombre del documento (código)', tituloArchivo({ ...F, titulo_archivo:'' }))}</div></details>
+    <div class="hint" style="margin-top:6px">El consecutivo, el ingeniero y la firma se llenan solos. El control de revisiones y la vista de la portada están en «📋 Revisiones y portada».</div></div>`;
+}
+
 // ─── Página ───
 function renderRevision(){
   const m = S.m, R = datosR(), F = m.ficha, ro = esIng() ? '' : 'disabled', ctx = ctxR(R);
@@ -57,13 +79,13 @@ function renderRevision(){
   <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" type="button" id="back">← Memorias</button>
     <span class="hint"><b>${esc(m.consecutivo)}</b> · ${esc(m.titulo || '')}</span>${m.variante_de || m.variante_nom ? `<span class="vchip">⧉ ${esc(m.variante_nom || 'Variante')}${m.definitiva !== false ? ' ★' : ''}</span>` : ''}
     <span class="sp" style="flex:1"></span><span class="saved" id="saved"></span>
-    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}${m.tipo === 'verificacion' ? '<button class="btn sm" type="button" id="rvFicha">☰ Pasos de la verificación</button><button class="btn sm pri" type="button" id="rvImp">Generar PDF →</button></div>' : '<button class="btn sm" type="button" id="rvFicha" title="Datos completos de la portada y control de revisiones">📋 Portada y revisiones</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>'}
+    ${esIng() ? '<button class="btn sm" type="button" id="btnHist">🕘 Historial</button>' : ''}${m.tipo === 'verificacion' ? '<button class="btn sm" type="button" id="rvFicha">☰ Pasos de la verificación</button><button class="btn sm pri" type="button" id="rvImp">Generar PDF →</button></div>' : '<button class="btn sm" type="button" id="rvFicha" title="Control de revisiones y vista de la portada">📋 Revisiones y portada</button><button class="btn sm pri" type="button" id="rvImp">🖨 Imprimir memoria</button></div>'}
   <div class="main-hd"><div><div class="hint" style="font-weight:700;text-transform:uppercase;letter-spacing:1px">${m.tipo === 'verificacion' ? 'Verificación puntual' : 'Revisión de cubierta'} · ${pill(...(ESTADOS[m.estado] || ESTADOS.wip))}</div><h2>Verificación de correas — NSR-10</h2></div></div>
 
-  <div class="card"><div class="ct">Datos del proyecto</div>
+  ${m.tipo === 'revision' ? datosProyRev(m, F, inpF, ro) : `<div class="card"><div class="ct">Datos del proyecto</div>
     <div class="fg g3">${inpF('proyecto', 'Proyecto', 'Ej.: Revisión cubierta Casa López')}${inpF('prop', 'Propietario / cliente')}${inpF('doc', 'Identificación (NIT / C.C.)')}
       ${inpF('dir', 'Dirección / predio')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}</div>
-    <div class="hint">La portada (sin imagen), el consecutivo, el ingeniero y la firma se llenan solos. Los demás datos de la portada (contacto, matrícula, predial) y el control de revisiones están en «📋 Portada y revisiones».</div></div>
+    <div class="hint">Los demás datos de la portada están en la ficha del proyecto.</div></div>`}
 
   <div class="card"><div class="ct"><span>① Cubierta y cargas — NSR-10 Título B</span></div>
     <div class="fg g4">${selR('cub.perfil', 'Material de la cubierta', Object.entries(AnexoA.LAMINAS).map(([k, v]) => [k, v.nombre]))}
@@ -304,13 +326,20 @@ function activarRevision(R){
   const m = S.m, re = () => renderRevision();
   $('#back').onclick = () => ir('#/');
   if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
-  $('#rvFicha').onclick = () => ir(`#/m/${m.id}/ficha`);
+  $('#rvFicha').onclick = () => ir(`#/m/${m.id}/${m.tipo === 'revision' ? 'revisiones' : 'ficha'}`);
   $('#rvImp').onclick = m.tipo === 'verificacion' ? () => ir(`#/m/${m.id}/gen`) : imprimirRevision;
   const cor = () => R.correas.find(c => c.id === R.activa);
   const refresca = () => { const ctx = ctxR(R); $('#rvCargas').innerHTML = cargasStrip(R, ctx); $('#rvViento').innerHTML = vientoStrip(R, ctx, cor()); $('#rvVdib').innerHTML = svgVientoRev(R, ctx, cor()); const c = cor(); if(c.huella) $('#rvRes').innerHTML = resultadoHTML(R, c, ctx);
     if($('#rvCdg') && c.mat === 'mad'){ const k = Correas.coefMadera(c); $('#rvCdg').className = 'rv-cdg' + (k.fuera ? ' no' : ''); $('#rvCdg').textContent = `Pendiente = ${fR(k.pend, 3)} → CDG flexión ${fR(k.cdgB, 2)}${k.fuera ? ' · fuera de tabla (> 1/8): no apta' : ''}`; } };
   const valor = el => el.type === 'checkbox' ? el.checked : el.value;
-  $$('[data-fk]').forEach(el => el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); });
+  $$('[data-fk]').forEach(el => {
+    if(el.tagName === 'SELECT') el.onchange = () => { m.ficha[el.dataset.fk] = el.value;
+      if(el.dataset.fk === 'tipo') m.ficha.docTipo = el.value === 'empresa' ? 'NIT' : (m.ficha.docTipo === 'NIT' ? 'C.C.' : m.ficha.docTipo);
+      guardarMemoria(); re(); };
+    else el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); };
+  });
+  if($('#rvPerfil')) $('#rvPerfil').onchange = e => { m.perfil_id = e.target.value; guardarMemoria(); };
+  if($('#rvEstado')) $('#rvEstado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado === 'apr' ? 'Aprobada: ya la puede ver el resto de la empresa.' : 'En proceso: solo tú la ves.'); re(); };
   $$('[data-rv]').forEach(el => {
     const set = () => { let v = valor(el); if(el.dataset.rv === 'viento.V') v = Number(v); rvSet(R, el.dataset.rv, v);
       if(el.dataset.rv === 'cielo.tipo') R.cielo.w = AnexoA.CIELOS[v] ?? R.cielo.w; /* peso típico del tipo elegido, como en el Anexo A */ guardarMemoria(); };

@@ -327,12 +327,12 @@ async function abrirMemoria(id, paso){
     S.m = m.data; S.m.ficha = S.m.ficha || {}; S.revs = r.data || [];
   }
   if(!esIng()) paso = 'portada';
-  if(S.m.tipo === 'revision'){ if(!['ficha','revisiones','portada'].includes(paso)) return renderRevision(); return renderWS(paso); }
+  if(S.m.tipo === 'revision'){ if(!['revisiones','portada'].includes(paso)) return renderRevision(); return renderWS(paso); }
   if(S.m.tipo === 'verificacion'){ if(paso === 'R' && modsDe(S.m).includes('R')) return renderRevision(); return renderWS(STEPS_VER(S.m).some(s => s.id === paso) ? paso : 'ficha'); }
   renderWS(STEPS.some(s => s.id === paso && !s.off) ? paso : 'ficha');
 }
 // Revisión de cubierta: solo los pasos del proyecto y la página única «R» (pedido de Amo 29-oct)
-const STEPS_REV = () => [...STEPS.filter(s => ['ficha','revisiones','portada'].includes(s.id)), { id:'R', ph:'Revisión', n:'R', t:'Revisión de cubierta', s:'Correas, viento y fotos' }];
+const STEPS_REV = () => [...STEPS.filter(s => ['revisiones','portada'].includes(s.id)), { id:'R', ph:'Revisión', n:'R', t:'Revisión de cubierta', s:'Correas, viento y fotos' }];
 function renderWS(cur){
   const m = S.m, pasos = esIng() ? (m.tipo === 'revision' ? STEPS_REV() : m.tipo === 'verificacion' ? STEPS_VER(m) : STEPS) : STEPS.filter(s => s.id === 'portada');
   const st = estadoPaso;
