@@ -191,6 +191,10 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 ## Listas en el celular (29-oct, opción A de Amo) — app.js `armarListaMovil`
 - En pantallas ≤ 900 px cada `.d-lista` (D metálicos/zapatas/pedestales, E, memoria general) se convierte sola (MutationObserver) en una línea fija `.d-sel` con el elemento abierto ▾; al tocarla se despliega `.d-drop` con la lista y sus botones. En el computador no cambia.
 
+## Organización de la lista (29-oct, opción A de Amo) — app.js `renderLista`
+- Estado nuevo `pau` = Pausada (sin restricción en la columna, no hizo falta migración; consulta sigue viendo solo apr/arch); motivo en `ficha.pausa` (se pide al pausar). `apr` se muestra como «Terminada».
+- Pestañas `S.lf.tab` (wip/pau/apr/arch/todas, recordada en `localStorage.memTab`) con contadores, buscador (consecutivo, título, proyecto, cliente, municipio, motivo, variantes), fichas por tipo (completo/revision/verificacion) y año (si hay más de uno). Terminadas y archivadas agrupadas por mes. Estado editable en la fila (`select.est-sel` → `cambiarEstado`). Clase `.lbar` (ojo: `.mbar` ya existía para la barra móvil).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

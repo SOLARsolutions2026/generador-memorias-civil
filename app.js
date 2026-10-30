@@ -29,7 +29,7 @@ const fmtFecha = iso => iso ? iso.slice(0,10).split('-').reverse().join('/') : '
 function toast(m, ms=2600){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true, ms); }
 function err(e, pre='Error'){ console.error(e); toast(`${pre}: ${e?.message || e}`, 4500); }
 const debounce = (fn, ms) => { let h; const d=(...a)=>{ clearTimeout(h); d.pend=()=>{ clearTimeout(h); d.pend=null; return fn(...a); }; h=setTimeout(d.pend, ms); }; return d; };
-const ESTADOS = { wip:['wip','En proceso'], apr:['ok','Aprobada'], arch:['arch','Archivada en NAS'] };
+const ESTADOS = { wip:['wip','En proceso'], pau:['pend','Pausada'], apr:['ok','Terminada'], arch:['arch','Archivada en NAS'] };   // pau: pedido de Amo 29-oct (motivo en ficha.pausa)
 
 // URL temporal (firmada) para ver archivos privados del bucket
 async function urlDe(path){
@@ -167,9 +167,10 @@ async function renderLista(){
   const acts = (g) => {
     const m = g.def, [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
     let b = (g.vs.length ? `<button class="chev" type="button" data-chev="${g.r.id}" aria-label="Ver diseños" aria-expanded="false">▾</button>` : '')
-      + `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>` + pill(c, t);
+      + `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>`
+      + (m.estado === 'arch' ? pill(c, t) : `<select class="est-sel est-${m.estado}" data-est="${m.id}" aria-label="Cambiar estado">${['wip','pau','apr'].map(k => `<option value="${k}" ${m.estado === k ? 'selected' : ''}>${ESTADOS[k][1]}</option>`).join('')}</select>`);
     const p1 = m.tipo === 'revision' ? 'R' : 'ficha';
-    if(m.estado === 'wip') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/${p1}">Continuar</button>`;
+    if(m.estado === 'wip' || m.estado === 'pau') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/${p1}">Continuar</button>`;
     else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Portada</button><button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;
     else b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Ver ficha</button>`;
     return b;
@@ -182,26 +183,75 @@ async function renderLista(){
       ${m.variante_de ? `<button class="btn sm danger" type="button" data-borvar="${m.id}">Eliminar</button>` : ''}
       <button class="btn sm pri" type="button" data-go="#/m/${m.id}/${m.tipo === 'revision' ? 'R' : 'ficha'}">Abrir</button></div></div>`;
   $('#app').innerHTML = `
-  <div class="main-hd"><div><h2>Memorias de cálculo</h2><p class="lead">Las memorias en ejecución viven en la app. Cuando una esté aprobada, la archivas en el NAS y se libera su espacio; su ficha queda en la lista.</p></div>
+  <div class="main-hd"><div><h2>Memorias de cálculo</h2><p class="lead">Las memorias en ejecución viven en la app. Cuando una esté terminada, la archivas en el NAS y se libera su espacio; su ficha queda en la lista.</p></div>
     <div class="nav-btns"><button class="btn pri" type="button" id="nueva">+ Nueva memoria</button></div></div>
   <div class="card"><div class="ct">Espacio de archivos en la app${pill(pct>=80?'no':pct>=60?'pend':'ok', `${usado.toFixed(1)} MB de 1 GB · ${pct.toFixed(1)} %`)}</div>
     <div class="store"><div class="bar2">${S.mems.map((m,k)=> tam[k] ? `<i style="width:${MB(tam[k])/CAP_MB*100}%;background:${cols[k%4]}" title="${esc(m.consecutivo)}"></i>` : '').join('')}</div></div>
-    <div class="hint" style="margin-top:6px">Al llegar al 80 % archiva en el NAS las memorias aprobadas para liberar espacio.</div></div>
-  <div class="mlist">${grupos.length ? grupos.map(g => {
-      const m = g.def, f = m.ficha || {};
-      const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
-      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : ''}</div>
-        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div></div>
-        <div class="acts">${acts(g)}</div></div>
-        ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; }).join('')
-    : '<div class="card empty">Todavía no hay memorias. Crea la primera con <b>+ Nueva memoria</b>.</div>'}</div>`;
+    <div class="hint" style="margin-top:6px">Al llegar al 80 % archiva en el NAS las memorias terminadas para liberar espacio.</div></div>
+  <div id="mfil"></div><div class="mlist" id="mlist"></div>`;
   $('#nueva').onclick = nuevaMemoria;
-  $$('[data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
-  $$('[data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
-  $$('[data-chev]').forEach(b => b.onclick = () => { const sub = $(`[data-sub="${b.dataset.chev}"]`); sub.hidden = !sub.hidden; b.textContent = sub.hidden ? '▾' : '▴'; b.setAttribute('aria-expanded', !sub.hidden);
-    try{ localStorage.setItem('memAbierta', sub.hidden ? '' : b.dataset.chev); }catch(e){} });
-  try{ const ab = localStorage.getItem('memAbierta'); if(ab && $(`[data-chev="${ab}"]`)) $(`[data-chev="${ab}"]`).click(); }catch(e){}
-  activarVariantes(grupos);
+  // Organización de la lista (opción A de Amo, 29-oct): pestañas por estado, buscador, tipo y año; terminadas/archivadas por mes
+  const LF = S.lf = S.lf || { tab:(() => { try{ return localStorage.getItem('memTab') || 'wip'; }catch(e){ return 'wip'; } })(), q:'', tipo:'', anio:'' };
+  const TABS = [['wip','En proceso'],['pau','Pausadas'],['apr','Terminadas'],['arch','Archivadas en NAS'],['todas','Todas']];
+  const tipoDe = m => m.tipo === 'revision' || m.tipo === 'verificacion' ? m.tipo : 'completo';
+  const fechaDe = m => m.estado === 'arch' ? (m.archivada_en || m.updated_at) : m.updated_at;
+  const anios = [...new Set(grupos.map(g => String(fechaDe(g.def) || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const filaHTML = g => { const m = g.def, f = m.ficha || {};
+      const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
+      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : ' <span class="vtag tipo dis">🏗️ Diseño</span>'}</div>
+        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div>
+        ${m.estado === 'pau' ? `<div class="meta pausa">⏸ ${esc((f.pausa || '').trim() || 'Pausada sin motivo escrito')}</div>` : ''}</div>
+        <div class="acts">${acts(g)}</div></div>
+        ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; };
+  const pintarFil = () => {
+    const cnt = k => k === 'todas' ? grupos.length : grupos.filter(g => (g.def.estado || 'wip') === k).length;
+    $('#mfil').innerHTML = `<div class="mtabs" role="tablist">${TABS.map(([k, t]) => `<button type="button" role="tab" data-mtab="${k}" class="${LF.tab === k ? 'on' : ''}">${t}<b class="n">${cnt(k)}</b></button>`).join('')}</div>
+      <div class="lbar"><input type="search" id="mq" placeholder="🔍 Buscar: cliente, proyecto, municipio, consecutivo…" value="${esc(LF.q)}" aria-label="Buscar memorias"/>
+        <div class="mchips">${[['','Todos'],['completo','🏗️ Diseño'],['revision','🔍 Revisión'],['verificacion','🧰 Verificación']].map(([k, t]) => `<button type="button" class="mchip ${LF.tipo === k ? 'on' : ''}" data-mtipo="${k}">${t}</button>`).join('')}</div>
+        ${anios.length > 1 ? `<select id="manio" aria-label="Año"><option value="">Todos los años</option>${anios.map(a => `<option ${LF.anio === a ? 'selected' : ''}>${a}</option>`).join('')}</select>` : ''}</div>`;
+    $$('[data-mtab]').forEach(b => b.onclick = () => { LF.tab = b.dataset.mtab; try{ localStorage.setItem('memTab', LF.tab); }catch(e){} pintarFil(); pintarLista(); });
+    $$('[data-mtipo]').forEach(b => b.onclick = () => { LF.tipo = b.dataset.mtipo; pintarFil(); pintarLista(); });
+    $('#mq').oninput = e => { LF.q = e.target.value; pintarLista(); };
+    if($('#manio')) $('#manio').onchange = e => { LF.anio = e.target.value; pintarLista(); };
+  };
+  const pintarLista = () => {
+    const q = norm(LF.q).trim();
+    let gs = grupos.filter(g => { const m = g.def, f = m.ficha || {};
+      if(LF.tab !== 'todas' && (m.estado || 'wip') !== LF.tab) return false;
+      if(LF.tipo && tipoDe(m) !== LF.tipo) return false;
+      if(LF.anio && String(fechaDe(m) || '').slice(0, 4) !== LF.anio) return false;
+      return !q || norm([m.consecutivo, m.titulo, f.proyecto, f.prop, f.mun, f.depto, f.dir, f.pausa, ...g.todos.map(x => x.variante_nom)].join(' ')).includes(q); });
+    gs.sort((a, b) => String(fechaDe(b.def)).localeCompare(String(fechaDe(a.def))));
+    let h = '';
+    if(!gs.length) h = `<div class="card empty">${grupos.length ? (q || LF.tipo || LF.anio ? 'Ninguna memoria coincide con la búsqueda.' : `No hay memorias en «${TABS.find(t => t[0] === LF.tab)[1]}».`) : 'Todavía no hay memorias. Crea la primera con <b>+ Nueva memoria</b>.'}</div>`;
+    else if(LF.tab === 'apr' || LF.tab === 'arch'){ let mes = '';
+      gs.forEach(g => { const d = new Date(fechaDe(g.def)), k = isNaN(d) ? 'Sin fecha' : `${MESES[d.getMonth()]} ${d.getFullYear()}`;
+        if(k !== mes){ mes = k; h += `<div class="mmes">${k} · ${gs.filter(x => { const e = new Date(fechaDe(x.def)); return (isNaN(e) ? 'Sin fecha' : `${MESES[e.getMonth()]} ${e.getFullYear()}`) === k; }).length}</div>`; }
+        h += filaHTML(g); }); }
+    else h = gs.map(filaHTML).join('');
+    $('#mlist').innerHTML = h;
+    $$('#mlist [data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
+    $$('#mlist [data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
+    $$('#mlist [data-chev]').forEach(b => b.onclick = () => { const sub = $(`[data-sub="${b.dataset.chev}"]`); sub.hidden = !sub.hidden; b.textContent = sub.hidden ? '▾' : '▴'; b.setAttribute('aria-expanded', !sub.hidden);
+      try{ localStorage.setItem('memAbierta', sub.hidden ? '' : b.dataset.chev); }catch(e){} });
+    $$('#mlist [data-est]').forEach(sel => sel.onchange = () => cambiarEstado(S.mems.find(m => m.id === sel.dataset.est), sel.value, sel));
+    try{ const ab = localStorage.getItem('memAbierta'); if(ab && $(`[data-chev="${ab}"]`)) $(`[data-chev="${ab}"]`).click(); }catch(e){}
+    activarVariantes(grupos);
+  };
+  pintarFil(); pintarLista();
+}
+// Cambiar el estado desde la lista; al pausar se pide el motivo (queda en ficha.pausa)
+async function cambiarEstado(m, est, sel){
+  if(!m || m.estado === est) return;
+  const ficha = { ...(m.ficha || {}) };
+  if(est === 'pau'){ const mot = prompt('¿Por qué se pausa? (opcional; ej.: esperando estudio de suelos)', ficha.pausa || ''); if(mot === null){ if(sel) sel.value = m.estado; return; } ficha.pausa = mot.trim(); }
+  try{
+    const { error } = await sb.from('mem_memorias').update({ estado:est, ficha }).eq('id', m.id); if(error) throw error;
+    toast(est === 'apr' ? 'Terminada: ya la puede ver el personal de consulta.' : est === 'pau' ? 'Memoria pausada.' : 'Memoria en proceso.');
+    renderLista();
+  }catch(e){ err(e, 'No se pudo cambiar el estado'); if(sel) sel.value = m.estado; }
 }
 async function borrarMemoria(m){
   if(!m) return;
@@ -287,7 +337,7 @@ async function renderConsulta(){
   $('#app').innerHTML = '<p class="muted">Cargando…</p>';
   try{ await cargarMemorias(); }catch(e){ return err(e); }
   const lista = S.mems.filter(m => m.estado !== 'wip' && m.definitiva !== false);
-  $('#app').innerHTML = `<div class="main-hd"><div><h2>Memorias aprobadas</h2><p class="lead">Consulta y descarga. Las memorias archivadas indican el paquete que se debe buscar en el NAS.</p></div>
+  $('#app').innerHTML = `<div class="main-hd"><div><h2>Memorias terminadas</h2><p class="lead">Consulta y descarga. Las memorias archivadas indican el paquete que se debe buscar en el NAS.</p></div>
     <div class="f" style="min-width:240px"><label for="q">Buscar</label><input id="q" placeholder="Proyecto, municipio o consecutivo"/></div></div>
     <div class="card"><div class="tw"><table class="t"><thead><tr><th>Consecutivo</th><th>Proyecto</th><th>Municipio</th><th>Estado</th><th></th></tr></thead><tbody id="tb"></tbody></table></div></div>`;
   const pintar = () => {
@@ -295,7 +345,7 @@ async function renderConsulta(){
     const f = lista.filter(m => [m.consecutivo, m.titulo, m.ficha?.mun, m.ficha?.prop].join(' ').toLowerCase().includes(q));
     $('#tb').innerHTML = f.length ? f.map(m => `<tr><td><b>${esc(m.consecutivo)}</b></td><td>${esc(m.titulo)}</td><td>${esc(m.ficha?.mun || '')}</td>
       <td>${pill(...ESTADOS[m.estado])}</td><td>${m.estado==='arch' ? `<span class="hint">En el NAS: <b>${esc(m.paquete || m.consecutivo + '_paquete.zip')}</b></span>` : `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Ver portada</button>`}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="hint">No hay memorias aprobadas todavía.</td></tr>';
+      : '<tr><td colspan="5" class="hint">No hay memorias terminadas todavía.</td></tr>';
     $$('[data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
   };
   $('#q').oninput = pintar; pintar();
@@ -605,7 +655,7 @@ ficha(){
       ${inp('fecha','Fecha de emisión',{type:'date'})}
       <div class="f"><label for="f_perfil">Membrete y pie de página</label><select id="f_perfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id===perfilDe(m).id?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select><div class="hint">Se editan en ⚙ Configuración</div></div>
       <div class="f"><label for="f_estado">Estado</label><select id="f_estado" ${ro || (m.estado==='arch'?'disabled':'')}>
-        <option value="wip" ${m.estado==='wip'?'selected':''}>En proceso — solo tú la ves</option><option value="apr" ${m.estado==='apr'?'selected':''}>Aprobada — visible para consulta</option>${m.estado==='arch'?'<option value="arch" selected>Archivada en NAS</option>':''}</select></div>
+        <option value="wip" ${m.estado==='wip'?'selected':''}>En proceso — solo tú la ves</option><option value="pau" ${m.estado==='pau'?'selected':''}>Pausada — solo tú la ves</option><option value="apr" ${m.estado==='apr'?'selected':''}>Terminada — visible para consulta</option>${m.estado==='arch'?'<option value="arch" selected>Archivada en NAS</option>':''}</select></div>
       ${inp('titulo_doc','Título en la portada',{cls:'span2',ph:TITULO_DEF})}
       ${inp('titulo_archivo','Nombre del documento (código)',{cls:'span2',ph:tituloArchivo({...F,titulo_archivo:''}),h:'Va arriba a la derecha y debajo de la firma. Vacío = se arma con el nombre del proyecto.'})}
     </div></div>
@@ -637,7 +687,9 @@ ficha(){
     prev(); guardarMemoria();
   }));
   $('#f_perfil').onchange = e => { m.perfil_id = e.target.value; prev(); guardarMemoria(); };
-  $('#f_estado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado==='apr' ? 'Aprobada: ya la puede ver el resto de la empresa.' : 'En proceso: solo tú la ves.'); };
+  $('#f_estado').onchange = e => { m.estado = e.target.value;
+    if(m.estado === 'pau'){ const mot = prompt('¿Por qué se pausa? (opcional)', F.pausa || ''); if(mot !== null) F.pausa = mot.trim(); }
+    guardarMemoria(); toast(m.estado==='apr' ? 'Terminada: ya la puede ver el personal de consulta.' : m.estado === 'pau' ? 'Pausada: solo tú la ves.' : 'En proceso: solo tú la ves.'); };
   if(m.tipo === 'verificacion') activarHerr($('#pane'), her => { if(!her.length) return toast('Deja al menos una herramienta.'), PANES.ficha(); m.anexos = m.anexos || {}; m.anexos.her = her; m.anexos.mods = modsDeHer(her); guardarMemoria(); renderWS('ficha'); });
   $$('[data-tipo]').forEach(b => b.onclick = () => {
     F.tipo = b.dataset.tipo;
@@ -760,7 +812,7 @@ async function renderConfig(){
     <div class="sig" style="margin-top:12px"><div class="box" id="sigBox">Sin firma</div><div><b>Firma escaneada</b><div class="hint">PNG o JPG con fondo blanco o transparente. Va en la portada sobre la línea de firma.</div>
       <button class="btn sm pri" type="button" id="upSig" style="margin-top:6px">${c.firma_path?'Cambiar firma':'Subir firma'}</button></div></div></div>
   <div class="card"><div class="ct">Usuarios</div><div id="users"><p class="muted">Cargando…</p></div>
-    <div class="hint" style="margin-top:8px">Para dar acceso a alguien: créalo en Supabase → Authentication → <b>Add user</b>. Entra como <b>Consulta</b> (solo ve memorias aprobadas) y aquí puedes cambiarle el rol.</div></div>`;
+    <div class="hint" style="margin-top:8px">Para dar acceso a alguien: créalo en Supabase → Authentication → <b>Add user</b>. Entra como <b>Consulta</b> (solo ve memorias terminadas) y aquí puedes cambiarle el rol.</div></div>`;
   $('#back2').onclick = () => ir('#/');
   urlDe(c.firma_path).then(u => { if(u && $('#sigBox')) $('#sigBox').innerHTML = `<img src="${esc(u)}" alt="Firma"/>`; });
   $$('[data-pid]').forEach(b => b.onclick = async () => { await guardarPendientes(); S.editPerfil = b.dataset.pid; renderConfig(); });
@@ -802,7 +854,7 @@ async function renderConfig(){
   if(!$('#users')) return;
   if(error){ $('#users').innerHTML = `<p class="err">${esc(error.message)}</p>`; return; }
   $('#users').innerHTML = `<div class="tw"><table class="t"><thead><tr><th>Correo</th><th>Rol</th></tr></thead><tbody>${us.map(u => `<tr><td>${esc(u.email)}${u.user_id===S.user.id?' <span class="pill gray">tú</span>':''}</td>
-    <td><div class="f"><select data-uid="${u.user_id}" ${u.user_id===S.user.id?'disabled':''}><option value="consulta" ${u.rol==='consulta'?'selected':''}>Consulta — ve y descarga aprobadas</option><option value="ingeniero" ${u.rol==='ingeniero'?'selected':''}>Ingeniero — crea, edita y firma</option></select></div></td></tr>`).join('')}</tbody></table></div>`;
+    <td><div class="f"><select data-uid="${u.user_id}" ${u.user_id===S.user.id?'disabled':''}><option value="consulta" ${u.rol==='consulta'?'selected':''}>Consulta — ve y descarga terminadas</option><option value="ingeniero" ${u.rol==='ingeniero'?'selected':''}>Ingeniero — crea, edita y firma</option></select></div></td></tr>`).join('')}</tbody></table></div>`;
   $$('[data-uid]').forEach(s => s.onchange = async () => {
     const { error } = await sb.from('mem_usuarios').update({ rol:s.value }).eq('user_id', s.dataset.uid);
     error ? err(error) : toast('Rol actualizado.');

@@ -676,3 +676,19 @@ table.t td{border-bottom:1px solid #edf1f6}
 /* Firma de la revisión: imagen (o espacio) arriba y nombre centrado debajo de una sola raya */
 .rv-print .rv-firma img,.rv-print .rv-firma .rv-sinf{display:block;margin:0 auto 2px;max-height:60px}.rv-print .rv-firma .rv-sinf{height:60px}
 .rv-print .rv-firma div.rv-nm{display:inline-block;border-top:1px solid #333;padding-top:3px;font-size:9.5pt;min-width:2.8in}
+/* Lista organizada (opción A de Amo, 29-oct): pestañas por estado, buscador, tipo, año y meses */
+.mtabs{display:flex;gap:18px;border-bottom:1px solid var(--border);margin:4px 0 10px;overflow-x:auto;scrollbar-width:none}
+.mtabs button{background:none;border:none;padding:8px 0;font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;font-family:inherit}
+.mtabs button.on{color:#0f2b4c;font-weight:700;border-bottom-color:#0f2b4c}
+.mtabs .n{background:#e2e8f0;color:#334155;border-radius:9px;padding:0 7px;font-size:11px;margin-left:5px;font-weight:700}
+.lbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.lbar input[type=search]{flex:1;min-width:220px;margin:0;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;background:#fff;font-family:inherit;color:var(--text)}
+.lbar select{width:auto;margin:0;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12.5px;background:#fff;font-family:inherit}
+.mchips{display:flex;gap:6px;flex-wrap:wrap}
+.mchip{border:1px solid var(--border);background:#fff;border-radius:16px;padding:5px 11px;font-size:12.5px;cursor:pointer;font-family:inherit;color:inherit}
+.mchip.on{background:#0f2b4c;color:#fff;border-color:#0f2b4c}
+.mmes{font-size:11.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin:14px 2px 6px}
+.est-sel{width:auto;margin:0;min-height:0;padding:4px 8px;font-size:12px;font-weight:700;border-radius:7px;border:1px solid transparent;cursor:pointer}
+.est-wip{background:#dbeafe;color:#1d4ed8}.est-pau{background:#fef3c7;color:#92400e}.est-apr{background:#dcfce7;color:#166534}
+.meta.pausa{color:#92400e;margin-top:2px}
+.vtag.tipo.dis{background:#eff6ff;color:#1e40af}

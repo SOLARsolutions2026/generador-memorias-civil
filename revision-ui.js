@@ -59,7 +59,7 @@ function datosProyRev(m, F, inpF, ro){
     <details class="d-opc" style="margin-top:10px"><summary>Documento: membrete, estado y título</summary>
       <div class="fg g3" style="margin-top:8px">
         <div class="f"><label>Membrete y pie de página</label><select id="rvPerfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id === perfilDe(m).id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
-        <div class="f"><label>Estado</label><select id="rvEstado" ${ro || (m.estado === 'arch' ? 'disabled' : '')}><option value="wip" ${m.estado === 'wip' ? 'selected' : ''}>En proceso — solo tú la ves</option><option value="apr" ${m.estado === 'apr' ? 'selected' : ''}>Aprobada — visible para consulta</option>${m.estado === 'arch' ? '<option value="arch" selected>Archivada en NAS</option>' : ''}</select></div>
+        <div class="f"><label>Estado</label><select id="rvEstado" ${ro || (m.estado === 'arch' ? 'disabled' : '')}><option value="wip" ${m.estado === 'wip' ? 'selected' : ''}>En proceso — solo tú la ves</option><option value="pau" ${m.estado === 'pau' ? 'selected' : ''}>Pausada — solo tú la ves</option><option value="apr" ${m.estado === 'apr' ? 'selected' : ''}>Terminada — visible para consulta</option>${m.estado === 'arch' ? '<option value="arch" selected>Archivada en NAS</option>' : ''}</select></div>
         ${inpF('titulo_doc', 'Título en la portada', TITULO_DEF)}${inpF('titulo_archivo', 'Nombre del documento (código)', tituloArchivo({ ...F, titulo_archivo:'' }))}</div></details>
     <div class="hint" style="margin-top:6px">El consecutivo, el ingeniero y la firma se llenan solos. El control de revisiones y la vista de la portada están en «📋 Revisiones y portada».</div></div>`;
 }
@@ -339,7 +339,7 @@ function activarRevision(R){
   if($('#btnHist')) $('#btnHist').onclick = abrirHistorial;
   if($('#rvListo')) $('#rvListo').onclick = () => { const f = faltanRev(m);
     if(f.length) return toast('Antes de terminarla falta: ' + f.join(', ') + '.', 6000);
-    m.estado = 'apr'; guardarMemoria(); toast('Revisión terminada: queda aprobada y visible para consulta.'); re(); };
+    m.estado = 'apr'; guardarMemoria(); toast('Revisión terminada: ya la puede ver el personal de consulta.'); re(); };
   if($('#rvAbrir')) $('#rvAbrir').onclick = () => { m.estado = 'wip'; guardarMemoria(); toast('Revisión abierta de nuevo (en proceso).'); re(); };
   $('#rvFicha').onclick = () => ir(`#/m/${m.id}/${m.tipo === 'revision' ? 'revisiones' : 'ficha'}`);
   $('#rvImp').onclick = m.tipo === 'verificacion' ? () => ir(`#/m/${m.id}/gen`) : imprimirRevision;
@@ -354,7 +354,7 @@ function activarRevision(R){
     else el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); };
   });
   if($('#rvPerfil')) $('#rvPerfil').onchange = e => { m.perfil_id = e.target.value; guardarMemoria(); };
-  if($('#rvEstado')) $('#rvEstado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado === 'apr' ? 'Aprobada: ya la puede ver el resto de la empresa.' : 'En proceso: solo tú la ves.'); re(); };
+  if($('#rvEstado')) $('#rvEstado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado === 'apr' ? 'Terminada: ya la puede ver el personal de consulta.' : m.estado === 'pau' ? 'Pausada: solo tú la ves.' : 'En proceso: solo tú la ves.'); re(); };
   $$('[data-rv]').forEach(el => {
     const set = () => { let v = valor(el); if(el.dataset.rv === 'viento.V') v = Number(v); rvSet(R, el.dataset.rv, v);
       if(el.dataset.rv === 'cielo.tipo') R.cielo.w = AnexoA.CIELOS[v] ?? R.cielo.w; /* peso típico del tipo elegido, como en el Anexo A */ guardarMemoria(); };
