@@ -58,6 +58,7 @@ function datosProyRev(m, F, inpF, ro){
     <div class="fg g3">${inpF('dir', 'Dirección del predio')}${inpF('lote', 'Lote')}${inpF('mz', 'Manzana')}${inpF('mun', 'Municipio')}${inpF('depto', 'Departamento')}${inpF('coord', 'Coordenadas', '8.311705, -73.597054')}</div>
     <details class="d-opc" style="margin-top:10px"><summary>Documento: membrete, estado y título</summary>
       <div class="fg g3" style="margin-top:8px">
+        ${consHTML(m, ro)}
         <div class="f"><label>Membrete y pie de página</label><select id="rvPerfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id === perfilDe(m).id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
         <div class="f"><label>Estado</label><select id="rvEstado" ${ro || (m.estado === 'arch' ? 'disabled' : '')}><option value="wip" ${m.estado === 'wip' ? 'selected' : ''}>En proceso — solo tú la ves</option><option value="pau" ${m.estado === 'pau' ? 'selected' : ''}>Pausada — solo tú la ves</option><option value="apr" ${m.estado === 'apr' ? 'selected' : ''}>Terminada — visible para consulta</option>${m.estado === 'arch' ? '<option value="arch" selected>Archivada en NAS</option>' : ''}</select></div>
         ${inpF('titulo_doc', 'Título en la portada', TITULO_DEF)}${inpF('titulo_archivo', 'Nombre del documento (código)', tituloArchivo({ ...F, titulo_archivo:'' }))}</div></details>
@@ -353,6 +354,7 @@ function activarRevision(R){
       guardarMemoria(); re(); };
     else el.oninput = () => { m.ficha[el.dataset.fk] = el.value; guardarMemoria(); };
   });
+  activarCons(m, re);
   if($('#rvPerfil')) $('#rvPerfil').onchange = e => { m.perfil_id = e.target.value; guardarMemoria(); };
   if($('#rvEstado')) $('#rvEstado').onchange = e => { m.estado = e.target.value; guardarMemoria(); toast(m.estado === 'apr' ? 'Terminada: ya la puede ver el personal de consulta.' : m.estado === 'pau' ? 'Pausada: solo tú la ves.' : 'En proceso: solo tú la ves.'); re(); };
   $$('[data-rv]').forEach(el => {

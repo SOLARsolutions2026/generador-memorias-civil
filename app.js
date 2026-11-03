@@ -481,6 +481,31 @@ function portadaHTML(imprimir, urlImg, urlFirma){
   </div>`;
 }
 
+// Consecutivo editable (pedido de Amo 3-nov): por defecto el automático DOC-MEM-DD-MM-AA; se puede cambiar, sin repetir otro.
+// Las variantes comparten el consecutivo de su original, así que se cambia en todo el grupo.
+const consHTML = (m, ro) => `<div class="f"><label for="f_cons">Consecutivo</label><input id="f_cons" class="cons-in" value="${esc(m.consecutivo)}" ${ro} autocomplete="off" spellcheck="false"/>
+  <div class="hint">Por defecto el automático (${esc(S.cfg.prefijo || 'DOC-MEM')}-DD-MM-AA). Puede cambiarlo; no se puede repetir.</div></div>`;
+function activarCons(m, luego){
+  const el = $('#f_cons'); if(!el || !esIng()) return;
+  const aplicar = async () => {
+    const nuevo = el.value.trim().replace(/\s+/g, ' ');
+    if(nuevo === m.consecutivo) return;
+    if(!nuevo){ el.value = m.consecutivo; return toast('El consecutivo no puede quedar vacío.'); }
+    const raiz = m.variante_de || m.id;
+    try{
+      const { data:ex, error:e1 } = await sb.from('mem_memorias').select('id').eq('consecutivo', nuevo).is('variante_de', null).neq('id', raiz);
+      if(e1) throw e1;
+      if(ex?.length){ el.value = m.consecutivo; return toast(`Ya existe una memoria con el consecutivo ${nuevo}.`, 5000); }
+      if(!confirm(`¿Cambiar el consecutivo ${m.consecutivo} → ${nuevo}?\nSe cambia en la portada, los rótulos y los PDF que genere de aquí en adelante.`)){ el.value = m.consecutivo; return; }
+      const { error } = await sb.from('mem_memorias').update({ consecutivo:nuevo }).or(`id.eq.${raiz},variante_de.eq.${raiz}`);
+      if(error) throw error;
+      m.consecutivo = nuevo; (S.mems || []).forEach(x => { if(x.id === raiz || x.variante_de === raiz) x.consecutivo = nuevo; });
+      toast('Consecutivo cambiado.'); luego && luego();
+    }catch(e){ el.value = m.consecutivo; err(e, 'No se pudo cambiar el consecutivo'); }
+  };
+  el.onchange = aplicar; el.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); el.blur(); } };
+}
+
 // Sube la imagen de portada de la memoria abierta (se usa en la ficha y en la portada)
 async function subirPortada(file, luego){
   const m = S.m;
@@ -651,7 +676,7 @@ ficha(){
   pane(`${m.tipo === 'verificacion' ? `<div class="card"><div class="ct">Herramientas de esta verificación</div>${herrHTML(herDe(m))}<p class="hint">Al quitar una herramienta sus datos no se borran: solo deja de verse en los pasos y en el PDF.</p></div>` : ''}
   <div class="card"><div class="ct">Identificación del documento</div>
     <div class="fg g4">
-      <div class="f"><label>Consecutivo</label><input value="${esc(m.consecutivo)}" readonly/><div class="hint">Automático: ${esc(S.cfg.prefijo||'DOC-MEM')}-DD-MM-AA</div></div>
+      ${consHTML(m, ro)}
       ${inp('fecha','Fecha de emisión',{type:'date'})}
       <div class="f"><label for="f_perfil">Membrete y pie de página</label><select id="f_perfil" ${ro}>${S.perfiles.map(p => `<option value="${p.id}" ${p.id===perfilDe(m).id?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select><div class="hint">Se editan en ⚙ Configuración</div></div>
       <div class="f"><label for="f_estado">Estado</label><select id="f_estado" ${ro || (m.estado==='arch'?'disabled':'')}>
@@ -686,6 +711,7 @@ ficha(){
     if(el.dataset.k === 'proyecto') $('#f_titulo_archivo').placeholder = tituloArchivo({ ...F, titulo_archivo:'' });
     prev(); guardarMemoria();
   }));
+  activarCons(m, () => PANES.ficha());
   $('#f_perfil').onchange = e => { m.perfil_id = e.target.value; prev(); guardarMemoria(); };
   $('#f_estado').onchange = e => { m.estado = e.target.value;
     if(m.estado === 'pau'){ const mot = prompt('¿Por qué se pausa? (opcional)', F.pausa || ''); if(mot !== null) F.pausa = mot.trim(); }

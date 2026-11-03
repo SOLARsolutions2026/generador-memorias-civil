@@ -196,6 +196,9 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Estado nuevo `pau` = Pausada (sin restricción en la columna, no hizo falta migración; consulta sigue viendo solo apr/arch); motivo en `ficha.pausa` (se pide al pausar). `apr` se muestra como «Terminada».
 - Pestañas `S.lf.tab` (wip/pau/apr/arch/todas, recordada en `localStorage.memTab`) con contadores, buscador (consecutivo, título, proyecto, cliente, municipio, motivo, variantes), fichas por tipo (completo/revision/verificacion) y año (si hay más de uno). Terminadas y archivadas agrupadas por mes. Estado editable en la fila (`select.est-sel` → `cambiarEstado`). Clase `.lbar` (ojo: `.mbar` ya existía para la barra móvil).
 
+## Consecutivo editable (3-nov, pedido de Amo) — app.js `consHTML` / `activarCons`
+- Por defecto el automático DOC-MEM-DD-MM-AA(-n); en la ficha (y en «Documento» de la revisión) se puede escribir otro. Se valida que no exista en otra memoria raíz, se pide confirmación y se actualiza la raíz y sus variantes (`or(id.eq.raiz,variante_de.eq.raiz)`). Las rutas de Storage usan el id, no el consecutivo.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
