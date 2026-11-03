@@ -78,6 +78,7 @@ function paneAnexoC(){
     h += `<div class="sap-file"><div class="sap-ico">📄</div><div><b>${esc(C.archivo.nombre)}</b> <span class="hint">(${C.archivo.kb} KB · cargado ${esc(fecha)})</span>
         <div class="hint">Unidades ${esc(M.unidades || '—')} · ${M.nudos.n} nudos · ${M.frames} elementos · ${M.patrones.length} patrones de carga</div></div>
         <div class="sap-acc"><button class="btn sm" type="button" data-guiax>📋 Cómo exportar</button>${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
+      ${(M.lector || 1) < 2 ? `<div class="note" style="margin-top:8px;background:#fef2f2;border-left:3px solid #b91c1c;color:#991b1b"><b>Hay que volver a leer este modelo.</b> La app tenía un error al leer los factores de las combinaciones (en esta versión del software la columna se llama distinto) y solo tomaba las combinaciones con sismo: las fuerzas del Anexo D, las reacciones y la revisión de combinaciones pueden estar incompletas. ${esIng() ? '<button class="btn sm pri" type="button" id="releerS2k" style="margin-left:6px">🔄 Volver a leer el modelo</button>' : ''}</div>` : ''}
       <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde el software?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
     const nRes = M.fuerzas?.n ? `<span class="tab-n">${M.fuerzas.grupos.length}</span>` : '<span class="tab-n vacio">sin datos</span>';
     h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}${C.der?.res?.ok ? ` <span class="pill ${C.der.res.cumple ? 'ok' : 'no'}">derivas ${C.der.res.cumple ? '✓' : '✗'}</span>` : ''}</button></div>
@@ -125,6 +126,10 @@ function paneAnexoC(){
     el.ondragover = e => { e.preventDefault(); el.classList.add('over'); }; el.ondragleave = () => el.classList.remove('over');
     el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); const f = e.dataTransfer.files[0]; if(f) fn(f); }; };
   zona($('#subeS2k'), '.$2k,.s2k,.txt', cargarModeloC);
+  if($('#releerS2k')) $('#releerS2k').onclick = async () => { const C = datosC();
+    try{ toast('Leyendo de nuevo el modelo…', 20000); const t = await textoModelo(C), M = AnexoC.analizar(t); if(!M.ok) return toast(M.error, 6000);
+      delete M.tablas; C.modelo = M; guardarMemoria(); toast(`Modelo leído de nuevo: ${M.fuerzas?.res?.length || 0} combinaciones de resistencia. Revise el Anexo D.`, 6000); renderWS('C');
+    }catch(e){ err(e, 'No se pudo leer de nuevo el modelo'); } };
   if(!M) return;
   const subeImg = async f => { if(!f.type.startsWith('image/')) return toast('Ese archivo no es una imagen.');
     try{ toast('Subiendo imagen…', 15000); const blob = await comprimir(f, { max:2000, type:'image/jpeg', q:0.85 }), path = `${S.m.id}/modelo-sap.jpg`;

@@ -128,11 +128,11 @@ function analizar(texto){
   const cb = {}; let ult = '';
   for(const r of tb('COMBINATION DEFINITIONS')){ const n = r.ComboName || ult; ult = n; if(!n) continue;
     const o = cb[n] = cb[n] || { n, tipo:r.ComboType || '', casos:{} };
-    if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF)); }
+    if(r.CaseName) o.casos[r.CaseName] = r3((o.casos[r.CaseName] || 0) + num(r.ScaleSF ?? r.ScaleFactor)); }
   const combos = Object.values(cb);
   const dsp = desplazamientos(texto), fz = fuerzasDe(T, null), rc = reaccionesDe(T);
 
-  return { ok:true, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
+  return { ok:true, lector:2, ver:pc.Version || '', prog:pc.ProgramName || 'SAP2000', unidades, okUnid, materiales, patrones,
     nudos:{ n:xs.length, x:ext(0), y:ext(1), z:ext(2), apoyos }, frames:tb('FRAME SECTION ASSIGNMENTS').length, secciones, dist, punt, nudosF, combos, desp:{ casos:dsp.casos, n:dsp.n }, fuerzas:fz, reac:{ n:rc.n, nudos:rc.nudos, casos:rc.casos, res:rc.res, serv:rc.serv }, diseno:disenoDe(T),
     tablas:Object.keys(T) };
 }
@@ -276,7 +276,7 @@ function funcionElem(a, b){
 function combosResistencia(T){
   const pat = Object.fromEntries((T['LOAD PATTERN DEFINITIONS'] || []).map(r => [r.LoadPat, categoria(r.LoadPat, r.DesignType)]));
   const cb = {}; let ult = '';
-  for(const r of T['COMBINATION DEFINITIONS'] || []){ const n = r.ComboName || ult; ult = n; if(!n || !r.CaseName) continue; (cb[n] = cb[n] || []).push([r.CaseName, num(r.ScaleSF)]); }
+  for(const r of T['COMBINATION DEFINITIONS'] || []){ const n = r.ComboName || ult; ult = n; if(!n || !r.CaseName) continue; (cb[n] = cb[n] || []).push([r.CaseName, num(r.ScaleSF ?? r.ScaleFactor)]); }   // según la versión la columna es ScaleSF o ScaleFactor (3-nov: con ScaleFactor se perdían las combinaciones sin sismo)
   const info = (n, prof = 0) => { const o = { D:false, E:false, N:false, max:0 };
     for(const [c, f] of cb[n] || []){
       if(cb[c] && prof < 5){ const i = info(c, prof + 1); o.D ||= i.D; o.E ||= i.E; o.N ||= i.N; o.max = Math.max(o.max, Math.abs(f) * (i.max || 1)); continue; }

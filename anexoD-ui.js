@@ -150,6 +150,7 @@ function paneAnexoD(){
   let h = `<div class="tabs" role="tablist">${Object.entries(tabs).map(([k, v]) => `<button type="button" role="tab" data-tabd="${k}" class="${tabD === k ? 'on' : ''}">${v}</button>`).join('')}</div>`;
   // Aviso de derivas (se revisan en el Anexo C antes de diseñar; pedido de Amo 29-oct)
   const dr = C?.der?.res, bOn = S.m.anexos?.B?.aplica !== false && S.m.anexos?.B;
+  if(C?.modelo && (C.modelo.lector || 1) < 2) h += `<div class="note" style="background:#fef2f2;border-left:3px solid #b91c1c;color:#991b1b"><b>Las fuerzas pueden estar incompletas:</b> el modelo se leyó con una versión de la app que solo tomaba las combinaciones con sismo. Vuelva a leerlo en el <a href="#/m/${S.m.id}/C" data-irc>Anexo C</a> (botón «🔄 Volver a leer el modelo») y luego revise estos elementos.</div>`;
   if(bOn && C?.modelo) h += dr?.ok ? (dr.cumple ? '' : `<div class="note" style="background:#fef2f2;border-left:3px solid #b91c1c;color:#991b1b"><b>Las derivas no cumplen</b> (máx. ${fx(dr.max * 100, 2)} % &gt; 1 %): revisa el modelo antes de diseñar los elementos. <a href="#/m/${S.m.id}/C" data-irc>Ver C-8 Derivas</a></div>`)
     : `<div class="note amber">Aún no revisas las derivas: hazlo en el <a href="#/m/${S.m.id}/C" data-irc>Anexo C → Resultados → C-8 Derivas</a> antes de diseñar.</div>`;
   if(tabD !== 'met') return paneConcreto(tabD, h);
