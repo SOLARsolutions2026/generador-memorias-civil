@@ -692,3 +692,14 @@ table.t td{border-bottom:1px solid #edf1f6}
 .est-wip{background:#dbeafe;color:#1d4ed8}.est-pau{background:#fef3c7;color:#92400e}.est-apr{background:#dcfce7;color:#166534}
 .meta.pausa{color:#92400e;margin-top:2px}
 .vtag.tipo.dis{background:#eff6ff;color:#1e40af}
+/* Guía de exportación del modelo (Anexo C, opción A de Amo 3-nov) */
+.modal .box2.gx-box{max-width:900px;width:calc(100vw - 32px)}
+.gx{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+@media (max-width:760px){.gx{grid-template-columns:minmax(0,1fr)}}
+.gx-tree{border:1px solid #9ca3af;background:#fff;padding:8px 10px;font-family:'Segoe UI',system-ui,sans-serif;font-size:12.5px;line-height:1.85;max-height:62vh;overflow:auto}
+.gx-h{font-weight:700;color:#0f2b4c;margin-top:4px}.gx-h.on::before{content:"☑ ";color:#16a34a}
+.gx-i{white-space:nowrap}.gx-1{padding-left:18px}.gx-2{padding-left:36px}.gx-3{padding-left:54px}
+.gx-i.on{color:#166534;font-weight:700}.gx-i.on::before{content:"☑ ";color:#16a34a}.gx-i.off{color:#9ca3af}.gx-i.off::before{content:"☐ "}
+.gx-why{color:#64748b;font-weight:400;font-size:11px;margin-left:8px;white-space:normal}
+.gx-ok{color:#166534}
+.gx-notas .tip-l{border-left:3px solid #d97706;background:#fffbeb;padding:7px 10px;margin-bottom:8px;border-radius:0 6px 6px 0;font-size:12.5px;line-height:1.45}

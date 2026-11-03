@@ -41,17 +41,43 @@ async function cargarModeloC(f){
 }
 
 let tabC = 'modelo';   // pestaña del Anexo C: información del modelo | resultados
+// Guía de exportación (opción A de Amo, 3-nov): copia del árbol «Choose Tables for Export to Text File» con las casillas que lee la app
+function guiaExportHTML(){
+  const it = (n, t, why, on = true) => `<div class="gx-i gx-${n} ${on ? 'on' : 'off'}">${t}${why ? `<span class="gx-why">${why}</span>` : ''}</div>`;
+  return `${hdModal('📋 Cómo exportar el modelo')}
+    <p class="hint" style="margin:0 0 8px">En el software: <b>File → Export → .s2k Text File…</b> Se abre la ventana «Choose Tables for Export to Text File». Marque las casillas en <b class="gx-ok">verde</b>.</p>
+    <div class="gx"><div class="gx-tree">
+      <div class="gx-h on">MODEL DEFINITION <span class="gx-why">marque la casilla de arriba: queda todo</span></div>
+      ${it(1, 'System Data', 'versión y unidades')}${it(1, 'Property Definitions', 'materiales y secciones')}${it(1, 'Load Pattern Definitions', 'patrones D, Lr, W, E…')}
+      ${it(1, 'Other Definitions', 'combinaciones')}${it(1, 'Load Case Definitions', 'casos y combinaciones')}${it(1, 'Connectivity Data', 'nudos y elementos')}
+      ${it(1, 'Joint Assignments', 'apoyos y cargas en nudos')}${it(1, 'Frame Assignments', 'secciones y cargas en elementos')}${it(1, 'Options/Preferences Data', '')}${it(1, 'Miscellaneous Data', '')}
+      <div class="gx-h">ANALYSIS RESULTS <span class="gx-why">solo estas</span></div>
+      ${it(1, 'Run Information', '', false)}
+      <div class="gx-i gx-1">Joint Output</div>${it(2, 'Displacements', 'derivas (C-8) y torsión')}${it(2, 'Reactions', 'zapatas, pedestales y placa base')}
+      <div class="gx-i gx-1">Element Output</div><div class="gx-i gx-2">Frame Output</div>${it(3, 'Element Forces - Frames', 'fuerzas del Anexo D y conexiones')}
+      ${it(1, 'Structure Output', '', false)}
+      <div class="gx-h">DESIGN DATA <span class="gx-why">solo si corrió el diseño en acero (opcional)</span></div>
+      <div class="gx-i gx-1">Steel Design</div>${it(2, 'Summary Data', 'longitudes, K y Cb por elemento')}${it(2, 'PMM Details', '')}
+    </div><div class="gx-notas">
+      <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> marque las combinaciones de resistencia (U…), las de servicio y las envolventes de sismo (100%X 30%Y y 30%X 100%Y). Las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí.</div>
+      <div class="tip-l"><b>Load Patterns (Model Def.):</b> déjelos todos («Select Load Patterns…» → todos).</div>
+      <div class="tip-l"><b>Unidades:</b> antes de exportar ponga <b>KN, m, C</b> (abajo a la derecha de la pantalla del software).</div>
+      <div class="tip-l"><b>Al terminar:</b> OK, guarde el archivo .$2k y súbalo aquí. Si cambia el modelo, exporte de nuevo y use «Reemplazar».</div>
+    </div></div>`;
+}
+function abrirGuiaExport(){ abrirModal(guiaExportHTML()).md.querySelector('.box2').classList.add('gx-box'); }
+
 function paneAnexoC(){
   const C = datosC(), M = C.modelo, ro_ = esIng() ? '' : 'disabled';
-  const pasos = `<ol class="pasos-sap"><li>En el software de análisis: <b>File → Export → .s2k Text File…</b></li><li>Deja marcadas todas las tablas y unidades <b>KN, m, C</b>.</li><li>Guarda el archivo y súbelo aquí.</li></ol>`;
+  const pasos = `<ol class="pasos-sap"><li>En el software de análisis: <b>File → Export → .s2k Text File…</b></li><li>Marca las tablas que lee la app (<a href="#" data-guiax>📋 ver cuáles</a>) y unidades <b>KN, m, C</b>.</li><li>Guarda el archivo y súbelo aquí.</li></ol>`;
   let h = `<div class="card"><div class="ct">Archivo del modelo estructural</div>`;
-  if(!M) h += `<p class="lead" style="margin-bottom:10px">La app lee el archivo de texto del modelo y arma sola las tablas del Anexo C.</p>${pasos}
+  if(!M) h += `<p class="lead" style="margin-bottom:10px">La app lee el archivo de texto del modelo y arma sola las tablas del Anexo C.</p>${pasos}<button class="btn sm" type="button" data-guiax style="margin-top:4px">📋 Cómo exportar el modelo: qué casillas marcar</button>
       ${esIng() ? `<button class="drop-img" type="button" id="subeS2k" style="max-width:none;min-height:110px;margin-top:10px"><div class="ph-in"><div style="font-size:22px">📂</div><b>Subir archivo .$2k</b><br/>toca o arrastra aquí</div></button>` : '<p class="muted">Aún no se ha cargado el modelo.</p>'}</div>`;
   else {
     const fecha = new Date(C.archivo.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' });
     h += `<div class="sap-file"><div class="sap-ico">📄</div><div><b>${esc(C.archivo.nombre)}</b> <span class="hint">(${C.archivo.kb} KB · cargado ${esc(fecha)})</span>
         <div class="hint">Unidades ${esc(M.unidades || '—')} · ${M.nudos.n} nudos · ${M.frames} elementos · ${M.patrones.length} patrones de carga</div></div>
-        <div class="sap-acc">${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
+        <div class="sap-acc"><button class="btn sm" type="button" data-guiax>📋 Cómo exportar</button>${esIng() ? '<button class="btn sm" type="button" id="subeS2k">🔄 Reemplazar</button>' : ''}<button class="btn sm" type="button" id="bajaS2k">⬇ Descargar</button></div></div>
       <details class="hint" style="margin-top:8px"><summary>¿Cómo exportar el archivo desde el software?</summary>${pasos}<p>Si cambias el modelo (otra iteración), exporta de nuevo y usa <b>Reemplazar</b>.</p></details></div>`;
     const nRes = M.fuerzas?.n ? `<span class="tab-n">${M.fuerzas.grupos.length}</span>` : '<span class="tab-n vacio">sin datos</span>';
     h += `<div class="tabs" role="tablist" style="margin-top:4px"><button type="button" role="tab" data-tabc="modelo" class="${tabC === 'modelo' ? 'on' : ''}">Información del modelo</button><button type="button" role="tab" data-tabc="res" class="${tabC === 'res' ? 'on' : ''}">Resultados ${nRes}${C.der?.res?.ok ? ` <span class="pill ${C.der.res.cumple ? 'ok' : 'no'}">derivas ${C.der.res.cumple ? '✓' : '✗'}</span>` : ''}</button></div>
@@ -92,6 +118,7 @@ function paneAnexoC(){
   if(C.img) urlDe(C.img).then(u => { const b = $('#imgC'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Imagen del modelo" style="max-width:100%;max-height:340px"/>` : '<span class="muted">No se encontró la imagen.</span>'; });
   if($('#bajaS2k')) $('#bajaS2k').onclick = async () => { const u = await urlDe(C.archivo.path); if(!u) return toast('No se encontró el archivo.');
     const a = document.createElement('a'); a.href = u; a.download = C.archivo.nombre; a.click(); };
+  $$('[data-guiax]').forEach(b => b.onclick = e => { e.preventDefault(); abrirGuiaExport(); });
   if(!esIng()) return;
   const zona = (el, accept, fn) => { if(!el) return;
     el.onclick = async () => { const f = await elegirArchivo(accept); if(f) fn(f); };
