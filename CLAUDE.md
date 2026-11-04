@@ -142,6 +142,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   `memDoc(ctx, ed)` arma los capítulos 1–10 (generalidades, introducción, planta, ubicación, materiales, cargas A/B, R y irregularidades K, combinaciones K, análisis: derivas y torsión con `K.tor.res`, resumen de cada PF (CHK), pedestales, zapatas, conexiones con `descCon`) numerando títulos, tablas y figuras;
   en la impresión cada uno lleva una marca invisible `.mk` «@@H<id>@@ / @@T<i>@@ / @@F<i>@@»; `gen.impreso` guarda toc/tabs/figs. Separadores «ANEXO X» (`sepAnexo`, marca @@S<L>@@, `gen.op.sep`).
   Paso 2: tabla de contenido (capítulos + anexos + A-1 fichas + archivos F/G), lista de tablas, de figuras y de anexos, paginadas con puntos guía; numeración final = posición + páginas de las listas.
+- PDF que pdf-lib no puede copiar (3-nov, estudio de suelos de La Brasa: protegido o con estructura rara → «—» páginas y no entraba al PDF final): `contarPaginas` (pdf-lib y si falla pdf.js) al subir y, para los ya subidos sin páginas, al abrir el paso FG; al unir, si pdf-lib falla o `isEncrypted`, `paginasComoImagen` dibuja cada página con pdf.js (≈150 ppp, JPEG) en carta vertical (o su tamaño si no es carta) y quita lo que alcanzó a entrar.
 - Pendiente: ZIP para el NAS.
 
 ## Estilo (opción A de Amo, 29-oct: sobrio, «el tamaño ordena, el color solo dice si cumple»)

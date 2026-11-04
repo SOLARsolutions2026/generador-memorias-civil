@@ -28,6 +28,36 @@ async function libPDFjs(){
   _pdfjs.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.mjs', location.href).href;
   return _pdfjs;
 }
+// PDF que pdf-lib no puede copiar (protegido con contraseña de permisos, dañado o con una estructura rara; pasó con
+// el estudio de suelos de La Brasa, 3-nov): pdf.js sí lo abre, así que cada página se dibuja como imagen (≈150 ppp)
+// y se pone en la hoja (carta vertical si carta = true, si no en su tamaño). El texto deja de ser seleccionable.
+async function paginasComoImagen(PDFLib, out, bytes, carta, log){
+  const pdfjs = await libPDFjs(), doc = await pdfjs.getDocument({ data:new Uint8Array(bytes.slice(0)), isEvalSupported:false }).promise, nuevas = [];
+  for(let i = 1; i <= doc.numPages; i++){
+    const p = await doc.getPage(i), v1 = p.getViewport({ scale:1 }), sc = Math.min(2.1, 1900 / Math.max(v1.width, v1.height)), v = p.getViewport({ scale:sc });
+    const cv = document.createElement('canvas'); cv.width = Math.ceil(v.width); cv.height = Math.ceil(v.height);
+    const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    await p.render({ canvasContext:cx, viewport:v }).promise;
+    const jpg = await new Promise((ok, mal) => cv.toBlob(b => b ? b.arrayBuffer().then(ok) : mal(new Error('No se pudo dibujar la página ' + i)), 'image/jpeg', 0.82));
+    cv.width = cv.height = 0; p.cleanup();
+    const img = await out.embedJpg(jpg), w = v1.width, h = v1.height;
+    if(!carta){ const pg = out.addPage([w, h]); pg.drawImage(img, { x:0, y:0, width:w, height:h }); nuevas.push(pg); }
+    else {
+      const m = { x:36, top:36, bot:54 }, aw = 612 - 2*m.x, ah = 792 - m.top - m.bot, rot = w > h, ew = rot ? h : w, eh = rot ? w : h, s = Math.min(aw/ew, ah/eh);
+      const x0 = m.x + (aw - ew*s)/2, y0 = m.bot + (ah - eh*s)/2, pg = out.addPage([612, 792]);
+      if(rot) pg.drawImage(img, { x:x0 + ew*s, y:y0, width:w*s, height:h*s, rotate:PDFLib.degrees(90) });   // acostada → vertical
+      else pg.drawImage(img, { x:x0, y:y0, width:w*s, height:h*s });
+      nuevas.push(pg);
+    }
+    if(log && i % 10 === 0) log(`  … página ${i} de ${doc.numPages}`);
+  }
+  await doc.destroy();
+  return nuevas;
+}
+async function contarPaginas(bytes){
+  try{ const PDFLib = await libPDF(), d = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption:true }); return d.getPageCount(); }catch(e){}
+  try{ const pdfjs = await libPDFjs(), d = await pdfjs.getDocument({ data:new Uint8Array(bytes.slice(0)), isEvalSupported:false }).promise, n = d.numPages; await d.destroy(); return n; }catch(e){ console.warn(e); return null; }
+}
 async function bytesDe(path){ const u = await urlFicha(path); if(!u) throw new Error('Sin dirección para ' + path); const r = await fetch(u); if(!r.ok) throw new Error(`No se pudo descargar ${path} (${r.status})`); return r.arrayBuffer(); }
 const kbTxt = kb => kb >= 1024 ? fx(kb/1024, 1) + ' MB' : Math.round(kb) + ' kB';
 const slugArch = n => String(n).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(0, 60);
@@ -54,7 +84,13 @@ function paneFG(){
   pane(`<p class="lead" style="margin-bottom:12px">Estos anexos no se calculan aquí: subes los PDF y la app los pega en el PDF final, detrás de su portada.</p>${card('F')}${card('G')}`);
   activarFG();
 }
+const _contados = new Set();
 function activarFG(){
+  // archivos subidos antes sin número de páginas (pdf-lib no los pudo leer): se cuentan ahora con pdf.js
+  const sinPag = ['F','G'].flatMap(k => (S.m.anexos?.[k]?.archivos || []).filter(a => a.pags == null && !_contados.has(a.path)));
+  if(sinPag.length) (async () => { let hubo = false;
+    for(const a of sinPag){ _contados.add(a.path); try{ const n = await contarPaginas(await bytesDe(a.path)); if(n){ a.pags = n; hubo = true; } }catch(e){ console.warn(e); } }
+    if(hubo){ guardarMemoria(); if(location.hash.endsWith('/FG')) PANES.FG(); } })();
   $$('[data-fgver]').forEach(b => b.onclick = async () => { const [k, i] = b.dataset.fgver.split('|'); const u = await urlDe(datosFG(k).archivos[+i].path); if(u) window.open(u, '_blank', 'noopener'); });
   if(!esIng()) return;
   const re = () => { guardarMemoria(); PANES.FG(); };
@@ -74,7 +110,7 @@ function activarFG(){
       if(f.size > 50*1024*1024){ toast(`«${f.name}» pesa más de 50 MB (límite del plan gratuito por archivo). Comprímelo antes de subirlo.`, 6000); continue; }
       try{
         toast(`Subiendo «${f.name}»…`, 30000);
-        let pags = null; try{ if(PDFLib){ const d = await PDFLib.PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption:true }); pags = d.getPageCount(); } }catch(e){ console.warn(e); }
+        const pags = await contarPaginas(await f.arrayBuffer());
         const path = `${S.m.id}/anexo${k}/${Date.now().toString(36)}-${slugArch(f.name)}`;
         await subir(path, f, 'application/pdf');
         X.archivos.push({ nombre:f.name, path, kb:+(f.size/1024).toFixed(1), pags, fecha:new Date().toISOString() });
@@ -192,9 +228,15 @@ async function unirPDF(file, op, log){
     const p0 = out.getPageCount();
     if(s.tipo === 'ext'){ log(`Agregando «${s.ent.t}»…`);
       // fichas técnicas y estudio de suelos: a carta vertical (Carta, calc/carta.js); los planos quedan en su tamaño
-      try{ const d = await PDFLib.PDFDocument.load(await bytesDe(s.path), { ignoreEncryption:true });
+      let by = null;
+      try{ by = await bytesDe(s.path); const d = await PDFLib.PDFDocument.load(by.slice(0), { ignoreEncryption:true });
+        if(d.isEncrypted) throw new Error('archivo protegido');
         if(s.carta) pags = await Carta.paginas(PDFLib, out, d); else { pags = await out.copyPages(d, d.getPageIndices()); pags.forEach(p => out.addPage(p)); } }
-      catch(e){ log(`⚠ No se pudo agregar «${s.ent.t}»: ${e.message}`); continue; }
+      catch(e){
+        for(let i = out.getPageCount() - 1; i >= p0; i--) out.removePage(i);   // lo que alcanzó a entrar
+        if(!by){ log(`⚠ No se pudo descargar «${s.ent.t}»: ${e.message}`); continue; }
+        try{ log(`  «${s.ent.t}» no se puede copiar directo (${e.message}); se agrega cada página como imagen…`); pags = await paginasComoImagen(PDFLib, out, by, s.carta, log); }
+        catch(e2){ log(`⚠ No se pudo agregar «${s.ent.t}»: ${e2.message}`); continue; } }
       for(let i = p0; i < out.getPageCount(); i++) extPag.add(i); }
     else pags.forEach(p => out.addPage(p));
     if(s.ent) marcas.push({ ...s.ent, pag:p0, n:pags.length });
