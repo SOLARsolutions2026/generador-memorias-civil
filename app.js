@@ -837,9 +837,11 @@ async function renderConfig(){
     <div class="fg g4">${ci('nombre_firma','Nombre en la firma')}${ci('matricula','Matrícula profesional')}${ci('iniciales','Iniciales para revisiones')}${ci('software','Programa de análisis (como sale en lo impreso)','Por licencia, en los anexos no se nombra el programa. Vacío = «software de análisis estructural»')}${ci('prefijo','Prefijo del consecutivo','Ej: DOC-MEM → DOC-MEM-18-08-26')}</div>
     <div class="sig" style="margin-top:12px"><div class="box" id="sigBox">Sin firma</div><div><b>Firma escaneada</b><div class="hint">PNG o JPG con fondo blanco o transparente. Va en la portada sobre la línea de firma.</div>
       <button class="btn sm pri" type="button" id="upSig" style="margin-top:6px">${c.firma_path?'Cambiar firma':'Subir firma'}</button></div></div></div>
+  ${bibliotecaCfgHTML()}
   <div class="card"><div class="ct">Usuarios</div><div id="users"><p class="muted">Cargando…</p></div>
     <div class="hint" style="margin-top:8px">Para dar acceso a alguien: créalo en Supabase → Authentication → <b>Add user</b>. Entra como <b>Consulta</b> (solo ve memorias terminadas) y aquí puedes cambiarle el rol.</div></div>`;
   $('#back2').onclick = () => ir('#/');
+  activarBibliotecaCfg(renderConfig);
   urlDe(c.firma_path).then(u => { if(u && $('#sigBox')) $('#sigBox').innerHTML = `<img src="${esc(u)}" alt="Firma"/>`; });
   $$('[data-pid]').forEach(b => b.onclick = async () => { await guardarPendientes(); S.editPerfil = b.dataset.pid; renderConfig(); });
   $$('[data-pk]').forEach(el => el.addEventListener('input', () => {

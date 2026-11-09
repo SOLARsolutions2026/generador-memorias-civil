@@ -201,6 +201,11 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 ## Consecutivo editable (3-nov, pedido de Amo) — app.js `consHTML` / `activarCons`
 - Por defecto el automático DOC-MEM-DD-MM-AA(-n); en la ficha (y en «Documento» de la revisión) se puede escribir otro. Se valida que no exista en otra memoria raíz, se pide confirmación y se actualiza la raíz y sus variantes (`or(id.eq.raiz,variante_de.eq.raiz)`). Las rutas de Storage usan el id, no el consecutivo.
 
+## Biblioteca de paneles y rieles (9-nov, opciones B + C de Amo) — `biblioteca-ui.js`
+- `modalItemBib(lista, idx)` = ventana para crear/corregir un panel o riel (campos `CAMPOS_BIB`, mismas unidades del Anexo A; ficha PDF a `biblioteca/<lista>-<slug>-<ts>.pdf`); guarda `mem_config.biblioteca` y devuelve el objeto.
+- Botón «＋ Nuevo» junto a «Panel solar» y «Riel de montaje» en la revisión de cubierta (`data-rvnuevo`, lo deja escogido) y en el Anexo A (`data-anuevo`).
+- Configuración: tarjeta `bibliotecaCfgHTML` / `activarBibliotecaCfg` con tablas, ✎ corregir, 🗑 quitar (no borra el PDF: las memorias guardan copia del objeto con su ruta).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)

@@ -105,8 +105,8 @@ function renderRevision(){
     <div style="margin:4px 0 8px">${chkR('cielo.aplica', 'Tiene cielo raso colgado de las correas')}</div>
     ${R.cielo.aplica ? `<div class="fg g4">${selR('cielo.tipo', 'Tipo de cielo raso', Object.keys(AnexoA.CIELOS).map(k => [k, `${k} — ${AnexoA.CIELOS[k]} kg/m²`]))}${inpR('cielo.w', 'Peso del cielo raso (kg/m²)', { n:1, h:'Se llena con el tipo elegido; cámbielo si el cielo real pesa distinto.' })}</div>` : ''}
     <div style="margin:4px 0 8px">${chkR('paneles', 'La cubierta lleva paneles solares')}</div>
-    ${R.paneles ? `<div class="fg g4"><div class="f"><label>Panel solar</label><select id="rvPanel" ${ro}>${(bib.paneles || []).map((p, i) => `<option value="${i}" ${p.nombre === R.panel?.nombre ? 'selected' : ''}>${esc(p.nombre)} — ${p.peso} kg</option>`).join('')}</select></div>
-      <div class="f"><label>Riel de montaje</label><select id="rvRiel" ${ro}>${(bib.rieles || []).map((r, i) => `<option value="${i}" ${r.nombre === R.riel?.nombre ? 'selected' : ''}>${esc(r.nombre)} — ${r.peso} kg/m</option>`).join('')}</select></div>
+    ${R.paneles ? `<div class="fg g4"><div class="f"><label>Panel solar${ro ? '' : ' <button class="btn xs" type="button" data-rvnuevo="paneles" title="Agregar un panel nuevo a la biblioteca">＋ Nuevo</button>'}</label><select id="rvPanel" ${ro}>${(bib.paneles || []).map((p, i) => `<option value="${i}" ${p.nombre === R.panel?.nombre ? 'selected' : ''}>${esc(p.nombre)} — ${p.peso} kg</option>`).join('')}</select></div>
+      <div class="f"><label>Riel de montaje${ro ? '' : ' <button class="btn xs" type="button" data-rvnuevo="rieles" title="Agregar un riel nuevo a la biblioteca">＋ Nuevo</button>'}</label><select id="rvRiel" ${ro}>${(bib.rieles || []).map((r, i) => `<option value="${i}" ${r.nombre === R.riel?.nombre ? 'selected' : ''}>${esc(r.nombre)} — ${r.peso} kg/m</option>`).join('')}</select></div>
       ${inpR('nRieles', 'Rieles por fila de paneles', { n:1 })}</div>` : ''}
     <div class="fg g4">${inpR('Lr', 'Carga viva de cubierta Lr (kN/m²)', { n:1, ph:th != null ? `mínimo ${Correas.LrMin(th)} (θ = ${fR(th, 1)}°)` : '0.50', h:'Tabla B.4.2.1-2: 0.50 kN/m² si θ ≤ 15°; 0.35 si θ > 15° (proyección horizontal).' })}</div>
     <div class="rv-strip" id="rvCargas">${cargasStrip(R, ctx)}</div></div>
@@ -368,6 +368,8 @@ function activarRevision(R){
     if(el.dataset.rc === 'nom') el.onchange = re;
   });
   $$('[data-rcb]').forEach(el => el.onchange = () => { cor()[el.dataset.rcb] = el.value === '1'; guardarMemoria(); re(); });
+  $$('[data-rvnuevo]').forEach(b => b.onclick = async e => { e.preventDefault(); const l = b.dataset.rvnuevo, x = await modalItemBib(l);
+    if(x){ R[l === 'paneles' ? 'panel' : 'riel'] = { ...x }; guardarMemoria(); re(); } });
   if($('#rvPanel')) $('#rvPanel').onchange = e => { R.panel = { ...(S.cfg.biblioteca.paneles[e.target.value]) }; guardarMemoria(); re(); };
   if($('#rvRiel')) $('#rvRiel').onchange = e => { R.riel = { ...(S.cfg.biblioteca.rieles[e.target.value]) }; guardarMemoria(); re(); };
   $$('[data-rsec]').forEach(b => b.onclick = () => { const c = cor(); c.sec = b.dataset.rsec; c.acero = c.sec === 'HSS' ? 'A500B' : 'A36'; guardarMemoria(); re(); });

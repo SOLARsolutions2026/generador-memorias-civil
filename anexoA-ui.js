@@ -91,12 +91,12 @@ muerta(A, R){
     const apoyo = A.tipo.lamina ? `<div class="f"><label>Apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly title="Separación de correas (pestaña Cubierta)"/></div>` : fIn(A,'viento.luz','Apoyos [m]');
     h += `<div class="card"><div class="ct">A.1 Paneles solares y rieles</div>
       <div class="two">
-        <div class="col"><h5>☀️ Panel ${iconos(A.panel,'panel','bibPanel')}</h5>
+        <div class="col"><h5>☀️ Panel ${iconos(A.panel,'panel','bibPanel')}${esIng() ? ' <button class="btn xs" type="button" data-anuevo="paneles" title="Agregar un panel nuevo a la biblioteca">＋ Nuevo</button>' : ''}</h5>
           <div class="f" style="margin-bottom:6px"><select id="selPanel" aria-label="Panel de la biblioteca" ${ro()}><option value="">— Escribir datos —</option>${pans.map((p,i) => `<option value="${i}" ${p.nombre===A.panel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
           ${enBib(pans, A.panel.nombre) ? '' : `<div style="margin-bottom:6px">${fIn(A,'panel.nombre','Referencia del panel',{num:false,ph:'Marca y modelo'})}</div>`}
           <div class="mini">${fIn(A,'panel.L','L [m]')}${fIn(A,'panel.W','A [m]')}${fIn(A,'panel.H','H [m]')}${fIn(A,'panel.peso','Peso [kg]')}${fIn(A,'panel.cargaF','Frontal [Pa]')}${fIn(A,'panel.cargaP','Posterior [Pa]')}</div>
           <div class="hint" style="margin-top:4px">${A.panel.ficha ? '📄 Ficha técnica adjunta' : '📎 Sin ficha técnica'}</div></div>
-        <div class="col"><h5>▬ Riel ${iconos(A.riel,'riel','bibRiel')}</h5>
+        <div class="col"><h5>▬ Riel ${iconos(A.riel,'riel','bibRiel')}${esIng() ? ' <button class="btn xs" type="button" data-anuevo="rieles" title="Agregar un riel nuevo a la biblioteca">＋ Nuevo</button>' : ''}</h5>
           <div class="f" style="margin-bottom:6px"><select id="selRiel" aria-label="Riel de la biblioteca" ${ro()}><option value="">— Escribir datos —</option>${rie.map((p,i) => `<option value="${i}" ${p.nombre===A.riel.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
           ${enBib(rie, A.riel.nombre) ? '' : `<div style="margin-bottom:6px">${fIn(A,'riel.nombre','Referencia del riel',{num:false,ph:'Marca y modelo'})}</div>`}
           <div class="mini">${fIn(A,'riel.alto','Alto [m]')}${fIn(A,'riel.ancho','Ancho [m]')}${fIn(A,'riel.peso','Peso [kg/m]')}${apoyo}${fIn(A,'riel.luzMax','Máx. fab. [m]',{ph:'—'})}<div class="f"><label>&nbsp;</label><div id="chkApoyo" class="estado"></div></div></div>
@@ -262,6 +262,8 @@ muerta(A){
       A[q].ficha = path; guardarMemoria(); toast(`Ficha técnica adjunta (${(file.size/1048576).toFixed(1)} MB).`); pintarTabA();
     }catch(e){ err(e, 'No se pudo subir el PDF'); }
   });
+  $$('[data-anuevo]').forEach(b => b.onclick = async () => { const l = b.dataset.anuevo, x = await modalItemBib(l);
+    if(x){ const d = l === 'paneles' ? 'panel' : 'riel'; if(d === 'riel'){ delete A.riel.Ix; delete A.riel.Iy; } Object.assign(A[d], { ficha:'', material:'' }, x); guardarMemoria(); pintarTabA(); } });
   if($('#bibPanel')) $('#bibPanel').onclick = () => guardarBib('paneles', A.panel);
   if($('#bibRiel')) $('#bibRiel').onclick = () => guardarBib('rieles', A.riel);
 },
