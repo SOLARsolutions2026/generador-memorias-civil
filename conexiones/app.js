@@ -148,21 +148,42 @@ function campo(c, k, l, opt = {}){
 }
 const SEL_DIAM = Conex.DIAM.map(([t, v]) => [v, `${t} (${v} mm)`]);
 const SEL_ACERO = Object.keys(Conex.ACEROS).map(k => [k, `${k} (Fy ${Conex.ACEROS[k].Fy} MPa)`]);
+// Datos de la conexión por secciones (pedido de Amo 10-nov: mezcla de A y B = franja azul con número y título,
+// resumen de lo escrito a la derecha, se abre y se cierra tocando la franja; varias pueden quedar abiertas).
+const dnom = c => (Conex.DIAM.find(x => x[1] === +c.d) || [`${c.d} mm`])[0];
+const SOPN = { ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga principal' };
+function seccionesDe(c){
+  const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
+  const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] })];
+  if(c.tipo === 'aleta') return [
+    ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`,
+      g3(campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) }), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'holgura', 'Holgura viga–soporte [mm]', { h:'Del extremo de la viga a la cara del soporte' }))],
+    ['sop', 'Soporte', () => `${SOPN[c.soporte]} · t ${c.tSop} mm · ${c.aceroSop}`,
+      g3(campo(c, 'soporte', 'Se suelda a', { sel:Object.entries(SOPN) }), campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }))
+      + (c.soporte !== 'ala' ? `<div class="f"><label class="ck"><input type="checkbox" data-k="dosLados" ${c.dosLados ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Hay otra conexión al otro lado del alma</label></div>` : '')],
+    ['chapa', 'Chapa', () => `PL ${c.tp} mm · ${c.aceroPl} · a = ${c.a} mm`,
+      g3(campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }), campo(c, 'a', 'a: soporte a la línea de pernos [mm]', { h:'Convencional: a ≤ 89 mm (3½")' }))],
+    ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · bordes ${c.Lev}/${c.Leh}`,
+      g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), '<div></div>', campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'Leh', 'Borde horizontal Leh [mm]'))],
+    ['sold', 'Soldadura chapa–soporte', () => `filete ${c.w} mm ${c.electrodo} por ambas caras`,
+      g3(campo(c, 'w', 'Pierna del filete w [mm]', { h:'Recomendado ≥ 5/8·tp' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))] ];
+  return [
+    ['geo', 'Distribución de pernos', () => `${c.filas} filas × ${c.cols} columnas · s ${c.s} · g ${c.g} · bordes ${c.Lev}/${c.Leh}`,
+      g3(campo(c, 'filas', 'Filas (vertical)'), campo(c, 'cols', 'Columnas (horizontal)'), '<div></div>', campo(c, 's', 'Separación vertical s [mm]'), campo(c, 'g', 'Separación horizontal g [mm]'), '<div></div>', campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'Leh', 'Borde horizontal Leh [mm]'))],
+    ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}`, g3(...pernosTipo)],
+    ['chapa', 'Chapa y soporte', () => `PL ${c.tp} mm ${c.aceroPl} · soporte t ${c.tSop} mm ${c.aceroSop}`,
+      g3(campo(c, 'tp', 'Espesor de la chapa tp [mm]'), campo(c, 'aceroPl', 'Acero de la chapa', { sel:SEL_ACERO }), '<div></div>', campo(c, 'tSop', 'Espesor del soporte [mm]', { h:'Ala de la columna u otra chapa' }), campo(c, 'aceroSop', 'Acero del soporte', { sel:SEL_ACERO }))] ];
+}
+const abiertas = () => { try{ return JSON.parse(localStorage.conSecc || 'null') || ['viga', 'geo']; }catch(e){ return ['viga', 'geo']; } };
 function formHTML(c){
-  const pern = `<h4>Pernos</h4><div class="fg g3">${campo(c, 'd', 'Diámetro', { sel:SEL_DIAM })}${campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) })}
-    ${campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] })}</div>`;
-  if(c.tipo === 'aleta') return `<div class="fg g2">${campo(c, 'Vu', 'Cortante de diseño Vu [kN]', { h:'Reacción mayorada de la viga (combinación de resistencia)' })}</div>
-    <h4>Viga apoyada</h4><div class="fg g3">${campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) })}${campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO })}
-      ${campo(c, 'holgura', 'Holgura viga–soporte [mm]', { h:'Separación del extremo de la viga a la cara del soporte' })}</div>
-    <h4>Soporte</h4><div class="fg g3">${campo(c, 'soporte', 'Se suelda a', { sel:[['ala', 'Ala de columna'], ['alma', 'Alma de columna'], ['viga', 'Alma de viga principal']] })}
-      ${campo(c, 'tSop', 'Espesor del soporte [mm]')}${campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })}
-      ${c.soporte !== 'ala' ? `<div class="f"><label class="ck"><input type="checkbox" data-k="dosLados" ${c.dosLados ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Hay otra conexión al otro lado del alma</label></div>` : ''}</div>
-    <h4>Chapa</h4><div class="fg g3">${campo(c, 'tp', 'Espesor tp [mm]')}${campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO })}${campo(c, 'a', 'a: soporte a la línea de pernos [mm]', { h:'Convencional: a ≤ 89 mm (3½")' })}
-      ${campo(c, 'n', 'Número de pernos n')}${campo(c, 's', 'Separación s [mm]')}${campo(c, 'Lev', 'Borde vertical Lev [mm]')}${campo(c, 'Leh', 'Borde horizontal Leh [mm]')}</div>
-    ${pern}<h4>Soldadura chapa–soporte (filete por ambas caras)</h4><div class="fg g3">${campo(c, 'w', 'Pierna del filete w [mm]', { h:'Recomendado ≥ 5/8·tp' })}${campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })}</div>`;
-  return `<div class="fg g3">${campo(c, 'Pu', 'Carga de diseño Pu [kN]')}${campo(c, 'e', 'Excentricidad e [mm]', { h:'Distancia de la línea de la carga al centro del grupo' })}${campo(c, 'ang', 'Ángulo de la carga [°]', { h:'0° = vertical' })}</div>
-    <h4>Distribución de pernos</h4><div class="fg g3">${campo(c, 'filas', 'Filas (vertical)')}${campo(c, 'cols', 'Columnas (horizontal)')}${campo(c, 's', 'Separación vertical s [mm]')}${campo(c, 'g', 'Separación horizontal g [mm]')}${campo(c, 'Lev', 'Borde vertical Lev [mm]')}${campo(c, 'Leh', 'Borde horizontal Leh [mm]')}</div>
-    ${pern}<h4>Chapa y soporte</h4><div class="fg g3">${campo(c, 'tp', 'Espesor de la chapa tp [mm]')}${campo(c, 'aceroPl', 'Acero de la chapa', { sel:SEL_ACERO })}${campo(c, 'tSop', 'Espesor del soporte [mm]', { h:'Ala de la columna u otra chapa' })}${campo(c, 'aceroSop', 'Acero del soporte', { sel:SEL_ACERO })}</div>`;
+  const ab = abiertas();
+  const carga = c.tipo === 'aleta'
+    ? `<div class="carga-in">${campo(c, 'Vu', 'Cortante de diseño Vu [kN]')}<div class="hint">Reacción mayorada de la viga<br/>(combinación de resistencia)</div></div>`
+    : `<div class="carga-in">${campo(c, 'Pu', 'Carga de diseño Pu [kN]')}${campo(c, 'e', 'Excentricidad e [mm]', { h:'De la carga al centro del grupo' })}${campo(c, 'ang', 'Ángulo [°]', { h:'0° = vertical' })}</div>`;
+  return carga + `<div class="sec-tools"><button type="button" class="lnk" data-secall="1">Abrir todo</button> · <button type="button" class="lnk" data-secall="0">Cerrar todo</button></div>`
+    + seccionesDe(c).map(([k, t, res, body], i) => `<section class="sec ${ab.includes(k) ? 'on' : ''}" data-sec="${k}">
+      <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
+      <div class="sec-bd">${body}</div></section>`).join('');
 }
 const GRUPOS = { pernos:'Pernos', chapa:'Chapa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga' };
 function chequeosHTML(r){
@@ -184,8 +205,12 @@ function renderEditor(){
     <div class="fg g2">${campo(c, 'nom', 'Nombre', { num:false })}${campo(c, 'desc', 'Descripción / ubicación', { num:false })}</div>
     <div class="ed-grid"><div id="form">${formHTML(c)}</div><div><div class="dib" id="dib">${r.error ? '' : dibujo(c, r)}</div></div></div></div>
     <div class="card" id="res">${resHTML(c, r)}</div>`;
-  const re = () => { const r2 = recalcular(c); $('#dib').innerHTML = r2.error ? '' : dibujo(c, r2); $('#res').innerHTML = resHTML(c, r2);
+  const re = () => { pintaRes(); const r2 = recalcular(c); $('#dib').innerHTML = r2.error ? '' : dibujo(c, r2); $('#res').innerHTML = resHTML(c, r2);
     const it = $(`[data-sel="${c.id}"] .pill`); if(it && c.res){ it.className = `pill ${c.res.ok ? 'ok' : 'no'}`; it.textContent = f2(c.res.max); } guardar(); };
+  const pintaRes = () => seccionesDe(c).forEach(([k, , res]) => { const e = $(`[data-res="${k}"]`); if(e) e.textContent = res(); });
+  const guardaAb = () => { try{ localStorage.conSecc = JSON.stringify($$('#ed .sec.on').map(x => x.dataset.sec)); }catch(e){} };
+  $$('#ed .sec-hd').forEach(b => b.onclick = () => { const s = b.parentElement; s.classList.toggle('on'); b.setAttribute('aria-expanded', s.classList.contains('on')); guardaAb(); });
+  $$('#ed [data-secall]').forEach(b => b.onclick = () => { $$('#ed .sec').forEach(s => { s.classList.toggle('on', b.dataset.secall === '1'); $('.sec-hd', s).setAttribute('aria-expanded', b.dataset.secall === '1'); }); guardaAb(); });
   $$('#ed [data-k]').forEach(el => { const k = el.dataset.k;
     const fn = () => { if(el.type === 'checkbox') c[k] = el.checked; else if(el.dataset.num) c[k] = el.value === '' ? '' : Number(el.value.replace(',', '.')); else c[k] = el.value;
       if(el.tagName === 'SELECT' && ['viga', 'soporte'].includes(k)){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
@@ -214,7 +239,7 @@ function dibujo(c, r){ return c.tipo === 'grupo' ? dibGrupo(c, r) : dibAleta(c, 
 function dibAleta(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, Leh = +c.Leh, a = +c.a, hol = +c.holgura || 0, tp = +c.tp;
   const W = a + Leh + 160, H = vg.d + 40, k = Math.min(300 / W, 330 / H);
-  const X = v => 92 + v * k, Y = v => 34 + v * k;
+  const X = v => 92 + v * k, Y = v => 50 + v * k;
   const yb = (vg.d - g.Lp) / 2;                                   // chapa centrada en el alma
   const sup = `<rect x="${X(-24)}" y="${Y(-12)}" width="${24 * k}" height="${(vg.d + 24) * k}" class="sop"/>`;
   const viga = `<rect x="${X(hol)}" y="${Y(0)}" width="${(a + Leh + 140 - hol) * k}" height="${vg.d * k}" class="vg"/>
