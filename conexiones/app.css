@@ -75,3 +75,5 @@ details.card:not([open]){padding-bottom:4px}details.card:not([open])>summary.ct{
 .dsvg .mom path{fill:none;stroke:#7c3aed;stroke-width:2}.dsvg .mom path.pt{fill:#7c3aed;stroke:none}
 .f label.ck{display:flex!important;gap:8px;align-items:center;font-weight:500;color:var(--text);font-size:12.5px;margin:4px 0 8px}
 .f label.ck input{width:16px!important;height:16px;margin:0;flex:none;min-height:0}
+.gal-cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:14px 2px 4px}
+.gal-cat:first-of-type{margin-top:10px}

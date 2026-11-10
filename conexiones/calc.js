@@ -239,30 +239,36 @@ function calcTesta(c){
   const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), Ab = Math.PI * d * d / 4;
   const db = vg.d, tbf = vg.tf, bbf = vg.bf, tbw = vg.tw;
-  const h0 = db - tbf / 2 + pfo, h1 = db - 1.5 * tbf - pfi;          // brazos desde el centro del ala en compresión
+  const ras = c.tipo === 'ras', nfR = ras && +c.filas === 1 ? 1 : 2, pb = +c.pb || 0;
+  // Extendida: h0 = fila exterior, h1 = interior. A ras: h1 = primera fila bajo el ala, h2 = segunda (pb más abajo)
+  const h0 = ras ? 0 : db - tbf / 2 + pfo, h1 = db - 1.5 * tbf - pfi, h2 = ras && nfR === 2 ? h1 - pb : 0, gr = ras ? 1.25 : 1.0;
   const Ffu = Mu * 1000 / (db - tbf);                                   // fuerza en el ala [kN]
   pasos.push(`Viga ${vg.nom}: d = ${db}, bf = ${bbf}, tf = ${tbf}, tw = ${tbw} mm · Mu = ${r2(Mu)} kN·m, Vu = ${r2(Vu)} kN`);
-  pasos.push(`h₀ = d − tf/2 + pfo = ${r1(h0)} mm; h₁ = d − 1.5tf − pfi = ${r1(h1)} mm; Ffu = Mu/(d − tf) = ${r2(Ffu)} kN`);
+  pasos.push(ras ? `Placa a ras con ${nfR} fila(s) de 2 pernos bajo el ala en tensión: h₁ = d − 1.5tf − pfi = ${r1(h1)} mm${nfR === 2 ? `, h₂ = h₁ − pb = ${r1(h2)} mm` : ''}; Ffu = ${r2(Ffu)} kN`
+    : `h₀ = d − tf/2 + pfo = ${r1(h0)} mm; h₁ = d − 1.5tf − pfi = ${r1(h1)} mm; Ffu = Mu/(d − tf) = ${r2(Ffu)} kN`);
 
   // Requisitos de geometría
   req.push(['Ancho de la placa bp ≤ bf + 25 mm (Guía 4)', bp <= bbf + 25 + 1e-6, `${bp} ≤ ${bbf + 25} mm`]);
   req.push(['Ancho de la placa bp ≥ bf de la viga', bp >= bbf - 1e-6, `${bp} ≥ ${bbf} mm`]);
   req.push(['Gramil g ≥ 3d (llave) y g ≤ bp − 2·borde mín.', g >= 3 * d - 1e-6 && g <= bp - 2 * bm + 1e-6, `${r1(3 * d)} ≤ ${g} ≤ ${bp - 2 * bm} mm`]);
-  req.push(['pfo, pfi ≥ d + 12.7 mm (espacio para apretar)', Math.min(pfo, pfi) >= d + 12.7 - 1e-6, `${Math.min(pfo, pfi)} ≥ ${r1(d + 12.7)} mm`]);
-  req.push(['Borde de la extensión de ≥ mín. Tabla F.2.10.3-4', de >= bm, `${de} ≥ ${bm} mm`]);
+  if(ras){ req.push(['pfi ≥ d + 12.7 mm (espacio para apretar)', pfi >= d + 12.7 - 1e-6, `${pfi} ≥ ${r1(d + 12.7)} mm`]);
+    if(nfR === 2) req.push(['pb ≥ 2.67d', pb >= 2.67 * d - 1e-6, `${pb} ≥ ${r1(2.67 * d)} mm`]);
+    req.push(['Los pernos caben antes de la mitad del alma: h₂ (o h₁) > d/2', (nfR === 2 ? h2 : h1) > db / 2, `${r1(nfR === 2 ? h2 : h1)} > ${r1(db / 2)} mm`]); }
+  else { req.push(['pfo, pfi ≥ d + 12.7 mm (espacio para apretar)', Math.min(pfo, pfi) >= d + 12.7 - 1e-6, `${Math.min(pfo, pfi)} ≥ ${r1(d + 12.7)} mm`]);
+  req.push(['Borde de la extensión de ≥ mín. Tabla F.2.10.3-4', de >= bm, `${de} ≥ ${bm} mm`]); }
   req.push(['Borde lateral (bp − g)/2 ≥ mín.', (bp - g) / 2 >= bm, `${r1((bp - g) / 2)} ≥ ${bm} mm`]);
   if(cl) req.push(['Gramil cabe en el ala de la columna: (bfc − g)/2 ≥ borde mín.', (cl.bf - g) / 2 >= bm, `${r1((cl.bf - g) / 2)} ≥ ${bm} mm`]);
   req.push(['Pernos pretensionados (F.2.10.3.1, conexión a momento)', true, 'indicar en planos']);
   req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
 
   // 1. Pernos a tensión sin palanca: φMnp = φ·2·Pt·(h0 + h1)
-  const Pt = B.Fnt * Ab / 1000, phiMnp = 0.75 * 2 * Pt * (h0 + h1) / 1000;
-  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = Fnt·Ab = ${B.Fnt}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = 0.75·2·Pt·(h₀ + h₁) = ${r2(phiMnp)} kN·m`);
-  add('pernos', 'Rotura de los pernos a tensión (sin palanca)', 'F.2.10.3.6 (J3-1) · Guía AISC 4', Mu, phiMnp, 'kN·m', `Pt = ${r2(Pt)} kN, h₀ = ${r1(h0)}, h₁ = ${r1(h1)} mm`);
+  const Pt = B.Fnt * Ab / 1000, phiMnp = 0.75 * 2 * Pt * (ras ? h1 + h2 : h0 + h1) / 1000;
+  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = Fnt·Ab = ${B.Fnt}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = 0.75·2·Pt·Σh = ${r2(phiMnp)} kN·m`);
+  add('pernos', 'Rotura de los pernos a tensión (sin palanca)', 'F.2.10.3.6 (J3-1) · Guía AISC 4', Mu, phiMnp, 'kN·m', ras ? `Pt = ${r2(Pt)} kN, h₁ = ${r1(h1)}${nfR === 2 ? `, h₂ = ${r1(h2)}` : ''} mm` : `Pt = ${r2(Pt)} kN, h₀ = ${r1(h0)}, h₁ = ${r1(h1)} mm`);
   // 2. Pernos a cortante en la zona de compresión
-  const nb = c.ambos ? 4 : Math.max(0, Math.round(+c.nbc || 0));
+  const nb = c.ambos ? (ras ? 2 * nfR : 4) : Math.max(0, Math.round(+c.nbc || 0));
   const rv = 0.75 * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
-  const bPl = aplast(de - dh / 2, tp, d, pl.Fu).phiRn, bPlI = 2.4 * d * tp * pl.Fu * 0.75 / 1000;
+  const bPl = ras ? Infinity : aplast(de - dh / 2, tp, d, pl.Fu).phiRn, bPlI = 2.4 * d * tp * pl.Fu * 0.75 / 1000;
   const bCol = cl ? 0.75 * 2.4 * d * cl.tf * ac.Fu / 1000 : Infinity;
   const rb = Math.min(rv, c.ambos ? Math.min(bPl, bPlI) : bPlI, bCol);
   add('pernos', `Cortante en los ${nb} pernos de la zona de compresión`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', Vu, nb * rb, 'kN', `φrn = ${r2(rb)} kN por perno (corte ${r2(rv)}, aplastamiento placa ${r2(Math.min(bPl, bPlI))}${cl ? `, ala columna ${r2(bCol)}` : ''})`);
@@ -270,14 +276,17 @@ function calcTesta(c){
 
   // 3. Placa: líneas de fluencia (placa gruesa: φb·Mpl ≥ 1.11·φMnp)
   const sP = 0.5 * Math.sqrt(bp * g), pfiY = Math.min(pfi, sP);
-  const Yp = bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h0 / pfo - 0.5) + 2 / g * (h1 * (pfiY + sP));
-  const phiMpl = 0.9 * pl.Fy * tp * tp * Yp / 1e6, tpReq = Math.sqrt(1.11 * phiMnp * 1e6 / (0.9 * pl.Fy * Yp));
+  const Yp = !ras ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h0 / pfo - 0.5) + 2 / g * (h1 * (pfiY + sP))
+    : nfR === 1 ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) - 0.5) + 2 / g * (h1 * (pfiY + sP))
+    : bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h2 / sP - 0.5) + 2 / g * (h1 * (pfiY + 0.75 * pb) + h2 * (sP + 0.25 * pb)) + g / 2;    // Guía AISC 16, tablas de placa a ras
+  const phiMpl = 0.9 * pl.Fy * tp * tp * Yp / 1e6, tpReq = Math.sqrt(1.11 * gr * phiMnp * 1e6 / (0.9 * pl.Fy * Yp));
   pasos.push(`Placa: s = ½√(bp·g) = ${r1(sP)} mm${pfi > sP ? ` (pfi se limita a s)` : ''}; Yp = ${Math.round(Yp)} mm; φMpl = 0.9·Fy·tp²·Yp = ${r2(phiMpl)} kN·m`);
-  pasos.push(`Espesor para comportamiento de placa gruesa: tp,req = √(1.11·φMnp/(0.9·Fy·Yp)) = ${r1(tpReq)} mm`);
-  add('placa', 'Placa gruesa: flexión por líneas de fluencia', 'Guía AISC 4/16 · φb = 0.90', 1.11 * phiMnp, phiMpl, 'kN·m', `exige 1.11·φMnp; tp,req = ${r1(tpReq)} mm`);
+  pasos.push(`Espesor para comportamiento de placa gruesa: tp,req = √(1.11·γr·φMnp/(0.9·Fy·Yp)) = ${r1(tpReq)} mm (γr = ${gr})`);
+  add('placa', 'Placa gruesa: flexión por líneas de fluencia', 'Guía AISC 4/16 · φb = 0.90', 1.11 * gr * phiMnp, phiMpl, 'kN·m', `exige 1.11·γr·φMnp (γr = ${gr}); tp,req = ${r1(tpReq)} mm`);
+  if(!ras){
   add('placa', 'Fluencia por cortante de la extensión', 'F.2.10.4.2 (J4-3)', Ffu / 2, 1.0 * 0.6 * pl.Fy * bp * tp / 1000, 'kN', `Ffu/2; Agv = bp·tp = ${r1(bp * tp)} mm²`);
   const An = (bp - 2 * dn) * tp;
-  add('placa', 'Rotura por cortante de la extensión', 'F.2.10.4.2 (J4-4)', Ffu / 2, 0.75 * 0.6 * pl.Fu * An / 1000, 'kN', `Anv = (bp − 2·${r1(dn)})·tp = ${r1(An)} mm²`);
+  add('placa', 'Rotura por cortante de la extensión', 'F.2.10.4.2 (J4-4)', Ffu / 2, 0.75 * 0.6 * pl.Fu * An / 1000, 'kN', `Anv = (bp − 2·${r1(dn)})·tp = ${r1(An)} mm²`); }
 
   // 4. Soldaduras
   const fw = w => 0.75 * 0.6 * FEXX * 0.707 * w / 1000;                // kN/mm, F.2.10.2.4 (J2-4)
@@ -293,9 +302,11 @@ function calcTesta(c){
 
   // 5. Columna (ala sin rigidizar y alma)
   if(cl){
-    const sC = 0.5 * Math.sqrt(cl.bf * g), cc = pfo + pfi + tbf, kc = cl.tf + cl.r;
-    const Yc = cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2;
-    const phiMcf = 0.9 * ac.Fy * cl.tf * cl.tf * Yc / 1e6, tcfReq = Math.sqrt(1.11 * phiMnp * 1e6 / (0.9 * ac.Fy * Yc));
+    const sC = 0.5 * Math.sqrt(cl.bf * g), cc = ras ? pfi + tbf + (nfR === 2 ? pb : 0) : pfo + pfi + tbf, kc = cl.tf + cl.r;
+    const Yc = !ras ? cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2
+      : nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2
+      : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;     // por confirmar (Guía AISC 16)
+    const phiMcf = 0.9 * ac.Fy * cl.tf * cl.tf * Yc / 1e6, tcfReq = Math.sqrt(1.11 * gr * phiMnp * 1e6 / (0.9 * ac.Fy * Yc));
     pasos.push(`Columna ${cl.nom}: bf = ${cl.bf}, tf = ${cl.tf}, tw = ${cl.tw}, k = tf + r = ${r1(kc)} mm; s = ${r1(sC)}, c = ${r1(cc)} mm; Yc = ${Math.round(Yc)} mm; φMcf = ${r2(phiMcf)} kN·m`);
     add('columna', 'Flexión del ala de la columna (sin rigidizadores)', 'Guía AISC 4/16 · φb = 0.90', Mu, phiMcf, 'kN·m', `Yc = ${Math.round(Yc)} mm; tcf para placa gruesa = ${r1(tcfReq)} mm`);
     if(cl.tf < tcfReq) av.push(`El ala de la columna (${cl.tf} mm) es más delgada que ${r1(tcfReq)} mm: habrá algo de palanca en los pernos. Considere rigidizadores o una columna de ala más gruesa.`);
@@ -313,8 +324,8 @@ function calcTesta(c){
   } else av.push('No se revisó la columna: escoja su perfil para revisar el ala y el alma.');
 
   const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
-  const Hp = c.ambos ? db + 2 * (pfo + de) : db + pfo + de + 25;
-  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, cl, Hp, h0, h1, dh, nTot: c.ambos ? 8 : 4 + nb } };
+  const Hp = ras ? db + 50 : c.ambos ? db + 2 * (pfo + de) : db + pfo + de + 25;
+  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, cl, Hp, h0, h1, h2, ras, nfR, dh, nTot: ras ? (c.ambos ? 4 * nfR : 2 * nfR + nb) : c.ambos ? 8 : 4 + nb } };
 }
 
 // ── Doble angular de alma (atornillado a la viga y al soporte) — Manual AISC parte 10, fórmulas NSR-10 F.2.10 ─────────────
@@ -375,10 +386,211 @@ function calcAngular(c){
   return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, L, dh, gage:2 * g2 + vg.tw } };
 }
 
+// ═════════ Tipos agregados el 10-nov (pedido de Amo: «creamos todas y después las revisamos») ═════════
+const addF = ch => (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : (dem > 0 ? Infinity : 0), extra });
+const fin = (ch, req, av, pasos, geo) => { req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
+  const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0); return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo }; };
+const fv = (c, d) => 0.75 * PERNOS[c.grado][c.rosca === 'X' ? 'X' : 'N'] * Math.PI * d * d / 4 / 1000;     // φrn corte simple [kN]
+const fw = (FEXX, w) => 0.75 * 0.6 * FEXX * 0.707 * w / 1000;                                                  // kN/mm de filete
+const bloqueRn = (Fy, Fu, agv, anv, ant) => 0.75 * Math.min(0.6 * Fu * anv + Fu * ant, 0.6 * Fy * agv + Fu * ant) / 1000;
+// Pandeo por flexión E3 (φc = 0.9) de una sección con KL/r
+function fcrE3(Fy, KLr){ if(KLr <= 25) return Fy; const Fe = Math.PI ** 2 * 200000 / (KLr * KLr); return KLr <= 4.71 * Math.sqrt(200000 / Fy) ? Math.pow(0.658, Fy / Fe) * Fy : 0.877 * Fe; }
+const perfilX = nom => { const P = (G.PERFILES_LAM || []).find(x => x[0] === nom); return P ? { ...perfil(nom), A:P[7], Ix:P[8], Sx:P[9], Zx:P[10] } : null; };
+
+// ── Chapa de testa a cortante (articulada): placa soldada al alma, 2 columnas de pernos ─────────────
+function defaultsTestaV(){
+  return { tipo:'testaV', nom:'', desc:'', Vu:80, viga:'IPE 300', aceroViga:'A572 Gr 50',
+    tSop:10.7, aceroSop:'A572 Gr 50', dosLados:false, tp:9.5, bp:150, aceroPl:'A36', n:3, s:75, Lev:38, g:90,
+    d:19.1, grado:'A325', rosca:'N', w:5, electrodo:'E70XX' };
+}
+function calcTestaV(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const V = Math.abs(+c.Vu || 0), d = +c.d, n = Math.max(1, Math.round(+c.n)), s = +c.s, Lev = +c.Lev, tp = +c.tp, bp = +c.bp, g = +c.g, w = +c.w;
+  const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
+  const pl = ACEROS[c.aceroPl], ac = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop], FEXX = ELECTRODOS[c.electrodo];
+  const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), Lp = (n - 1) * s + 2 * Lev, Leh = (bp - g) / 2;
+  pasos.push(`Placa ${bp} × ${r1(Lp)} × ${tp} mm (${c.aceroPl}); ${2 * n} pernos en 2 columnas, gramil g = ${g} mm; Vu = ${r2(V)} kN`);
+  req.push(['Alto de la placa T/2 ≤ Lp ≤ T', Lp >= vg.T / 2 - 1e-6 && Lp <= vg.T + 1e-6, `${r1(vg.T / 2)} ≤ ${r1(Lp)} ≤ ${r1(vg.T)} mm`]);
+  req.push(['Separación s ≥ 2.67d', s >= 2.67 * d - 1e-6, `${s} ≥ ${r1(2.67 * d)} mm`]);
+  req.push(['Bordes Lev y (bp − g)/2 ≥ mín.', Math.min(Lev, Leh) >= bm, `${Math.min(Lev, r1(Leh))} ≥ ${bm} mm`]);
+  req.push(['Placa flexible: tp ≤ 10 mm (Manual AISC parte 10)', tp <= 10, `${tp} mm`]);
+  req.push(['Gramil g ≥ tw + 2·(d + 12.7) (espacio para apretar)', g >= vg.tw + 2 * (d + 12.7) - 1e-6, `${g} ≥ ${r1(vg.tw + 2 * (d + 12.7))} mm`]);
+  const rv = fv(c, d), bE = aplast(Lev - dh / 2, tp, d, pl.Fu).phiRn, bI = aplast(s - dh, tp, d, pl.Fu).phiRn, bS = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000 / (c.dosLados ? 2 : 1);
+  const cap = 2 * (Math.min(rv, bE, bS) + (n - 1) * Math.min(rv, bI, bS));
+  add('pernos', `Pernos (${2 * n}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, cap, 'kN', `corte ${r2(rv)}, aplast. placa borde ${r2(bE)} / interior ${r2(bI)}, soporte ${r2(bS)} kN`);
+  add('chapa', 'Fluencia por cortante de la placa (2 planos)', 'F.2.10.4.2 (J4-3)', V, 0.6 * pl.Fy * 2 * Lp * tp / 1000, 'kN', `Agv = 2·Lp·tp = ${r1(2 * Lp * tp)} mm²`);
+  add('chapa', 'Rotura por cortante de la placa (2 planos)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * pl.Fu * 2 * (Lp - n * dn) * tp / 1000, 'kN', `Anv = ${r1(2 * (Lp - n * dn) * tp)} mm²`);
+  const agv = (Lp - Lev) * tp, anv = (Lp - Lev - (n - 0.5) * dn) * tp, ant = (Leh - dn / 2) * tp;
+  add('chapa', 'Bloque de cortante (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, 2 * bloqueRn(pl.Fy, pl.Fu, agv, anv, ant), 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm²`);
+  const Lw = Lp - 2 * w;
+  add('soldadura', 'Filetes alma–placa (ambas caras)', 'F.2.10.2.4 (J2-4)', V, 2 * fw(FEXX, w) * Lw, 'kN', `w = ${w} mm, L = Lp − 2w = ${r1(Lw)} mm`);
+  add('viga', 'Cortante del alma junto a la soldadura', 'F.2.10.4.2 (J4-3)', V, 0.6 * ac.Fy * vg.tw * Lp / 1000, 'kN', `0.6·Fy·tw·Lp`);
+  req.push(['Filete ≥ mín. Tabla J2.4', w >= (Math.min(tp, vg.tw) > 12.7 ? 6 : Math.min(tp, vg.tw) > 6.4 ? 5 : 3), `${w} mm`]);
+  return fin(ch, req, av, pasos, { vg, Lp, dh });
+}
+
+// ── Asiento con angular sin rigidizar (seated) — Manual AISC parte 10 ─────────────
+function defaultsAsiento(){
+  return { tipo:'asiento', nom:'', desc:'', Vu:60, viga:'IPE 300', aceroViga:'A572 Gr 50', holgura:13,
+    tSop:10.7, aceroSop:'A572 Gr 50', bv:152, bh:102, t:12.7, La:150, aceroAng:'A36', filas:1, g:90, ev:64,
+    d:19.1, grado:'A325', rosca:'N' };
+}
+function calcAsiento(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const V = Math.abs(+c.Vu || 0), d = +c.d, t = +c.t, La = +c.La, bh = +c.bh, bv = +c.bv, hol = +c.holgura || 0, nf = Math.max(1, Math.round(+c.filas)), g = +c.g;
+  const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
+  const an = ACEROS[c.aceroAng], ac = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop];
+  const kv = vg.tf + vg.r, N = bh - hol, E = 200000;
+  pasos.push(`Viga ${vg.nom}: d ${vg.d}, tw ${vg.tw}, tf ${vg.tf}, k = tf + r = ${r1(kv)} mm; longitud de apoyo N = bh − holgura = ${r1(N)} mm`);
+  const Ry = 1.0 * ac.Fy * vg.tw * (2.5 * kv + N) / 1000;
+  add('viga', 'Fluencia local del alma (extremo de la viga)', 'F.2.10.10.2 (J10-3)', V, Ry, 'kN', `Fy·tw·(2.5k + N)`);
+  const rN = N / vg.d, cr = rN <= 0.2 ? 0.4 * vg.tw ** 2 * (1 + 3 * rN * (vg.tw / vg.tf) ** 1.5) : 0.4 * vg.tw ** 2 * (1 + (4 * rN - 0.2) * (vg.tw / vg.tf) ** 1.5);
+  add('viga', 'Aplastamiento del alma (extremo de la viga)', `F.2.10.10.3 (J10-5${rN <= 0.2 ? 'a' : 'b'})`, V, 0.75 * cr * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000, 'kN', `N/d = ${r3(rN)}`);
+  const Nreq = Math.max(V * 1000 / (ac.Fy * vg.tw) - 2.5 * kv, kv);
+  const ka = t + 9.5, ef = Math.max(0, hol + Nreq / 2 - ka), Mu = V * ef / 1000;
+  pasos.push(`Apoyo requerido Nreq = Vu/(Fy·tw) − 2.5k ≥ k → ${r1(Nreq)} mm; excentricidad a la sección crítica del angular ef = holgura + Nreq/2 − (t + 9.5) = ${r1(ef)} mm; Mu = ${r3(Mu)} kN·m`);
+  add('angular', 'Flexión del ala horizontal del asiento', 'Manual AISC parte 10 · φb = 0.90', Mu, 0.9 * an.Fy * La * t * t / 4 / 1e6, 'kN·m', `φMn = 0.9·Fy·La·t²/4, La = ${La} mm`);
+  add('angular', 'Cortante del ala horizontal', 'F.2.10.4.2 (J4-3)', V, 0.6 * an.Fy * La * t / 1000, 'kN', '0.6·Fy·La·t');
+  const nb = 2 * nf, rv = fv(c, d), dh = agujero(d), bA = aplast(+c.ev - dh / 2 > 0 ? bv - +c.ev - dh / 2 : 99, t, d, an.Fu).phiRn, bS = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000;
+  add('pernos', `Pernos al soporte (${nb}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10', V, nb * Math.min(rv, bA, bS), 'kN', `corte ${r2(rv)}, aplast. angular ${r2(bA)}, soporte ${r2(bS)} kN`);
+  req.push(['Longitud de apoyo N ≥ k de la viga', N >= kv, `${r1(N)} ≥ ${r1(kv)} mm`]);
+  req.push(['Ancho del asiento La ≥ bf de la viga', La >= vg.bf - 1e-6, `${La} ≥ ${vg.bf} mm`]);
+  req.push(['Gramil g cabe en el ancho: (La − g)/2 ≥ borde mín.', (La - g) / 2 >= bordeMin(d), `${r1((La - g) / 2)} ≥ ${bordeMin(d)} mm`]);
+  req.push(['Angular superior o lateral para estabilidad (Manual AISC)', true, 'indicar en planos']);
+  return fin(ch, req, av, pasos, { vg, N, dh, ka });
+}
+
+// ── Empalme de viga atornillado: cubrejuntas en las alas y el alma ─────────────
+function defaultsEmpalme(){
+  return { tipo:'empalme', nom:'', desc:'', Mu:80, Vu:60, viga:'IPE 300', aceroViga:'A572 Gr 50', gap:10,
+    tpf:12.7, bpf:150, aceroPl:'A36', nf:3, sf:75, gf:90, Lef:38,
+    tpw:8, hpw:210, nw:3, sw:65, Lew:38, Lehw:40,
+    d:19.1, grado:'A325', rosca:'N' };
+}
+function calcEmpalme(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const Mu = Math.abs(+c.Mu || 0), V = Math.abs(+c.Vu || 0), d = +c.d, gap = +c.gap || 0;
+  const vg = perfilX(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
+  const pl = ACEROS[c.aceroPl], ac = ACEROS[c.aceroViga];
+  const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d);
+  // Alas
+  const tpf = +c.tpf, bpf = +c.bpf, nf = Math.max(1, Math.round(+c.nf)), sf = +c.sf, gf = +c.gf, Lef = +c.Lef, nbF = 2 * nf;      // 2 columnas por lado
+  const Ff = Mu * 1000 / (vg.d + tpf);
+  pasos.push(`Fuerza en cada ala Ff = Mu/(d + tpf) = ${r2(Ff)} kN (el alma solo toma el cortante, del lado seguro)`);
+  const bPlE = aplast(Lef - dh / 2, tpf, d, pl.Fu).phiRn, bPlI = aplast(sf - dh, tpf, d, pl.Fu).phiRn;
+  const bFlE = aplast(Lef + gap / 2 - dh / 2, vg.tf, d, ac.Fu).phiRn, bFlI = aplast(sf - dh, vg.tf, d, ac.Fu).phiRn;
+  const capF = 2 * (Math.min(rv, bPlE, bFlE) + (nf - 1) * Math.min(rv, bPlI, bFlI));
+  add('pernos', `Pernos de un ala, a cada lado (${nbF}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10', Ff, capF, 'kN', `corte ${r2(rv)} kN; aplast. cubrejunta ${r2(bPlE)}/${r2(bPlI)}, ala ${r2(bFlE)}/${r2(bFlI)} kN`);
+  const Ag = bpf * tpf, An = Math.min((bpf - 2 * dn) * tpf, 0.85 * Ag);
+  add('alas', 'Cubrejunta del ala: fluencia a tensión', 'F.2.10.4.1 (J4-1)', Ff, 0.9 * pl.Fy * Ag / 1000, 'kN', `Ag = ${r1(Ag)} mm²`);
+  add('alas', 'Cubrejunta del ala: rotura a tensión', 'F.2.10.4.1 (J4-2), An ≤ 0.85Ag', Ff, 0.75 * pl.Fu * An / 1000, 'kN', `An = ${r1(An)} mm²`);
+  const KLr = 0.65 * (gap + 2 * Lef) / (tpf / Math.sqrt(12));
+  add('alas', 'Cubrejunta del ala: compresión', 'F.2.10.4.4 (J4-6) / E3', Ff, 0.9 * fcrE3(pl.Fy, KLr) * Ag / 1000, 'kN', `KL/r = 0.65·(gap + 2Lef)/r = ${r1(KLr)}`);
+  const agvP = 2 * (Lef + (nf - 1) * sf) * tpf, anvP = agvP - 2 * (nf - 0.5) * dn * tpf, antP = (gf - dn) * tpf;
+  add('alas', 'Cubrejunta del ala: bloque de cortante', 'F.2.10.4.3 (J4-5)', Ff, bloqueRn(pl.Fy, pl.Fu, agvP, anvP, antP), 'kN', `bloque entre las dos líneas de pernos`);
+  const antP2 = 2 * ((bpf - gf) / 2 - dn / 2) * tpf;
+  add('alas', 'Cubrejunta del ala: bloque por los bordes', 'F.2.10.4.3 (J4-5)', Ff, bloqueRn(pl.Fy, pl.Fu, agvP, anvP, antP2), 'kN', `tensión hacia los bordes exteriores`);
+  const agvF = 2 * (Lef + gap / 2 + (nf - 1) * sf) * vg.tf, anvF = agvF - 2 * (nf - 0.5) * dn * vg.tf, antF = 2 * ((vg.bf - gf) / 2 - dn / 2) * vg.tf;
+  add('alas', 'Ala de la viga: bloque de cortante', 'F.2.10.4.3 (J4-5)', Ff, bloqueRn(ac.Fy, ac.Fu, agvF, anvF, antF), 'kN', `hacia los bordes del ala`);
+  const Afg = vg.bf * vg.tf, Afn = (vg.bf - 2 * dn) * vg.tf, Yt = ac.Fy / ac.Fu <= 0.8 ? 1.0 : 1.1;
+  if(ac.Fu * Afn < Yt * ac.Fy * Afg){ const Mn = ac.Fu * Afn / Afg * vg.Sx / 1e6;
+    add('viga', 'Viga: rotura del ala en tensión por los agujeros', 'F.2.6.13.1 (F13-1)', Mu, 0.9 * Mn, 'kN·m', `Fu·Afn < Yt·Fy·Afg → Mn = Fu·Afn/Afg·Sx`); }
+  else pasos.push(`Ala en tensión: Fu·Afn = ${r1(ac.Fu * Afn / 1000)} ≥ Yt·Fy·Afg = ${r1(Yt * ac.Fy * Afg / 1000)} kN → no reduce la resistencia (F13.1)`);
+  // Alma
+  const tpw = +c.tpw, hpw = +c.hpw, nw = Math.max(1, Math.round(+c.nw)), sw = +c.sw, Lew = +c.Lew, Lehw = +c.Lehw;
+  const ew = gap / 2 + Lehw;                                 // excentricidad del cortante a la línea de pernos
+  const pts = Array.from({ length:nw }, (_, i) => ({ x:0, y:i * sw })), ic = icr(pts, ew, 0);
+  const bWp = aplast(Lew - dh / 2, tpw, d, pl.Fu).phiRn, bWb = 0.75 * 2.4 * d * vg.tw * ac.Fu / 1000;
+  const rW = Math.min(2 * rv, 2 * bWp, bWb);
+  pasos.push(`Alma: 2 cubrejuntas ${hpw} × ${tpw} mm; ${nw} pernos a cada lado (doble cortante) con e = gap/2 + Leh = ${r1(ew)} mm → C = ${r2(ic.C)}`);
+  add('pernos', `Pernos del alma, a cada lado (${nw}, doble cortante, excéntricos)`, 'F.2.10.3 · Manual AISC parte 7', V, ic.C * rW, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rW)} kN`);
+  add('almaPl', 'Cubrejuntas del alma: fluencia por cortante (2)', 'F.2.10.4.2 (J4-3)', V, 0.6 * pl.Fy * 2 * hpw * tpw / 1000, 'kN', '');
+  add('almaPl', 'Cubrejuntas del alma: rotura por cortante (2)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * pl.Fu * 2 * (hpw - nw * dn) * tpw / 1000, 'kN', '');
+  const Mw = V * ew / 1000, Zw = 2 * tpw * hpw * hpw / 4;
+  add('almaPl', 'Cubrejuntas del alma: flexión por la excentricidad', 'F.2.6 · φb = 0.90', Mw, 0.9 * pl.Fy * Zw / 1e6, 'kN·m', `Mu = Vu·e = ${r3(Mw)} kN·m`);
+  add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1)', V, 0.6 * ac.Fy * vg.d * vg.tw / 1000, 'kN', '');
+  req.push(['Cubrejunta del ala bpf ≤ bf de la viga', bpf <= vg.bf + 1e-6, `${bpf} ≤ ${vg.bf} mm`]);
+  req.push(['Bordes de la cubrejunta del ala (bpf − gf)/2 y Lef ≥ mín.', Math.min((bpf - gf) / 2, Lef) >= bm, `${r1(Math.min((bpf - gf) / 2, Lef))} ≥ ${bm} mm`]);
+  req.push(['Cubrejunta del alma cabe entre las alas: hpw ≤ T', hpw <= vg.T + 1e-6, `${hpw} ≤ ${r1(vg.T)} mm`]);
+  req.push(['Pernos del alma caben: (nw − 1)·sw + 2·Lew ≤ hpw', (nw - 1) * sw + 2 * Lew <= hpw + 1e-6, `${(nw - 1) * sw + 2 * Lew} ≤ ${hpw} mm`]);
+  req.push(['Separaciones ≥ 2.67d', Math.min(sf, sw) >= 2.67 * d - 1e-6, `${Math.min(sf, sw)} ≥ ${r1(2.67 * d)} mm`]);
+  req.push(['Pernos pretensionados (empalme a momento)', true, 'indicar en planos']);
+  return fin(ch, req, av, pasos, { vg, dh, Ff, ic });
+}
+
+// ── Diagonal de angular(es) atornillada a una cartela soldada ─────────────
+function defaultsCartela(){
+  return { tipo:'cartela', nom:'', desc:'', Pu:150, nL:2, bL:76, tL:6.4, aceroL:'A36', n:3, s:65, Le:38, ga:45,
+    tg:9.5, aceroG:'A36', Lcr:150, K:0.65, theta:45, Lwg:250, w:6, electrodo:'E70XX', d:19.1, grado:'A325', rosca:'N' };
+}
+function calcCartela(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const P = +c.Pu || 0, Pa = Math.abs(P), d = +c.d, n = Math.max(1, Math.round(+c.n)), s = +c.s, Le = +c.Le, b = +c.bL, t = +c.tL, nL = +c.nL === 1 ? 1 : 2, ga = +c.ga, tg = +c.tg;
+  const aL = ACEROS[c.aceroL], ag = ACEROS[c.aceroG], FEXX = ELECTRODOS[c.electrodo];
+  const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d);
+  const A1 = (2 * b - t) * t, Ag = nL * A1, xb = (b * t * t / 2 + (b - t) * t * (t + (b - t) / 2)) / A1;   // centroide medido desde la espalda
+  pasos.push(`Diagonal ${nL === 2 ? '2L' : 'L'} ${b}×${b}×${t} mm (${c.aceroL}): Ag = ${r1(Ag)} mm², x̄ = ${r1(xb)} mm; Pu = ${r2(P)} kN (${P >= 0 ? 'tensión' : 'compresión'})`);
+  // Pernos
+  const bAE = aplast(Le - dh / 2, t, d, aL.Fu).phiRn, bAI = aplast(s - dh, t, d, aL.Fu).phiRn, bG = 0.75 * 2.4 * d * tg * ag.Fu / 1000;
+  const rE = Math.min(nL * rv, nL * bAE, bG), rI = Math.min(nL * rv, nL * bAI, bG);
+  add('pernos', `Pernos (${n}, ${nL === 2 ? 'doble' : 'simple'} cortante)`, 'F.2.10.3.6 y F.2.10.3.10', Pa, rE + (n - 1) * rI, 'kN', `por perno: borde ${r2(rE)}, interior ${r2(rI)} kN (cartela ${r2(bG)} kN)`);
+  // Diagonal
+  const l = (n - 1) * s, U = Math.max(l > 0 ? 1 - xb / l : 0, n >= 4 ? 0.8 : n === 3 ? 0.6 : 0), An = Ag - nL * dn * t, Ae = U * An;
+  if(P > 0){
+    add('diagonal', 'Fluencia a tensión de la diagonal', 'F.2.4.2 (D2-1)', P, 0.9 * aL.Fy * Ag / 1000, 'kN', '');
+    add('diagonal', 'Rotura a tensión (con rezago de cortante U)', 'F.2.4.2 (D2-2), Tabla D3.1', P, 0.75 * aL.Fu * Ae / 1000, 'kN', `U = máx(1 − x̄/l; caso 8) = ${r3(U)}, Ae = ${r1(Ae)} mm²`);
+  } else pasos.push('Compresión: el pandeo de la diagonal se revisa como elemento (Anexo D); aquí solo la conexión.');
+  const agv = (Le + l) * t, anv = agv - (n - 0.5) * dn * t, ant = (b - ga - dn / 2) * t;
+  add('diagonal', `Bloque de cortante en el angular (×${nL})`, 'F.2.10.4.3 (J4-5)', Pa, nL * bloqueRn(aL.Fy, aL.Fu, agv, anv, ant), 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm²`);
+  // Cartela: sección de Whitmore
+  const Lw = 2 * l * Math.tan(Math.PI / 6) + (n > 1 ? 0 : dh), Aw = Lw * tg;
+  pasos.push(`Cartela t = ${tg} mm: ancho de Whitmore Lw = 2·(n − 1)·s·tan30° = ${r1(Lw)} mm`);
+  if(P > 0) add('cartela', 'Fluencia en la sección de Whitmore', 'F.2.10.4.1 (J4-1)', P, 0.9 * ag.Fy * Aw / 1000, 'kN', `Aw = ${r1(Aw)} mm²`);
+  else { const KLr = +c.K * +c.Lcr / (tg / Math.sqrt(12));
+    add('cartela', 'Pandeo de la cartela (sección de Whitmore)', 'F.2.10.4.4 (J4-6) / E3', Pa, 0.9 * fcrE3(ag.Fy, KLr) * Aw / 1000, 'kN', `KL/r = ${c.K}·${c.Lcr}/r = ${r1(KLr)}`); }
+  // Soldadura cartela–soporte
+  const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, w = +c.w;
+  add('soldadura', 'Filetes cartela–soporte (ambas caras)', 'F.2.10.2.4 (J2-4, J2-5)', Pa, 2 * fw(FEXX, w) * Lwg * (1 + 0.5 * Math.pow(Math.sin(th), 1.5)), 'kN', `L = ${Lwg} mm, θ = ${c.theta}° entre la fuerza y el cordón`);
+  add('cartela', 'Cartela junto a la soldadura (cortante + tensión)', 'F.2.10.4 · F.2.10.2.4', Pa, Math.min(0.6 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.cos(th), 0.01), 0.9 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.sin(th), 0.01)), 'kN', 'componentes de la fuerza contra fluencia por cortante y por tensión');
+  req.push(['Separación s ≥ 2.67d', s >= 2.67 * d - 1e-6, `${s} ≥ ${r1(2.67 * d)} mm`]);
+  req.push(['Borde Le ≥ mín.', Le >= bm, `${Le} ≥ ${bm} mm`]);
+  req.push(['Borde del angular b − ga ≥ mín.', b - ga >= bm, `${b - ga} ≥ ${bm} mm`]);
+  req.push(['Filete ≥ mín. Tabla J2.4', w >= (tg > 19 ? 8 : tg > 12.7 ? 6 : tg > 6.4 ? 5 : 3), `${w} mm`]);
+  return fin(ch, req, av, pasos, { dh, Lw, U, xb });
+}
+
+// ── Placa base a momento: usa el mismo cálculo del Anexo E del generador (calc/anexoE.js) ─────────────
+function defaultsBase(){
+  return { tipo:'base', nom:'', desc:'', P:150, Mx:20, My:0, Vx:15, Vy:0, columna:'HEB 200',
+    N:400, B:350, tp:25.4, aceroPlaca:'A36', Lp:650, Wp:600, ha:1000, fc:21,
+    perno:'3/4"', anclaje:'F1554 Gr 36', nB:2, S1:300, S2:250, hef:300, arandela:50, cabeza:'tuerca', fisurado:true, mortero:true, w:8, electrodo:'E70XX' };
+}
+function calcBase(c){
+  const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null);
+  if(!AE) return { error:'No se cargó el cálculo de la placa base.' };
+  const cl = perfil(c.columna); if(!cl) return { error:'Escoja el perfil de la columna.' };
+  const R = AE.placaBase({ ...c, bf:cl.bf, d:cl.d, tw:cl.tw, tf:cl.tf }, [{ P:+c.P, Mn:+c.Mx, Mb:+c.My, Vn:+c.Vx, Vb:+c.Vy }]);
+  if(!R.ok) return { error:R.error };
+  const ch = [], GR = { apl:'concreto', geo:'placa', tp:'placa', ten:'anclajes', cono:'concreto', pull:'anclajes', vs:'anclajes', vb:'concreto', vcp:'concreto', int:'anclajes', sb:'concreto', sold:'soldadura' };
+  for(const [k, x] of Object.entries(R.checks)){
+    const N = x.u === 'N', soloR = !x.u || x.soloOk;
+    ch.push({ grupo:GR[k] || 'placa', nombre:x.n, ref:x.ref, dem: soloR ? x.r : N ? x.dem / 1000 : x.dem, cap: soloR ? 1 : N ? x.cap / 1000 : x.cap, ud: soloR ? '' : N ? 'kN' : x.u, ratio:x.r,
+      extra: k === 'tp' ? `t requerido = ${r1(x.req)} mm` : '' });
+  }
+  const f = R.peor, pasos = [
+    `Columna ${cl.nom} sobre placa N × B × tp = ${R.N} × ${R.B} × ${R.tp} mm; pedestal ${R.Lp} × ${R.Wp} mm, f'c = ${R.fc} MPa`,
+    `Aplastamiento máximo fp,máx = 0.65·0.85·f'c·√(A2/A1) ≤ 2 → ${r2(R.fpMax)} MPa; voladizos m = ${r1(R.m)}, n = ${r1(R.nv)}, λn' = ${r1(R.lnp)} mm`,
+    `Sentido X (N): ${f.rN.caso}; e = ${isFinite(f.rN.e) ? r1(f.rN.e) : '∞'} mm, e crít = ${r1(f.rN.ecrit)} mm, Y = ${r1(f.rN.Y)} mm, Tu = ${r2(f.rN.Tu / 1000)} kN`,
+    `Sentido Y (B): ${f.rB.caso}; Tu = ${r2(f.rB.Tu / 1000)} kN · espesor requerido ${r1(f.tReq)} mm`,
+    `Anclajes ${R.n} × ${c.perno} ${c.anclaje}: φNsa = ${r2(R.phiNsa / 1000)} kN, φVsa = ${r2(R.phiVsa / 1000)} kN por perno; hef = ${R.hef} mm` ];
+  return fin(ch, [], [...R.avisos], pasos, { R, cl });
+}
+
+function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
+const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase };
+const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
-  defaultsAleta, calcAleta, defaultsGrupo, calcGrupo, defaultsTesta, calcTesta, defaultsAngular, calcAngular,
-  calc: c => c.tipo === 'grupo' ? calcGrupo(c) : c.tipo === 'testa' ? calcTesta(c) : c.tipo === 'angular' ? calcAngular(c) : calcAleta(c),
-  defaults: t => t === 'grupo' ? defaultsGrupo() : t === 'testa' ? defaultsTesta() : t === 'angular' ? defaultsAngular() : defaultsAleta() };
+  calc: c => (CALC[c.tipo] || calcAleta)(c), defaults: t => (DEF[t] || defaultsAleta)() };
 G.Conex = Conex;
 if(typeof module !== 'undefined') module.exports = Conex;
 })(typeof window !== 'undefined' ? window : globalThis);
