@@ -26,6 +26,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .topbar .sp{flex:1}
 #userbox{display:flex;gap:6px;align-items:center}
 .tbtn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 11px;font-weight:700;font-size:12px}
+a.tbtn{text-decoration:none;display:inline-flex;align-items:center}
 
 .wrap{max-width:1240px;margin:0 auto;padding:16px}
 .muted{color:var(--muted)}

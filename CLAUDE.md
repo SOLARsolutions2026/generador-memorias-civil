@@ -206,6 +206,15 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Botón «＋ Nuevo» junto a «Panel solar» y «Riel de montaje» en la revisión de cubierta (`data-rvnuevo`, lo deja escogido) y en el Anexo A (`data-anuevo`).
 - Configuración: tarjeta `bibliotecaCfgHTML` / `activarBibliotecaCfg` con tablas, ✎ corregir, 🗑 quitar (no borra el PDF: las memorias guardan copia del objeto con su ruta).
 
+## App de conexiones (10-nov, opción B de Amo: app aparte) — carpeta `conexiones/`
+- URL …/generador-memorias-civil/conexiones/ (subcarpeta: desde aquí no se pueden crear repos). PWA propia (`conexiones/manifest.webmanifest`, `conexiones/sw.js` con CACHE `conexiones-vN`, alcance ./); usa ../app.css, ../config.js, ../vendor/supabase.js, ../data/perfiles.js. Misma sesión y roles (`mem_usuarios`), membrete `mem_perfiles_pie`, firma `mem_config`.
+- Tabla `con_proyectos(id, consecutivo DOC-CON-DD-MM-AA(-n) único, titulo, estado wip|apr, ficha{proyecto,prop,doc,dir,mun,depto,fecha}, datos{con[]}, perfil_id, creado_por)`; RLS igual (ingeniero todo; consulta solo apr/arch); trigger `mem_touch`.
+- Guía: PDF «Diseño de uniones en estructuras de acero» (Celigüeta, tecnun) para la lista de chequeos, pero con fórmulas NSR-10 F.2 (AISC 360-10 LRFD) + Manual AISC (partes 7, 9, 10). Cálculo puro `conexiones/calc.js` (`Conex`, corre también en node).
+- Tipos hechos: chapa de aleta `aleta` (CA-n: pernos por ICR con e = a, chapa: fluencia/rotura por cortante, bloque, flexión+cortante, rotura por flexión, pandeo; soldadura de filete por ambas caras y metal base; soporte; alma de la viga; requisitos de detallado) y grupo de pernos excéntrico `grupo` (GE-n: ICR con R = (1 − e^(−10Δ))^0.55, Δmáx 0.34 in, elástico de referencia; chapa a flexión y cortante).
+- Pantalla: lista de proyectos con buscador → proyecto (datos de portada desplegables, lista de conexiones + galería para agregar, editor con dibujo SVG a escala y cotas, tabla de chequeos por grupo, requisitos, cálculo detallado). Impresión: portada + generalidades con resumen + una sección por conexión.
+- Botón «🔩 Conexiones» en la barra del generador. Ojo con clases del app.css principal: `.chk` ya existe (la tabla usa `.chq`).
+- Siguientes tipos posibles (según el PDF): chapa de testa (end plate), doble angular, empalmes, placa base a momento, rigidez/clasificación.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
