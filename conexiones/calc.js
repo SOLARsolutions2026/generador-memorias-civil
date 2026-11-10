@@ -586,11 +586,147 @@ function calcBase(c){
   return fin(ch, [], [...R.avisos], pasos, { R, cl });
 }
 
+
+// ═════════ Fuerzas en los dos ejes y torsión (pedido de Amo 10-nov) ═════════
+// Ejes del miembro conectado (como el Anexo D): 1 = eje del miembro, 2 = eje fuerte (cortante V2, momento M3), 3 = eje débil (V3, M2); T = torsión.
+// Cargas mayoradas resultantes que da Amo (una sola fila). P: + tensión, − compresión.
+const nz = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
+// Grupo de pernos por el método elástico (6 componentes): pts {u, v} [mm] en el plano de los pernos; F {Fu, Fv [kN], Mn [kN·m] (en el plano), N [kN] (normal, + tensión), Mu, Mv [kN·m] (fuera del plano)}
+function pernos3D(pts, F, op){
+  const n = pts.length, uc = pts.reduce((a, p) => a + p.u, 0) / n, vc = pts.reduce((a, p) => a + p.v, 0) / n;
+  const P = pts.map(p => ({ u:p.u - uc, v:p.v - vc })), Iu = P.reduce((a, p) => a + p.v * p.v, 0), Iv = P.reduce((a, p) => a + p.u * p.u, 0), J = Iu + Iv;
+  const B = PERNOS[op.grado], Fnv = B[op.rosca === 'X' ? 'X' : 'N'], Ab = Math.PI * op.d * op.d / 4, planos = op.planos || 1;
+  let peor = null;
+  for(const p of P){
+    const ru = F.Fu / n - (J > 0 ? F.Mn * 1000 * p.v / J : 0), rv = F.Fv / n + (J > 0 ? F.Mn * 1000 * p.u / J : 0), r = Math.hypot(ru, rv);
+    const t = Math.max(0, F.N / n + (Iu > 0 ? F.Mu * 1000 * p.v / Iu : 0) + (Iv > 0 ? F.Mv * 1000 * p.u / Iv : 0));
+    const frv = r * 1000 / (Ab * planos), Fntp = Math.max(0, Math.min(B.Fnt, 1.3 * B.Fnt - B.Fnt / (0.75 * Fnv) * frv));
+    const capT = 0.75 * Fntp * Ab / 1000, rat = Math.max(r / op.rCorte, t > 0 ? (capT > 0 ? t / capT : Infinity) : 0);
+    if(!peor || rat > peor.rat) peor = { r, t, capT, Fntp, rat };
+  }
+  peor.nota = (Iv === 0 && F.Mv ? ' · una sola columna de pernos no toma ese momento por tensión: lo toma la chapa a flexión' : '') + (Iu === 0 && F.Mu ? ' · una sola fila de pernos no toma ese momento por tensión: lo toma la chapa a flexión' : '');
+  return peor;
+}
+// Sección rectangular de platina (L × t) con las 6 fuerzas: flexión y axial lineal + cortante y torsión (Manual AISC ec. 10-5 generalizada)
+function secPlatina(L, t, Fy, f){
+  const A = L * t, flex = Math.abs(f.N) * 1000 / (0.9 * Fy * A) + Math.abs(f.ML) * 1e6 / (0.9 * Fy * t * L * L / 4) + Math.abs(f.Mt) * 1e6 / (0.9 * Fy * L * t * t / 4);
+  const corte = (Math.abs(f.VL) + Math.abs(f.Vt)) * 1000 / (1.0 * 0.6 * Fy * A) + Math.abs(f.T) * 1e6 / (L * t * t / 3) / (0.6 * Fy);
+  return { flex, corte, ratio:Math.hypot(flex, corte) };
+}
+// Soldadura de filete por el método de la línea (misma función del Anexo E del generador)
+function soldLinea(forma, b, d, w, electrodo, tBase, f){
+  const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null); if(!AE) return null;
+  const R = AE.soldadura({ forma, b, d, w, electrodo, t:tBase, acero:'A36', H:f.H, V:f.V, N:f.N, T:f.T, Mx:f.Mx, My:f.My });
+  return { ratio:R.checks[0].r, f:R.peor.f, wReq:R.wReq };
+}
+const hayExtra = (c, k) => k.some(x => Math.abs(nz(c[x])) > 0);
+const EXTRA = {
+  aleta(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2', 'M3'])) return;
+    const d = +c.d, n = Math.round(+c.n), s = +c.s, a = +c.a, vg = r.geo.vg, Lp = r.geo.Lp, dh = agujero(d), pl = ACEROS[c.aceroPl];
+    const pts = Array.from({ length:n }, (_, i) => ({ u:0, v:i * s })), rC = Math.min(fv(c, d), aplast(+c.Lev - dh / 2, +c.tp, d, pl.Fu).phiRn, 0.75 * 2.4 * d * vg.tw * ACEROS[c.aceroViga].Fu / 1000);
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
+    const b = pernos3D(pts, { Fu:P, Fv:V2, Mn:M3, N:Math.abs(V3), Mu:T, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos con las 6 fuerzas (método elástico, J3-3a)', 'F.2.10.3.7 (J3-3a)', b.rat, 1, '', `perno crítico: cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN (φRn ${r2(b.capT)})${b.nota}`);
+    const sp = secPlatina(Lp, +c.tp, pl.Fy, { N:P, VL:V2, Vt:V3, T, ML:M3 + V2 * a / 1000, Mt:M2 + V3 * a / 1000 });
+    add('chapa', 'Chapa en la soldadura: flexión en ambos ejes + cortante + torsión', 'F.2.10.4 · Manual AISC ec. 10-5', sp.ratio, 1, '', `flexión/axial ${r3(sp.flex)}, cortante/torsión ${r3(sp.corte)}; M3 + V2·a y M2 + V3·a`);
+    const w = soldLinea('2', +c.tp, Lp, +c.w, c.electrodo, +c.tp, { H:V3, V:V2, N:P, T, Mx:M3 + V2 * a / 1000, My:M2 + V3 * a / 1000 });
+    if(w) add('soldadura', 'Filetes con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `f máx. ${r1(w.f)} N/mm; w requerido ${r1(w.wReq)} mm`);
+    const q = [M3 && 'el momento M3', M2 && 'el momento M2', T && 'la torsión T', V3 && 'el cortante V3'].filter(Boolean);
+    if(q.length) av.push(`La chapa de aleta es una unión a cortante y es delgada fuera de su plano: ${q.join(', ')} la doblan en su eje débil. Si no cumple, considere una chapa más gruesa, una chapa de testa o una unión a momento.`); },
+  angular(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2', 'M3'])) return;
+    const d = +c.d, n = Math.round(+c.n), s = +c.s, vg = r.geo.vg, dh = agujero(d), an = ACEROS[c.aceroAng], g2 = +c.g2;
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3), op = { d, grado:c.grado, rosca:c.rosca };
+    const rW = Math.min(2 * fv(c, d), 0.75 * 2.4 * d * vg.tw * ACEROS[c.aceroViga].Fu / 1000, 2 * aplast(+c.Lev - dh / 2, +c.tAng, d, an.Fu).phiRn);
+    const bw = pernos3D(Array.from({ length:n }, (_, i) => ({ u:0, v:i * s })), { Fu:P, Fv:V2, Mn:M3, N:Math.abs(V3), Mu:T, Mv:M2 }, { ...op, planos:2, rCorte:rW });
+    add('pernos', 'Pernos en el alma con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', bw.rat, 1, '', `cortante ${r2(bw.r)} kN (φrn ${r2(rW)}), tensión ${r2(bw.t)} kN${bw.nota}`);
+    const rS = Math.min(fv(c, d), aplast(+c.Lev - dh / 2, +c.tAng, d, an.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
+    const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < n; i++) pts.push({ u:sg * (g2 + vg.tw / 2), v:i * s });
+    const bs = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { ...op, rCorte:rS });
+    add('pernos', 'Pernos en el soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', bs.rat, 1, '', `cortante ${r2(bs.r)} kN (φrn ${r2(rS)}), tensión ${r2(bs.t)} kN`);
+    if(P > 0 || Math.abs(M3) > 0 || Math.abs(M2) > 0) av.push('Con tensión o momentos los angulares se doblan y los pernos del soporte trabajan con efecto palanca, que aquí no se calcula. Revise el espesor de los angulares o use una chapa de testa.'); },
+  testaV(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2', 'M3'])) return;
+    const d = +c.d, n = Math.round(+c.n), s = +c.s, g = +c.g, dh = agujero(d), pl = ACEROS[c.aceroPl], vg = r.geo.vg, Lp = r.geo.Lp;
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
+    const rC = Math.min(fv(c, d), aplast(+c.Lev - dh / 2, +c.tp, d, pl.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
+    const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < n; i++) pts.push({ u:sg * g / 2, v:i * s });
+    const b = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos con las 6 fuerzas (método elástico, J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN (φRn ${r2(b.capT)})`);
+    const w = soldLinea('2', vg.tw, Lp - 2 * +c.w, +c.w, c.electrodo, Math.min(+c.tp, vg.tw), { H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
+    if(w) add('soldadura', 'Filetes alma–placa con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `f máx. ${r1(w.f)} N/mm; w requerido ${r1(w.wReq)} mm`);
+    if(P > 0 || Math.abs(M3) > 0 || Math.abs(M2) > 0) av.push('La placa delgada trabaja con efecto palanca cuando hay tensión o momento; aquí no se calcula. Considere una chapa de testa a momento.'); },
+  asiento(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2', 'M3'])) return;
+    const d = +c.d, g = +c.g, nf = Math.max(1, Math.round(+c.filas)), an = ACEROS[c.aceroAng];
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
+    const rC = Math.min(fv(c, d), 0.75 * 2.4 * d * +c.t * an.Fu / 1000, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
+    const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < nf; i++) pts.push({ u:sg * g / 2, v:i * 3 * d });
+    const b = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos al soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN, tensión ${r2(b.t)} kN`);
+    av.push('El asiento solo apoya la viga: la tensión, los momentos y la torsión deben tomarse con un angular superior o lateral, que aquí no se diseña.'); },
+  testa(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2'])) return;
+    const d = +c.d, g = +c.g, Ab = Math.PI * d * d / 4, B = PERNOS[c.grado], Fnv = B[c.rosca === 'X' ? 'X' : 'N'], vg = r.geo.vg, nT = r.geo.nTot;
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.Mu);
+    const ras = c.tipo === 'ras', sumh = ras ? r.geo.h1 + (r.geo.h2 || 0) : r.geo.h0 + r.geo.h1;
+    const tM3 = Math.abs(M3) * 1000 / (2 * sumh), tP = Math.max(0, P) / nT, tM2 = Math.abs(M2) * 1000 / (nT * g / 2), t = tM3 + tP + tM2;
+    const rMax = Math.hypot(g / 2, (vg.d + 2 * (+c.pfo || 0)) / 2), Jp = nT * (g * g / 4 + (vg.d / 2) ** 2 * 0.6);
+    const rv = Math.hypot(V2, V3) / nT + Math.abs(T) * 1e3 * rMax / Jp;
+    const frv = rv * 1000 / Ab, Fntp = Math.max(0, Math.min(B.Fnt, 1.3 * B.Fnt - B.Fnt / (0.75 * Fnv) * frv)), capT = 0.75 * Fntp * Ab / 1000;
+    add('pernos', 'Perno más cargado: tensión (M3 + P + M2) con cortante (V2, V3, T)', 'F.2.10.3.7 (J3-3a)', t, capT, 'kN', `t = ${r2(tM3)} + ${r2(tP)} + ${r2(tM2)} kN; cortante ${r2(rv)} kN/perno → F'nt = ${Math.round(Fntp)} MPa`);
+    add('pernos', 'Cortante por perno (V2, V3 y torsión T, todos los pernos)', 'F.2.10.3.6 (J3-1)', rv, fv(c, d), 'kN', `${nT} pernos`);
+    if(c.soldAla !== 'cjp'){ const w = soldLinea('I', vg.bf, vg.d, Math.min(+c.wAla, +c.wAlma), c.electrodo, vg.tf, { H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
+      if(w) add('soldadura', 'Soldadura del contorno del perfil con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `f máx. ${r1(w.f)} N/mm con el filete menor; w requerido ${r1(w.wReq)} mm`); }
+    if(Math.abs(M2) > 0) av.push('El momento M2 (eje débil) se reparte como tensión entre las dos columnas de pernos; la placa y el ala de la columna se revisan solo para M3 por líneas de fluencia.'); },
+  empalme(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2'])) return;
+    const d = +c.d, vg = r.geo.vg, gap = +c.gap || 0, tpf = +c.tpf, bpf = +c.bpf, nf = Math.round(+c.nf), sf = +c.sf, gf = +c.gf, pl = ACEROS[c.aceroPl], dh = agujero(d);
+    const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.Mu);
+    const Af = bpf * tpf, Aw = 2 * +c.hpw * +c.tpw, At = 2 * Af + Aw, brazo = vg.d + tpf;
+    const Ff = Math.abs(M3) * 1000 / brazo + Math.abs(P) * Af / At, Vf = Math.abs(V3) / 2 + Math.abs(T) * 1000 / brazo, Mf = Math.abs(M2) / 2;
+    const pts = []; for(let i = 0; i < nf; i++) for(const sg of [-1, 1]) pts.push({ u:i * sf, v:sg * gf / 2 });
+    const rC = Math.min(fv(c, d), aplast(sf - dh, tpf, d, pl.Fu).phiRn, aplast(sf - dh, vg.tf, d, ACEROS[c.aceroViga].Fu).phiRn);
+    const b = pernos3D(pts, { Fu:Ff, Fv:Vf, Mn:Mf + Vf * (gap / 2 + +c.Lef + (nf - 1) * sf / 2) / 1000, N:0, Mu:0, Mv:0 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos de un ala con M3, P, V3, M2 y T (método elástico)', 'F.2.10.3.6', b.rat, 1, '', `cortante del perno crítico ${r2(b.r)} kN (φrn ${r2(rC)}); por ala: F ${r2(Ff)} kN, V ${r2(Vf)} kN, M ${r2(Mf)} kN·m`);
+    const sp = secPlatina(bpf, tpf, pl.Fy, { N:Ff, VL:Vf, Vt:0, T:0, ML:Mf + Vf * gap / 2000, Mt:0 });
+    add('alas', 'Cubrejunta del ala: tensión + flexión en su plano (M2) + cortante', 'F.2.10.4 · Manual AISC ec. 10-5', sp.ratio, 1, '', `flexión/axial ${r3(sp.flex)}, cortante ${r3(sp.corte)}`);
+    if(Math.abs(P) > 0){ const ew = gap / 2 + +c.Lehw, Pw = Math.abs(P) * Aw / At, nw = Math.round(+c.nw);
+      const rW = Math.min(2 * fv(c, d), 0.75 * 2.4 * d * vg.tw * ACEROS[c.aceroViga].Fu / 1000);
+      const bw = pernos3D(Array.from({ length:nw }, (_, i) => ({ u:0, v:i * +c.sw })), { Fu:Pw, Fv:V2, Mn:V2 * ew / 1000, N:0, Mu:0, Mv:0 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rW });
+      add('pernos', 'Pernos del alma con V2 y la parte de P (método elástico)', 'F.2.10.3.6', bw.rat, 1, '', `P en el alma ${r2(Pw)} kN; cortante crítico ${r2(bw.r)} kN`); } },
+  cartela(c, r, add, av){ if(!hayExtra(c, ['V2', 'V3', 'T', 'M2', 'M3'])) return;
+    const d = +c.d, n = Math.round(+c.n), s = +c.s, nL = +c.nL === 1 ? 1 : 2, dh = agujero(d), ag = ACEROS[c.aceroG], aL = ACEROS[c.aceroL];
+    const P = nz(c.Pu), V2 = nz(c.V2), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
+    const rC = Math.min(nL * fv(c, d), nL * aplast(s - dh, +c.tL, d, aL.Fu).phiRn, 0.75 * 2.4 * d * +c.tg * ag.Fu / 1000);
+    const b = pernos3D(Array.from({ length:n }, (_, i) => ({ u:i * s, v:0 })), { Fu:P, Fv:V2, Mn:M3, N:Math.abs(V3), Mu:T, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, planos:nL, rCorte:rC });
+    add('pernos', 'Pernos con las 6 fuerzas de la diagonal (J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN${b.nota}`);
+    const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, hc = +c.Lcr + (n - 1) * s / 2;
+    const Vw = P * Math.cos(th) - V2 * Math.sin(th), Nw = P * Math.sin(th) + V2 * Math.cos(th), Mx = Math.abs(M3), My = Math.abs(M2) + Math.abs(V3) * hc / 1000;
+    const sp = secPlatina(Lwg, +c.tg, ag.Fy, { N:Nw, VL:Vw, Vt:V3, T, ML:Mx, Mt:My });
+    add('cartela', 'Cartela en la soldadura: fuerzas en su plano y fuera de él', 'F.2.10.4 · Manual AISC ec. 10-5', sp.ratio, 1, '', `flexión/axial ${r3(sp.flex)}, cortante/torsión ${r3(sp.corte)}; fuera del plano M = M2 + V3·${Math.round(hc)} mm`);
+    const w = soldLinea('2', +c.tg, Lwg, +c.w, c.electrodo, +c.tg, { H:V3, V:Vw, N:Nw, T, Mx, My });
+    if(w) add('soldadura', 'Filetes cartela–soporte con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `f máx. ${r1(w.f)} N/mm; w requerido ${r1(w.wReq)} mm`);
+    av.push('Fuerzas fuera del plano de la cartela: la cartela es delgada en esa dirección; revise si necesita un rigidizador.'); },
+  grupo(c, r, add, av){ if(!hayExtra(c, ['Nt', 'Mx', 'My'])) return;
+    const d = +c.d, dh = agujero(d), pl = ACEROS[c.aceroPl], t = (+c.ang || 0) * Math.PI / 180, Pu = nz(c.Pu), e = nz(c.e);
+    const pts = []; for(let j = 0; j < +c.cols; j++) for(let i = 0; i < +c.filas; i++) pts.push({ u:j * +c.g, v:i * +c.s });
+    const rC = Math.min(fv(c, d), aplast(+c.s - dh, +c.tp, d, pl.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
+    const b = pernos3D(pts, { Fu:Pu * Math.sin(t), Fv:Pu * Math.cos(t), Mn:Pu * e / 1000, N:nz(c.Nt), Mu:nz(c.Mx), Mv:nz(c.My) }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos con fuerzas en el plano y fuera de él (método elástico, J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN (φRn ${r2(b.capT)})`);
+    av.push('Con tensión normal a la chapa los pernos pueden trabajar con efecto palanca; aquí no se calcula.'); },
+  base(c, r, add, av){ if(!hayExtra(c, ['T'])) return;
+    const R = r.geo.R, nB = +c.nB, T = nz(c.T), pts = [];
+    for(const sx of [-1, 1]) for(let j = 0; j < nB; j++) pts.push({ u:sx * +c.S1 / 2, v:nB > 1 ? -+c.S2 / 2 + j * +c.S2 / (nB - 1) : 0 });
+    const J = pts.reduce((a, p) => a + p.u * p.u + p.v * p.v, 0), n = pts.length; let peor = 0;
+    for(const p of pts){ const vx = nz(c.Vx) / n - T * 1000 * p.v / J, vy = nz(c.Vy) / n + T * 1000 * p.u / J; peor = Math.max(peor, Math.hypot(vx, vy)); }
+    add('anclajes', 'Cortante en el anclaje más cargado con torsión T', 'C-D.6.1 (acero)', peor, R.phiVsa / 1000, 'kN', `T = ${r2(T)} kN·m repartida en ${n} anclajes`);
+    av.push('Con torsión, el arrancamiento del borde del concreto por cortante se revisa aquí solo con Vx y Vy; verifíquelo si la torsión es importante.'); },
+};
+EXTRA.ras = EXTRA.testa;
+
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
 const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase };
 const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
-  calc: c => (CALC[c.tipo] || calcAleta)(c), defaults: t => (DEF[t] || defaultsAleta)() };
+  calc: c => { const r = (CALC[c.tipo] || calcAleta)(c); if(r.error || !EXTRA[c.tipo]) return r;
+    EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
+  defaults: t => (DEF[t] || defaultsAleta)() };
 G.Conex = Conex;
 if(typeof module !== 'undefined') module.exports = Conex;
 })(typeof window !== 'undefined' ? window : globalThis);

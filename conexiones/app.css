@@ -77,3 +77,10 @@ details.card:not([open]){padding-bottom:4px}details.card:not([open])>summary.ct{
 .f label.ck input{width:16px!important;height:16px;margin:0;flex:none;min-height:0}
 .gal-cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:14px 2px 4px}
 .gal-cat:first-of-type{margin-top:10px}
+/* Cargas con las 6 fuerzas (10-nov) */
+.carga6{display:block;padding:8px 12px 4px}
+.carga6 .cg-hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}.carga6 .cg-hd b{color:#9a3412;font-size:13px}
+.carga6 .cg-bd{display:flex;gap:12px;align-items:flex-start}
+.carga6 .cg-f{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px}.carga6 .cg-f .f{width:auto}
+.carga6 .cg-ej{flex:none;width:130px}.carga6 .ejes{width:100%;height:auto}.carga6 .ejes .lbl{font-size:9px;fill:#334155}
+@media (max-width:600px){.carga6 .cg-bd{flex-direction:column}.carga6 .cg-f{grid-template-columns:repeat(2,minmax(0,1fr))}.carga6 .cg-ej{align-self:center}}

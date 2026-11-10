@@ -256,17 +256,33 @@ function seccionesDe(c){
       g3(campo(c, 'tp', 'Espesor de la chapa tp [mm]'), campo(c, 'aceroPl', 'Acero de la chapa', { sel:SEL_ACERO }), '<div></div>', campo(c, 'tSop', 'Espesor del soporte [mm]', { h:'Ala de la columna u otra chapa' }), campo(c, 'aceroSop', 'Acero del soporte', { sel:SEL_ACERO }))] ];
 }
 const abiertas = () => { try{ return JSON.parse(localStorage.conSecc || 'null') || ['viga', 'geo', 'diag', 'col']; }catch(e){ return ['viga', 'geo', 'diag', 'col']; } };
+
+// Cargas mayoradas resultantes (pedido de Amo 10-nov: eje fuerte, eje débil y torsión). Vacío = 0.
+const EJES_SVG = `<svg viewBox="0 0 150 120" class="ejes" role="img" aria-label="Ejes del miembro: 1 a lo largo, 2 fuerte, 3 débil">
+  <rect x="38" y="22" width="44" height="7" fill="#cbd5e1" stroke="#64748b"/><rect x="38" y="91" width="44" height="7" fill="#cbd5e1" stroke="#64748b"/><rect x="57" y="29" width="6" height="62" fill="#cbd5e1" stroke="#64748b"/>
+  <line x1="60" y1="60" x2="60" y2="8" stroke="#ea580c" stroke-width="2"/><path d="M56 13 L60 4 L64 13Z" fill="#ea580c"/><text x="66" y="12" class="lbl">2 · V2, M3</text>
+  <line x1="60" y1="60" x2="112" y2="60" stroke="#ea580c" stroke-width="2"/><path d="M107 56 L116 60 L107 64Z" fill="#ea580c"/><text x="92" y="76" class="lbl">3 · V3, M2</text>
+  <circle cx="60" cy="60" r="5" fill="#fff" stroke="#0f2d5e" stroke-width="2"/><circle cx="60" cy="60" r="1.6" fill="#0f2d5e"/><text x="4" y="58" class="lbl">1 · P, T</text>
+  <path d="M44 74 A 20 20 0 1 1 76 74" fill="none" stroke="#7c3aed" stroke-width="1.6"/><path d="M73 70 L77 76 L70 77Z" fill="#7c3aed"/><text x="98" y="112" class="lbl" style="fill:#7c3aed">T</text></svg>`;
+function cargasHTML(c){
+  const f = (k, l, h) => campo(c, k, l, h ? { h } : {});
+  const caja = (titulo, campos, nota, ejes = true) => `<div class="carga-in carga6"><div class="cg-hd"><b>${titulo}</b><span class="hint">${nota}</span></div>
+    <div class="cg-bd"><div class="cg-f">${campos.join('')}</div>${ejes ? `<div class="cg-ej">${EJES_SVG}</div>` : ''}</div></div>`;
+  const nota = 'Resultantes mayoradas · vacío = 0 · P: + tensión';
+  if(c.tipo === 'base') return caja('Cargas en la base de la columna', [f('P', 'P [kN]', '+ compresión'), f('Vx', 'Vx [kN]', 'sentido N'), f('Vy', 'Vy [kN]', 'sentido B'), f('T', 'T [kN·m]', 'torsión'), f('Mx', 'Mx [kN·m]', 'flexión en el sentido N'), f('My', 'My [kN·m]', 'flexión en el sentido B')], 'Resultantes mayoradas · vacío = 0', false);
+  if(c.tipo === 'grupo') return caja('Cargas sobre el grupo de pernos', [f('Pu', 'Pu en el plano [kN]'), f('e', 'Excentricidad e [mm]', 'al centro del grupo'), f('ang', 'Ángulo [°]', '0° = vertical'),
+    f('Nt', 'N normal a la chapa [kN]', '+ tensión en los pernos'), f('Mx', 'Mx fuera del plano [kN·m]', 'eje horizontal'), f('My', 'My fuera del plano [kN·m]', 'eje vertical')], 'Resultantes mayoradas · vacío = 0', false);
+  const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme'].includes(c.tipo) ? 'Mu' : 'M3';
+  return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]'), f(k2, 'V2 eje fuerte [kN]'), f('V3', 'V3 eje débil [kN]'),
+    f('T', 'T torsión [kN·m]'), f('M2', 'M2 eje débil [kN·m]'), f(k3, 'M3 eje fuerte [kN·m]')], nota);
+}
+const cargasTxt = c => c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
+  : c.tipo === 'grupo' ? `Pu ${nz(c.Pu)} kN a ${nz(c.ang)}° con e = ${nz(c.e)} mm · N ${nz(c.Nt)} kN · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
+  : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
+const nz = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
 function formHTML(c){
   const ab = abiertas();
-  const carga = c.tipo === 'base'
-    ? `<div class="carga-in">${campo(c, 'P', 'P [kN] (+ compresión)')}${campo(c, 'Mx', 'Mx [kN·m] (sentido N)')}${campo(c, 'My', 'My [kN·m] (sentido B)')}${campo(c, 'Vx', 'Vx [kN]')}${campo(c, 'Vy', 'Vy [kN]')}</div>`
-    : c.tipo === 'cartela'
-    ? `<div class="carga-in">${campo(c, 'Pu', 'Fuerza en la diagonal Pu [kN]', { h:'+ tensión, − compresión' })}</div>`
-    : c.tipo === 'testa' || c.tipo === 'ras' || c.tipo === 'empalme'
-    ? `<div class="carga-in">${campo(c, 'Mu', 'Momento de diseño Mu [kN·m]')}${campo(c, 'Vu', 'Cortante de diseño Vu [kN]')}<div class="hint">Fuerzas mayoradas en la cara<br/>de la columna</div></div>`
-    : ['aleta', 'angular', 'testaV', 'asiento'].includes(c.tipo)
-    ? `<div class="carga-in">${campo(c, 'Vu', 'Cortante de diseño Vu [kN]')}<div class="hint">Reacción mayorada de la viga<br/>(combinación de resistencia)</div></div>`
-    : `<div class="carga-in">${campo(c, 'Pu', 'Carga de diseño Pu [kN]')}${campo(c, 'e', 'Excentricidad e [mm]', { h:'De la carga al centro del grupo' })}${campo(c, 'ang', 'Ángulo [°]', { h:'0° = vertical' })}</div>`;
+  const carga = cargasHTML(c);
   return carga + `<div class="sec-tools"><button type="button" class="lnk" data-secall="1">Abrir todo</button> · <button type="button" class="lnk" data-secall="0">Cerrar todo</button></div>`
     + seccionesDe(c).map(([k, t, res, body], i) => `<section class="sec ${ab.includes(k) ? 'on' : ''}" data-sec="${k}">
       <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
@@ -530,16 +546,16 @@ async function imprimir(){
 function datosPrint(c){
   const t = (l, v) => `<tr><th>${l}</th><td>${v}</td></tr>`, dn = (Conex.DIAM.find(x => x[1] === +c.d) || [c.d])[0];
   if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base'].includes(c.tipo)){
-    const carga = c.tipo === 'base' ? `P ${c.P} kN · Mx ${c.Mx} · My ${c.My} kN·m · Vx ${c.Vx} · Vy ${c.Vy} kN` : c.tipo === 'cartela' ? `Pu = ${c.Pu} kN` : c.Mu != null ? `Mu ${c.Mu} kN·m · Vu ${c.Vu} kN` : `Vu = ${c.Vu} kN`;
+    const carga = cargasTxt(c);
     return `<table class="t kv">${t('Cargas', carga)}${seccionesDe(c).map(([, tt, res]) => t(esc(tt), esc(res()))).join('')}</table>`; }
-  if(c.tipo === 'angular') return `<table class="t kv">${t('Vu', `${f2(+c.Vu, 1)} kN`)}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
+  if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
     ${t('Angulares', `2L ${c.bAng}×${c.bAng}×${c.tAng} mm · ${esc(c.aceroAng)}`)}${t('Pernos', `${c.n} en el alma + ${2 * c.n} en el soporte, ${dn} ${esc(c.grado)}-${esc(c.rosca)}`)}${t('Distancias', `s = ${c.s} · Lev = ${c.Lev} · g₁ = ${c.g1} · g₂ = ${c.g2} mm`)}</table>`;
-  if(c.tipo === 'testa') return `<table class="t kv">${t('Mu · Vu', `${f2(+c.Mu, 1)} kN·m · ${f2(+c.Vu, 1)} kN`)}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Columna', c.columna ? `${esc(c.columna)} · ${esc(c.aceroCol)}` : 'no revisada')}
+  if(c.tipo === 'testa') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Columna', c.columna ? `${esc(c.columna)} · ${esc(c.aceroCol)}` : 'no revisada')}
     ${t('Placa', `${c.tp} × ${c.bp} mm · ${esc(c.aceroPl)} · extensión ${c.ambos ? 'arriba y abajo' : 'arriba'}`)}${t('Pernos', `${c.ambos ? 8 : 4 + (+c.nbc || 0)} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} pretensionados · g = ${c.g} mm`)}
     ${t('Distancias', `pfo = ${c.pfo} · pfi = ${c.pfi} · de = ${c.de} mm`)}${t('Soldaduras', `alas: ${c.soldAla === 'cjp' ? 'penetración completa' : `filete ${c.wAla} mm`} · alma: filete ${c.wAlma} mm · ${esc(c.electrodo)}`)}</table>`;
-  if(c.tipo === 'aleta') return `<table class="t kv">${t('Vu', `${f2(+c.Vu, 1)} kN`)}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Soporte', `${{ ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga' }[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
+  if(c.tipo === 'aleta') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Soporte', `${{ ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga' }[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
     ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)} · a = ${c.a} mm`)}${t('Pernos', `${c.n} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} · s = ${c.s} mm`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}${t('Soldadura', `filete ${c.w} mm por ambas caras · ${esc(c.electrodo)}`)}</table>`;
-  return `<table class="t kv">${t('Pu', `${f2(+c.Pu, 1)} kN a ${c.ang || 0}° · e = ${c.e} mm`)}${t('Pernos', `${c.filas} × ${c.cols} de ${dn} ${esc(c.grado)}-${esc(c.rosca)}`)}${t('Separaciones', `s = ${c.s} · g = ${c.g} mm`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}
+  return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Pernos', `${c.filas} × ${c.cols} de ${dn} ${esc(c.grado)}-${esc(c.rosca)}`)}${t('Separaciones', `s = ${c.s} · g = ${c.g} mm`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}
     ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)}`)}${t('Soporte', `t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}</table>`;
 }
 
