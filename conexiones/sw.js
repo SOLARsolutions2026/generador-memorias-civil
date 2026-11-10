@@ -1,5 +1,5 @@
 // Service worker de la app de conexiones (alcance /conexiones/): red primero, caché si no hay conexión.
-const CACHE = 'conexiones-v2';
+const CACHE = 'conexiones-v4';
 const ARCHIVOS = ['./', 'index.html', 'app.css', 'app.js', 'calc.js', 'manifest.webmanifest',
   '../app.css', '../config.js', '../vendor/supabase.js', '../data/perfiles.js', '../icons/icon-192.png', '../icons/icon-512.png', '../icons/logo-pe.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS))); self.skipWaiting(); });

@@ -71,3 +71,7 @@ details.card:not([open]){padding-bottom:4px}details.card:not([open])>summary.ct{
 .sec-bd{display:none;padding:10px 12px 2px}.sec.on .sec-bd{display:block}
 .sec-bd .fg+.fg{margin-top:2px}
 @media (max-width:600px){.sec-hd small{display:none}.sec.on .sec-hd small{display:none}}
+.dsvg .bl{stroke:#1e3a8a;stroke-width:3;stroke-linecap:round}
+.dsvg .mom path{fill:none;stroke:#7c3aed;stroke-width:2}.dsvg .mom path.pt{fill:#7c3aed;stroke:none}
+.f label.ck{display:flex!important;gap:8px;align-items:center;font-weight:500;color:var(--text);font-size:12.5px;margin:4px 0 8px}
+.f label.ck input{width:16px!important;height:16px;margin:0;flex:none;min-height:0}
