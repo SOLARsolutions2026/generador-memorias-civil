@@ -317,10 +317,68 @@ function calcTesta(c){
   return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, cl, Hp, h0, h1, dh, nTot: c.ambos ? 8 : 4 + nb } };
 }
 
+// ── Doble angular de alma (atornillado a la viga y al soporte) — Manual AISC parte 10, fórmulas NSR-10 F.2.10 ─────────────
+function defaultsAngular(){
+  return { tipo:'angular', nom:'', desc:'', Vu:80,
+    viga:'IPE 300', aceroViga:'A572 Gr 50', holgura:13,
+    soporte:'ala', tSop:10.7, aceroSop:'A572 Gr 50', dosLados:false,
+    bAng:89, tAng:7.9, aceroAng:'A36', n:3, s:75, Lev:38, g1:51, g2:51,
+    d:19.1, grado:'A325', rosca:'N' };
+}
+function calcAngular(c){
+  const ch = [], av = [], pasos = [], req = [];
+  const V = Math.abs(+c.Vu || 0), d = +c.d, n = Math.max(1, Math.round(+c.n || 1)), s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0;
+  const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
+  const an = ACEROS[c.aceroAng], av_ = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop], B = PERNOS[c.grado];
+  const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
+  const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), Ab = Math.PI * d * d / 4, L = (n - 1) * s + 2 * Lev;
+  const LehA = b - Math.max(g1, g2), LehV = g1 - hol;
+  pasos.push(`Viga ${vg.nom}: d = ${vg.d}, tw = ${vg.tw}, T = ${r1(vg.T)} mm · Vu = ${r2(V)} kN`);
+  pasos.push(`Angulares 2L ${b}×${b}×${t} mm (${c.aceroAng}), largo L = (n − 1)·s + 2·Lev = ${r1(L)} mm; ${n} pernos en el alma (doble cortante) y ${2 * n} en el soporte (cortante simple)`);
+  req.push(['Largo de los angulares L ≥ T/2 (estabilidad)', L >= vg.T / 2 - 1e-6, `${r1(L)} ≥ ${r1(vg.T / 2)} mm`]);
+  req.push(['Largo de los angulares L ≤ T (caben entre las alas)', L <= vg.T + 1e-6, `${r1(L)} ≤ ${r1(vg.T)} mm`]);
+  req.push(['Separación s ≥ 2.67d (preferible 3d)', s >= 2.67 * d - 1e-6, `${s} ≥ ${r1(2.67 * d)} mm`]);
+  req.push(['Borde vertical Lev ≥ mín. Tabla F.2.10.3-4', Lev >= bm, `${Lev} ≥ ${bm} mm`]);
+  req.push(['Borde horizontal del angular b − g ≥ mín.', LehA >= bm, `${r1(LehA)} ≥ ${bm} mm`]);
+  req.push(['Borde horizontal en la viga g₁ − holgura ≥ mín.', LehV >= bm, `${r1(LehV)} ≥ ${bm} mm`]);
+  req.push(['Espacio para apretar: g ≥ d + 12.7 mm', Math.min(g1, g2) >= d + 12.7 - 1e-6, `${Math.min(g1, g2)} ≥ ${r1(d + 12.7)} mm`]);
+  req.push(['Angulares flexibles: t ≤ 16 mm (Manual AISC parte 10)', t <= 16, `${t} mm`]);
+  req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
+
+  // Pernos en el alma de la viga: doble cortante
+  const rv = 0.75 * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
+  const brg = (lc, tt, Fu) => aplast(lc, tt, d, Fu).phiRn;
+  const lcE = Lev - dh / 2, lcI = s - dh;
+  const angE = brg(lcE, t, an.Fu), angI = brg(lcI, t, an.Fu), web = 0.75 * 2.4 * d * vg.tw * av_.Fu / 1000;
+  const rWebE = Math.min(2 * rv, web, 2 * angE), rWebI = Math.min(2 * rv, web, 2 * angI);
+  const capWeb = rWebE + (n - 1) * rWebI;
+  pasos.push(`Corte de un perno φrn = 0.75·Fnv·Ab = ${r2(rv)} kN; aplastamiento en el angular: borde ${r2(angE)} kN (lc = ${r1(lcE)}), interior ${r2(angI)} kN (lc = ${r1(lcI)}); alma de la viga ${r2(web)} kN`);
+  add('pernos', `Pernos en el alma de la viga (${n}, doble cortante)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, capWeb, 'kN', `por perno: borde ${r2(rWebE)}, interior ${r2(rWebI)} kN`);
+  // Pernos en el soporte: cortante simple, 2 por fila
+  const sop = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000 / (c.dosLados ? 2 : 1);
+  const rSE = Math.min(rv, angE, sop), rSI = Math.min(rv, angI, sop), capSop = 2 * (rSE + (n - 1) * rSI);
+  add('pernos', `Pernos en el soporte (${2 * n}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, capSop, 'kN', `por perno: borde ${r2(rSE)}, interior ${r2(rSI)} kN; soporte ${r2(sop)} kN${c.dosLados ? ' (comparte agujeros)' : ''}`);
+  pasos.push('Se desprecia la excentricidad de los pernos (angulares flexibles, Manual AISC parte 10).');
+
+  // Angulares (los dos)
+  const Agv = 2 * L * t, Anv = 2 * (L - n * dn) * t;
+  add('angulares', 'Fluencia por cortante (2 angulares)', 'F.2.10.4.2 (J4-3)', V, 1.0 * 0.6 * an.Fy * Agv / 1000, 'kN', `Agv = 2·L·t = ${r1(Agv)} mm²`);
+  add('angulares', 'Rotura por cortante (2 angulares)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * an.Fu * Anv / 1000, 'kN', `Anv = 2·(L − n·${r1(dn)})·t = ${r1(Anv)} mm²`);
+  const bloque = Lh => { const agv = (L - Lev) * t, anv = (L - Lev - (n - 0.5) * dn) * t, ant = (Lh - 0.5 * dn) * t;
+    return { phiRn: 2 * 0.75 * Math.min(0.6 * an.Fu * anv + an.Fu * ant, 0.6 * an.Fy * agv + an.Fu * ant) / 1000, agv, anv, ant }; };
+  const bkW = bloque(b - g1), bkS = bloque(b - g2);
+  add('angulares', 'Bloque de cortante, ala sobre la viga (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, bkW.phiRn, 'kN', `por angular Agv = ${r1(bkW.agv)}, Anv = ${r1(bkW.anv)}, Ant = ${r1(bkW.ant)} mm²`);
+  add('angulares', 'Bloque de cortante, ala sobre el soporte (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, bkS.phiRn, 'kN', `por angular Agv = ${r1(bkS.agv)}, Anv = ${r1(bkS.anv)}, Ant = ${r1(bkS.ant)} mm²`);
+  // Viga
+  add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', V, 1.0 * 0.6 * av_.Fy * vg.d * vg.tw / 1000, 'kN', '0.6·Fy·d·tw (viga sin destaje)');
+  const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
+  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, L, dh, gage:2 * g2 + vg.tw } };
+}
+
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
-  defaultsAleta, calcAleta, defaultsGrupo, calcGrupo, defaultsTesta, calcTesta,
-  calc: c => c.tipo === 'grupo' ? calcGrupo(c) : c.tipo === 'testa' ? calcTesta(c) : calcAleta(c),
-  defaults: t => t === 'grupo' ? defaultsGrupo() : t === 'testa' ? defaultsTesta() : defaultsAleta() };
+  defaultsAleta, calcAleta, defaultsGrupo, calcGrupo, defaultsTesta, calcTesta, defaultsAngular, calcAngular,
+  calc: c => c.tipo === 'grupo' ? calcGrupo(c) : c.tipo === 'testa' ? calcTesta(c) : c.tipo === 'angular' ? calcAngular(c) : calcAleta(c),
+  defaults: t => t === 'grupo' ? defaultsGrupo() : t === 'testa' ? defaultsTesta() : t === 'angular' ? defaultsAngular() : defaultsAleta() };
 G.Conex = Conex;
 if(typeof module !== 'undefined') module.exports = Conex;
 })(typeof window !== 'undefined' ? window : globalThis);
