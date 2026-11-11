@@ -110,11 +110,11 @@ function guardar(){ clearTimeout(tGuardar); $('#gEst') && ($('#gEst').textConten
     if($('#gEst')) $('#gEst').textContent = error ? '⚠ Sin guardar' : '✓ Guardado'; if(error) err(error, 'No se pudo guardar'); }, 700); }
 const conSel = () => S.p.datos.con.find(c => c.id === S.sel);
 const NOMBRES = { aleta:'Chapa de aleta (shear tab)', angular:'Doble angular de alma', testaV:'Chapa de testa a cortante', asiento:'Asiento con angular',
-  testa:'Chapa de testa extendida (4 pernos)', ras:'Chapa de testa a ras', empalme:'Empalme de viga con cubrejuntas',
+  testa:'Chapa de testa extendida (4 pernos)', ras:'Chapa de testa a ras', empalme:'Empalme de viga con cubrejuntas', soldada:'Soldada en todo el perímetro',
   cartela:'Diagonal a cartela', grupo:'Grupo de pernos excéntrico', base:'Placa base a momento' };
 // Galería por tipo de trabajo (pedido de Amo 10-nov)
-const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'empalme']], ['Axiales y otras', ['cartela', 'grupo', 'base']]];
-const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', cartela:'DC', grupo:'GE', base:'PB' };
+const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme']], ['Axiales y otras', ['cartela', 'grupo', 'base']]];
+const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB' };
 
 function renderProyecto(){
   const p = S.p, F = p.ficha, ro = esIng() ? '' : 'disabled';
@@ -177,6 +177,17 @@ function seccionesDe(c){
       g3(campo(c, 'soldAla', 'Alas', { sel:[['filete', 'Filete por ambas caras'], ['cjp', 'Penetración completa']] }), c.soldAla === 'cjp' ? '' : campo(c, 'wAla', 'Filete de las alas w [mm]'), campo(c, 'wAlma', 'Filete del alma w [mm]', { h:'Por ambas caras' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))];
   const colSec = () => ['col', 'Columna', () => c.columna ? `${c.columna} · ${c.aceroCol}${c.colTope ? ' · en el extremo superior' : ''}` : 'sin revisar',
       g3(SELP('columna', 'Perfil', '— No revisar la columna —'), campo(c, 'aceroCol', 'Acero', { sel:SEL_ACERO })) + ck('colTope', 'La unión está en el extremo superior de la columna (menos de d de la punta)')];
+  if(c.tipo === 'soldada') return [
+    ['miem', 'Miembro soldado', () => c.miembro === 'tubo' ? `Tubo ${c.H}×${c.B}×${c.tt} mm · ${c.aceroViga}` : `${c.viga} · ${c.aceroViga}`,
+      g3(campo(c, 'miembro', 'Tipo', { sel:[['I', 'Perfil I'], ['tubo', 'Tubo rectangular']] }), c.miembro === 'tubo' ? '' : SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))
+      + (c.miembro === 'tubo' ? g3(campo(c, 'H', 'Alto H [mm]', { h:'En la dirección 2' }), campo(c, 'B', 'Ancho B [mm]'), campo(c, 'tt', 'Espesor t [mm]')) : '')],
+    ['sold', 'Soldadura en todo el perímetro', () => c.union === 'cjp' ? 'penetración completa' : `filete ${c.w} mm · ${c.electrodo}`,
+      g3(campo(c, 'union', 'Tipo de soldadura', { sel:[['filete', 'Filete en todo el contorno'], ['cjp', 'Penetración completa']] }), c.union === 'cjp' ? '' : campo(c, 'w', 'Pierna del filete w [mm]'), c.union === 'cjp' ? '' : campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))],
+    ['sop', 'Soporte', () => c.soporte === 'placa' ? `Placa t ${c.tSop} mm · ${c.aceroSop}` : c.columna ? `Ala de ${c.columna} · ${c.aceroCol}` : 'columna sin revisar',
+      g3(campo(c, 'soporte', 'Se suelda a', { sel:[['col', 'Ala de una columna'], ['placa', 'Una placa']] }),
+        ...(c.soporte === 'placa' ? [campo(c, 'tSop', 'Espesor de la placa [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })]
+          : [SELP('columna', 'Perfil de la columna', '— No revisar la columna —'), campo(c, 'aceroCol', 'Acero', { sel:SEL_ACERO })]))
+      + (c.soporte === 'placa' ? '' : ck('colTope', 'La unión está en el extremo superior de la columna'))] ];
   if(c.tipo === 'ras') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))], colSec(),
     ['placa', 'Placa de testa', () => `PL ${c.tp} × ${c.bp} mm ${c.aceroPl}`, g3(campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }))
@@ -286,13 +297,13 @@ function cargasHTML(c){
   if(c.tipo === 'base') return caja('Cargas en la base de la columna', [f('P', 'P [kN]', '+ compresión'), f('Vx', 'Vx [kN]', 'sentido N'), f('Vy', 'Vy [kN]', 'sentido B'), f('T', 'T [kN·m]', 'torsión'), f('Mx', 'Mx [kN·m]', 'flexión en el sentido N'), f('My', 'My [kN·m]', 'flexión en el sentido B')], 'Resultantes mayoradas · vacío = 0', false);
   if(c.tipo === 'grupo') return caja('Cargas sobre el grupo de pernos', [f('Pu', 'Pu en el plano [kN]'), f('e', 'Excentricidad e [mm]', 'al centro del grupo'), f('ang', 'Ángulo [°]', '0° = vertical'),
     f('Nt', 'N normal a la chapa [kN]', '+ tensión en los pernos'), f('Mx', 'Mx fuera del plano [kN·m]', 'eje horizontal'), f('My', 'My fuera del plano [kN·m]', 'eje vertical')], 'Resultantes mayoradas · vacío = 0', false);
-  const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme'].includes(c.tipo) ? 'Mu' : 'M3';
+  const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme', 'soldada'].includes(c.tipo) ? 'Mu' : 'M3';
   return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]', 'a lo largo del eje 1'), f(k2, 'V2 [kN]', 'dirección 2 (alma)'), f('V3', 'V3 [kN]', 'dirección 3 (alas)'),
     f('T', 'T torsión [kN·m]', 'alrededor del eje 1'), f('M2', 'M2 [kN·m]', 'alrededor de 2 · eje débil'), f(k3, 'M3 [kN·m]', 'alrededor de 3 · eje fuerte')], nota);
 }
 const cargasTxt = c => c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
   : c.tipo === 'grupo' ? `Pu ${nz(c.Pu)} kN a ${nz(c.ang)}° con e = ${nz(c.e)} mm · N ${nz(c.Nt)} kN · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
-  : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
+  : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme', 'soldada'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
 const nz = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
 function formHTML(c){
   const ab = abiertas();
@@ -330,7 +341,7 @@ function renderEditor(){
   $$('#ed [data-secall]').forEach(b => b.onclick = () => { $$('#ed .sec').forEach(s => { s.classList.toggle('on', b.dataset.secall === '1'); $('.sec-hd', s).setAttribute('aria-expanded', b.dataset.secall === '1'); }); guardaAb(); });
   $$('#ed [data-k]').forEach(el => { const k = el.dataset.k;
     const fn = () => { if(el.type === 'checkbox') c[k] = el.checked; else if(el.dataset.num) c[k] = el.value === '' ? '' : Number(el.value.replace(',', '.')); else c[k] = el.value;
-      if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
+      if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
     el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', fn); });
@@ -352,7 +363,7 @@ const ICO_ALETA = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="2"
 const ICO_GRUPO = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="4" width="26" height="32" fill="#93c5fd" stroke="#1e3a8a"/>' + [10, 20, 30].map(y => `<circle cx="12" cy="${y}" r="2.2" fill="#1e3a8a"/><circle cx="22" cy="${y}" r="2.2" fill="#1e3a8a"/>`).join('') + '<line x1="50" y1="6" x2="50" y2="32" stroke="#ea580c" stroke-width="2.5"/><path d="M46 28 L50 35 L54 28" fill="#ea580c"/></svg>';
 function cotaV(x, y1, y2, t, lado = -1){ const xx = x + lado * 0; return `<g class="cota"><line x1="${xx}" y1="${y1}" x2="${xx}" y2="${y2}"/><line x1="${xx - 4}" y1="${y1}" x2="${xx + 4}" y2="${y1}"/><line x1="${xx - 4}" y1="${y2}" x2="${xx + 4}" y2="${y2}"/><text x="${xx + lado * 6}" y="${(y1 + y2) / 2}" text-anchor="${lado < 0 ? 'end' : 'start'}" dominant-baseline="middle">${t}</text></g>`; }
 function cotaH(y, x1, x2, t, lado = 1){ return `<g class="cota"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/><line x1="${x1}" y1="${y - 4}" x2="${x1}" y2="${y + 4}"/><line x1="${x2}" y1="${y - 4}" x2="${x2}" y2="${y + 4}"/><text x="${(x1 + x2) / 2}" y="${y + lado * 11}" text-anchor="middle">${t}</text></g>`; }
-function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, base:dibBase }[c.tipo] || dibAleta)(c, r); }
+function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, base:dibBase, soldada:dibSoldada }[c.tipo] || dibAleta)(c, r); }
 const ICO_ANG = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="8" height="38" fill="#cbd5e1"/><rect x="18" y="6" width="40" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="12" y="9" width="18" height="22" fill="#93c5fd" stroke="#1e3a8a"/><rect x="12" y="9" width="3" height="22" fill="#1e3a8a"/><circle cx="23" cy="14" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="20" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="26" r="2" fill="#fff" stroke="#1e3a8a"/></svg>';
 function dibAngular(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0, ts = +c.tSop || 10;
@@ -386,7 +397,8 @@ const ICO_AS = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" wi
 const ICO_EMP = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="8" width="27" height="24" fill="#f1f5f9" stroke="#94a3b8"/><rect x="31" y="8" width="27" height="24" fill="#f1f5f9" stroke="#94a3b8"/><rect x="14" y="5" width="32" height="3" fill="#93c5fd" stroke="#1e3a8a"/><rect x="14" y="32" width="32" height="3" fill="#93c5fd" stroke="#1e3a8a"/><rect x="20" y="13" width="20" height="14" fill="#93c5fd" stroke="#1e3a8a"/></svg>';
 const ICO_CAR = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="34" width="56" height="5" fill="#cbd5e1"/><path d="M10 34 L10 20 L30 6 L46 20 L46 34 Z" fill="#93c5fd" stroke="#1e3a8a"/><line x1="18" y1="28" x2="56" y2="2" stroke="#475569" stroke-width="5"/><circle cx="26" cy="22.5" r="1.8" fill="#fff"/><circle cx="33" cy="17.7" r="1.8" fill="#fff"/></svg>';
 const ICO_BASE = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="8" y="28" width="44" height="11" fill="#e5e7eb" stroke="#94a3b8"/><rect x="12" y="24" width="36" height="4" fill="#93c5fd" stroke="#1e3a8a"/><rect x="22" y="2" width="16" height="22" fill="#f1f5f9" stroke="#475569"/><line x1="16" y1="20" x2="16" y2="38" stroke="#1e3a8a" stroke-width="2"/><line x1="44" y1="20" x2="44" y2="38" stroke="#1e3a8a" stroke-width="2"/></svg>';
-const ICO = { aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, grupo:ICO_GRUPO, base:ICO_BASE };
+const ICO_SP = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="9" height="38" fill="#cbd5e1"/><rect x="13" y="8" width="45" height="24" fill="#f1f5f9" stroke="#94a3b8"/><rect x="13" y="8" width="45" height="3" fill="#475569"/><rect x="13" y="29" width="45" height="3" fill="#475569"/><path d="M13 5 l4 3 h-4z M13 35 l4 -3 h-4z" fill="#b45309"/><line x1="13.5" y1="8" x2="13.5" y2="32" stroke="#b45309" stroke-width="2.5"/></svg>';
+const ICO = { soldada:ICO_SP, aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, grupo:ICO_GRUPO, base:ICO_BASE };
 const svgW = (w, h, body, label, nota) => `<svg viewBox="0 0 ${w} ${h}" class="dsvg" role="img" aria-label="${label}">${body}</svg><div class="hint" style="text-align:center">${nota}</div>`;
 function dibTestaV(c, r){
   const vg = r.geo.vg, n = +c.n, s = +c.s, Lev = +c.Lev, tp = +c.tp, bp = +c.bp, gg = +c.g, Lp = r.geo.Lp, ts = +c.tSop || 10;
@@ -451,6 +463,24 @@ function dibBase(c, r){
   h += cotaH(Y(Wp / 2) + 14, X(-N / 2), X(N / 2), `N = ${N}`) + cotaV(X(Lp / 2) + 12, Y(-B / 2), Y(B / 2), `B = ${B}`, 1) + cotaH(Y(-Wp / 2) - 10, X(-S1 / 2), X(S1 / 2), `S1 = ${S1}`, -1)
     + `<text x="${X(-Lp / 2) + 4}" y="${Y(-Wp / 2) + 12}" class="lbl">pedestal ${Lp} × ${Wp}</text>`;
   return svgW(X(Lp / 2) + 70, Y(Wp / 2) + 36, h, 'Placa base: planta', `Planta · columna ${esc(cl.nom)} · el sentido N es el del peralte`);
+}
+function dibSoldada(c, r){
+  const m = r.geo.m, cl = c.soporte === 'col' ? Conex.perfil(c.columna) : null, ts = cl ? cl.tf : +c.tSop || 20, dc = cl ? cl.d : ts;
+  const k = 240 / (m.d + 80), X = v => 30 + (v + dc) * k, Y = v => 40 + v * k, Ls = 260, cjp = c.union === 'cjp', w = cjp ? 6 : +c.w;
+  let h = cl ? `<rect x="${X(-dc)}" y="${Y(-40)}" width="${(dc - ts) * k}" height="${(m.d + 80) * k}" class="vg"/><rect x="${X(-dc)}" y="${Y(-40)}" width="${cl.tf * k}" height="${(m.d + 80) * k}" class="sop"/>` : '';
+  h += `<rect x="${X(-ts)}" y="${Y(-40)}" width="${ts * k}" height="${(m.d + 80) * k}" class="sop"/>
+    <rect x="${X(0)}" y="${Y(0)}" width="${Ls * k}" height="${m.d * k}" class="vg"/><rect x="${X(0)}" y="${Y(0)}" width="${Ls * k}" height="${m.tf * k}" fill="#475569"/><rect x="${X(0)}" y="${Y(m.d - m.tf)}" width="${Ls * k}" height="${m.tf * k}" fill="#475569"/>`;
+  const tri = (y, sg) => `<path d="M${X(0)} ${Y(y)} l${w * k * 1.6} 0 l${-w * k * 1.6} ${sg * w * k * 1.6} z" class="wld"/>`;
+  h += cjp ? `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(m.d)}" class="wl"/>` : tri(0, -1) + tri(m.tf, 1) + tri(m.d - m.tf, -1) + tri(m.d, 1) + `<line x1="${X(0)}" y1="${Y(m.tf)}" x2="${X(0)}" y2="${Y(m.d - m.tf)}" class="wl"/>`;
+  h += `<text x="${X(Ls / 2)}" y="${Y(m.d / 2) + 3}" class="lbl" text-anchor="middle">${esc(m.nom)}</text><text x="${X(-dc / 2)}" y="${Y(m.d + 40) + 12}" class="lbl" text-anchor="middle">${cl ? esc(cl.nom) : `placa ${ts} mm`}</text>`;
+  // sección vista desde el soporte: contorno soldado
+  const ox = X(Ls + 50), k2 = Math.min(k, 150 / Math.max(m.bf, 1)), S = (u, v) => `${ox + u * k2},${Y(0) + v * k2}`;
+  const perfilPath = m.tub ? `M${S(0, 0)} L${S(m.bf, 0)} L${S(m.bf, m.d)} L${S(0, m.d)} Z M${S(m.tw, m.tf)} L${S(m.tw, m.d - m.tf)} L${S(m.bf - m.tw, m.d - m.tf)} L${S(m.bf - m.tw, m.tf)} Z`
+    : `M${S(0, 0)} L${S(m.bf, 0)} L${S(m.bf, m.tf)} L${S((m.bf + m.tw) / 2, m.tf)} L${S((m.bf + m.tw) / 2, m.d - m.tf)} L${S(m.bf, m.d - m.tf)} L${S(m.bf, m.d)} L${S(0, m.d)} L${S(0, m.d - m.tf)} L${S((m.bf - m.tw) / 2, m.d - m.tf)} L${S((m.bf - m.tw) / 2, m.tf)} L${S(0, m.tf)} Z`;
+  h += `<path d="${perfilPath}" fill="#f1f5f9" stroke="#b45309" stroke-width="${cjp ? 2 : 3.2}" fill-rule="evenodd"/>
+    <text x="${ox + m.bf * k2 / 2}" y="${Y(m.d) + 16}" class="lbl" text-anchor="middle">${cjp ? 'penetración completa' : `filete ${c.w} mm en todo el contorno`}</text>`;
+  return `<svg viewBox="0 0 ${ox + m.bf * k2 + 30} ${Y(m.d + 40) + 22}" class="dsvg" role="img" aria-label="Unión soldada en todo el perímetro">${h}</svg>
+    <div class="hint" style="text-align:center">Izquierda: elevación · Derecha: sección en la cara del soporte (en naranja la soldadura)</div>`;
 }
 function dibTesta(c, r){
   const g = r.geo, vg = g.vg, cl = g.cl, db = vg.d, tf = vg.tf, pfo = +c.pfo, pfi = +c.pfi, de = +c.de, tp = +c.tp, bp = +c.bp, gg = +c.g;
@@ -559,7 +589,7 @@ async function imprimir(){
 }
 function datosPrint(c){
   const t = (l, v) => `<tr><th>${l}</th><td>${v}</td></tr>`, dn = (Conex.DIAM.find(x => x[1] === +c.d) || [c.d])[0];
-  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base'].includes(c.tipo)){
+  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base', 'soldada'].includes(c.tipo)){
     const carga = cargasTxt(c);
     return `<table class="t kv">${t('Cargas', carga)}${seccionesDe(c).map(([, tt, res]) => t(esc(tt), esc(res()))).join('')}</table>`; }
   if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}

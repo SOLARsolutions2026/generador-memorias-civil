@@ -720,9 +720,67 @@ const EXTRA = {
 };
 EXTRA.ras = EXTRA.testa;
 
+// ── Unión a momento soldada en todo el perímetro (pedido de Amo 11-nov) ─────────────
+// Perfil I o tubo rectangular soldado directo a la columna o a una placa; filete en todo el contorno (método de la línea con las 6 fuerzas)
+// o penetración completa (la soldadura iguala al metal base → se revisa la sección del miembro en la cara).
+function defaultsSoldada(){
+  return { tipo:'soldada', nom:'', desc:'', P:0, Vu:60, V3:0, T:0, M2:0, Mu:40,
+    miembro:'I', viga:'IPE 300', aceroViga:'A572 Gr 50', H:150, B:100, tt:6,
+    union:'filete', w:8, electrodo:'E70XX', soporte:'col', columna:'HEB 300', aceroCol:'A572 Gr 50', colTope:false, tSop:25, aceroSop:'A36' };
+}
+function calcSoldada(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.Mu);
+  const am = ACEROS[c.aceroViga], AEac = k => k === 'A992' ? 'A572 Gr 50' : k;
+  let m;                                                                           // propiedades del miembro [mm]
+  if(c.miembro === 'tubo'){ const H = +c.H, B = +c.B, t = +c.tt, Hi = H - 2 * t, Bi = B - 2 * t;
+    m = { nom:`Tubo ${H}×${B}×${t}`, d:H, bf:B, tf:t, tw:t, A:H * B - Hi * Bi, Zx:(B * H * H - Bi * Hi * Hi) / 4, Zy:(H * B * B - Hi * Bi * Bi) / 4, Aw2:2 * H * t, Aw3:2 * B * t, tub:true }; }
+  else { const pf = (G.PERFILES_LAM || []).find(x => x[0] === c.viga); if(!pf) return { error:'Escoja el perfil.' };
+    m = { nom:pf[0], d:pf[2], bf:pf[3], tw:pf[4], tf:pf[5], r:pf[6], A:pf[7], Zx:pf[10], Zy:pf[13], Aw2:pf[2] * pf[4], Aw3:2 * pf[3] * pf[5] }; }
+  const tMin = Math.min(m.tf, m.tw, c.soporte === 'placa' ? +c.tSop : (perfil(c.columna)?.tf || 99));
+  pasos.push(`Miembro ${m.nom} (${c.aceroViga}): d = ${m.d}, b = ${m.bf}, tf = ${m.tf}, tw = ${m.tw} mm · P = ${r2(P)}, V2 = ${r2(V2)}, V3 = ${r2(V3)} kN · T = ${r2(T)}, M2 = ${r2(M2)}, M3 = ${r2(M3)} kN·m`);
+  if(c.union === 'cjp'){
+    pasos.push('Penetración completa en todo el perímetro: la soldadura tiene la resistencia del metal base (Tabla F.2.10.2-5); se revisa la sección del miembro en la cara del soporte.');
+    const Pc = 0.9 * am.Fy * m.A / 1000, Mcx = 0.9 * am.Fy * m.Zx / 1e6, Mcy = 0.9 * am.Fy * m.Zy / 1e6, pr = Math.abs(P) / Pc;
+    const inter = pr >= 0.2 ? pr + 8 / 9 * (Math.abs(M3) / Mcx + Math.abs(M2) / Mcy) : pr / 2 + Math.abs(M3) / Mcx + Math.abs(M2) / Mcy;
+    add('soldadura', 'Sección en la cara: axial + flexión en ambos ejes', 'F.2.8.1 (H1-1a/b), φ = 0.90', inter, 1, '', `φPn ${r2(Pc)} kN, φMn3 ${r2(Mcx)}, φMn2 ${r2(Mcy)} kN·m`);
+    const tors = m.tub ? Math.abs(T) * 1e6 / (2 * (m.d - m.tf) * (m.bf - m.tw) * m.tf) : Math.abs(T) * 1e6 * Math.max(m.tf, m.tw) / ((2 * m.bf * m.tf ** 3 + m.d * m.tw ** 3) / 3);
+    add('soldadura', 'Cortante V2 con torsión', 'F.2.7 (G2-1) · esfuerzo', Math.abs(V2) * 1000 / m.Aw2 + tors, 0.6 * am.Fy, 'MPa', `V2/Aw + τ torsión (${r1(tors)} MPa)`);
+    add('soldadura', 'Cortante V3 con torsión', 'F.2.7 (G6) · esfuerzo', Math.abs(V3) * 1000 / m.Aw3 + tors, 0.9 * 0.6 * am.Fy, 'MPa', `V3/Af + τ torsión`);
+  } else {
+    const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null);
+    const R = AE.soldadura({ forma:m.tub ? 'O' : 'I', b:m.bf, d:m.d, w:+c.w, electrodo:c.electrodo, t:tMin, acero:AEac(c.aceroViga), H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
+    pasos.push(`Filete de ${c.w} mm en todo el contorno (${m.tub ? 'perímetro rectangular' : 'alas por ambas caras y alma'}): método de la línea; f máx. = ${r1(R.peor.f)} N/mm; w requerido = ${r1(R.wReq)} mm`);
+    R.checks.slice(0, 3).forEach(x => ch.push({ grupo:'soldadura', nombre:x.n, ref:x.ref, dem:x.soloOk ? x.dem : x.dem, cap:x.cap, ud:x.u, ratio:x.r, extra:'' }));
+    av.push('Unión en T: no aplica el tamaño máximo del filete en el borde (F.2.10.2.2 es para bordes de platinas).');
+  }
+  // Soporte
+  const Ffu = Math.abs(M3) * 1000 / (m.d - m.tf) + Math.abs(P) / 2;
+  const N = m.tf + 2 * (c.union === 'cjp' ? 0 : +c.w);
+  pasos.push(`Fuerza en cada ala Ffu = M3/(d − tf) + |P|/2 = ${r2(Ffu)} kN; longitud de apoyo N = tf + 2w = ${r1(N)} mm`);
+  if(c.soporte === 'placa'){ const ps = ACEROS[c.aceroSop], tp = +c.tSop;
+    add('soporte', 'Placa de apoyo: flexión local bajo el ala en tensión', 'F.2.10.10.1 (J10-1) aplicado a la placa', Ffu, 0.9 * 6.25 * ps.Fy * tp * tp / 1000, 'kN', `t = ${tp} mm`);
+    if(Math.abs(M2) > 0 || Math.abs(T) > 0) av.push('M2 y T llegan a la placa fuera de su plano; revise la placa y lo que la sostiene (pernos o soldadura).'); }
+  else { const cl = perfil(c.columna);
+    if(cl){ const ac = ACEROS[c.aceroCol], kc = cl.tf + cl.r, E = 200000;
+      add('columna', 'Flexión local del ala de la columna', 'F.2.10.10.1 (J10-1)', Ffu, 0.9 * 6.25 * ac.Fy * cl.tf ** 2 / 1000 * (c.colTope ? 0.5 : 1), 'kN', `6.25·Fy·tf²${c.colTope ? ' × 0.5 (en el tope)' : ''}`);
+      const ly = (c.colTope ? 2.5 : 5) * kc + N;
+      add('columna', 'Fluencia local del alma', `F.2.10.10.2 (J10-${c.colTope ? 3 : 2})`, Ffu, 1.0 * ac.Fy * cl.tw * ly / 1000, 'kN', `L = ${c.colTope ? '2.5' : '5'}k + N = ${r1(ly)} mm`);
+      const rN = N / cl.d, f = c.colTope ? 0.4 : 0.8;
+      const cr = (c.colTope && rN > 0.2) ? 0.4 * cl.tw ** 2 * (1 + (4 * rN - 0.2) * (cl.tw / cl.tf) ** 1.5) : f * cl.tw ** 2 * (1 + 3 * rN * (cl.tw / cl.tf) ** 1.5);
+      add('columna', 'Aplastamiento del alma', 'F.2.10.10.3 (J10-4/5)', Ffu, 0.75 * cr * Math.sqrt(E * ac.Fy * cl.tf / cl.tw) / 1000, 'kN', `N/d = ${r3(rN)}`);
+      add('columna', 'Zona de panel', 'F.2.10.10.6 (J10-9), φ = 0.90', Ffu, 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000, 'kN', '0.6·Fy·dc·tw (sin cortante de la columna)');
+      req.push(['El miembro cabe en el ala de la columna: b ≤ bf de la columna', m.bf <= cl.bf + 1e-6, `${m.bf} ≤ ${cl.bf} mm`]);
+      if(Math.abs(M2) > 0) av.push('M2 se transmite al ala de la columna como flexión fuera de su plano; si es importante, use rigidizadores o una placa.'); }
+    else av.push('No se revisó la columna: escoja su perfil.'); }
+  req.push(['Acceso para soldar todo el contorno (también por dentro de las alas)', true, 'verificar en obra']);
+  if(c.union !== 'cjp') req.push(['Filete ≥ mínimo de la Tabla F.2.10.2-4', +c.w >= (tMin > 19 ? 8 : tMin > 12.7 ? 6 : tMin > 6.4 ? 5 : 3), `${c.w} mm (parte más delgada ${tMin} mm)`]);
+  return fin(ch, req, av, pasos, { m, Ffu });
+}
+
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
-const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase };
-const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase };
+const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada };
+const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { const r = (CALC[c.tipo] || calcAleta)(c); if(r.error || !EXTRA[c.tipo]) return r;
     EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
