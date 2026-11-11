@@ -258,23 +258,37 @@ function seccionesDe(c){
 const abiertas = () => { try{ return JSON.parse(localStorage.conSecc || 'null') || ['viga', 'geo', 'diag', 'col']; }catch(e){ return ['viga', 'geo', 'diag', 'col']; } };
 
 // Cargas mayoradas resultantes (pedido de Amo 10-nov: eje fuerte, eje débil y torsión). Vacío = 0.
-const EJES_SVG = `<svg viewBox="0 0 150 120" class="ejes" role="img" aria-label="Ejes del miembro: 1 a lo largo, 2 fuerte, 3 débil">
-  <rect x="38" y="22" width="44" height="7" fill="#cbd5e1" stroke="#64748b"/><rect x="38" y="91" width="44" height="7" fill="#cbd5e1" stroke="#64748b"/><rect x="57" y="29" width="6" height="62" fill="#cbd5e1" stroke="#64748b"/>
-  <line x1="60" y1="60" x2="60" y2="8" stroke="#ea580c" stroke-width="2"/><path d="M56 13 L60 4 L64 13Z" fill="#ea580c"/><text x="66" y="12" class="lbl">2 · V2, M3</text>
-  <line x1="60" y1="60" x2="112" y2="60" stroke="#ea580c" stroke-width="2"/><path d="M107 56 L116 60 L107 64Z" fill="#ea580c"/><text x="92" y="76" class="lbl">3 · V3, M2</text>
-  <circle cx="60" cy="60" r="5" fill="#fff" stroke="#0f2d5e" stroke-width="2"/><circle cx="60" cy="60" r="1.6" fill="#0f2d5e"/><text x="4" y="58" class="lbl">1 · P, T</text>
-  <path d="M44 74 A 20 20 0 1 1 76 74" fill="none" stroke="#7c3aed" stroke-width="1.6"/><path d="M73 70 L77 76 L70 77Z" fill="#7c3aed"/><text x="98" y="112" class="lbl" style="fill:#7c3aed">T</text></svg>`;
+// Ejes del miembro con la convención del modelo (regla de la mano derecha): cada eje lleva su fuerza (flecha simple, naranja)
+// y el momento ALREDEDOR de ese eje (doble flecha, morada). Corrección pedida por Amo 11-nov: antes M2 se veía junto al eje 3.
+function ejesCon(){
+  const id = ejId(), P = iso(72, 118, 50), b = 0.32, h = 0.6, t = 0.07, Lm = 1.2, d = 0.2;
+  const ala = zz => caja(P, 0, -b, zz, Lm, 2 * b, t, '#c7d2e3', '#dbe3ee', '#e8eef7');
+  const alma = caja(P, 0, -t / 2, -h / 2 + t, Lm, t, h - 2 * t, '#c7d2e3', '#dbe3ee', '#e8eef7');
+  const A = (x, y, z) => P(Lm + x, y, z), O = A(0, 0, 0), L = 1.75;
+  const par = (eje, ax) => {           // fuerza y momento sobre cada eje, separados a lado y lado del eje
+    const v = (k, off) => eje === 1 ? A(k, 0, off) : eje === 2 ? A(off, 0, k) : A(0, k, off);
+    return lin(id, 'f', ...v(0.45, d), ...v(1.05, d), 2.2) + lin(id, 'm', ...v(0.45, -d), ...v(1.4, -d), 2.2); };
+  const lb = (eje, k, off, t, c, a = 'start', dx = 4, dy = 4) => { const q = eje === 1 ? A(k, 0, off) : eje === 2 ? A(off, 0, k) : A(0, k, off); return txt(q[0] + dx, q[1] + dy, t, c, a); };
+  return `<svg viewBox="0 18 300 185" class="ejes" role="img" aria-label="Ejes 1, 2 y 3 con sus fuerzas y momentos">${ejDefs(id)}${ala(-h / 2)}${alma}${ala(h / 2 - t)}
+    ${lin(id, 'a', ...O, ...A(L, 0, 0))}${lin(id, 'a', ...O, ...A(0, 0, L))}${lin(id, 'a', ...O, ...A(0, L, 0))}
+    ${par(1)}${par(2)}${par(3)}
+    ${txt(...A(L + 0.05, 0, 0).map((v, i) => v + (i ? 4 : 2)), 'eje 1')}${txt(A(0, 0, L)[0] + 5, A(0, 0, L)[1] + 2, 'eje 2')}${txt(A(0, L, 0)[0] - 4, A(0, L, 0)[1] + 4, 'eje 3', EJ.az, 'end')}
+    ${lb(1, 1.05, d, 'P', EJ.f, 'start', 2, -6)}${lb(1, 1.4, -d, 'T', EJ.m, 'start', 2, 14)}
+    ${lb(2, 1.05, d, 'V2', EJ.f, 'start', 6, 6)}${lb(2, 1.4, -d, 'M2', EJ.m, 'end', -6, 6)}
+    ${lb(3, 1.05, d, 'V3', EJ.f, 'end', -4, -6)}${lb(3, 1.4, -d, 'M3', EJ.m, 'end', -4, 14)}</svg>
+    <div class="ej-ley"><span class="f">→ fuerza en la dirección del eje</span><span class="m">⇉ momento alrededor del eje</span></div>`;
+}
 function cargasHTML(c){
   const f = (k, l, h) => campo(c, k, l, h ? { h } : {});
   const caja = (titulo, campos, nota, ejes = true) => `<div class="carga-in carga6"><div class="cg-hd"><b>${titulo}</b><span class="hint">${nota}</span></div>
-    <div class="cg-bd"><div class="cg-f">${campos.join('')}</div>${ejes ? `<div class="cg-ej">${EJES_SVG}</div>` : ''}</div></div>`;
+    <div class="cg-bd"><div class="cg-f">${campos.join('')}</div>${ejes ? `<div class="cg-ej">${ejesCon()}</div>` : ''}</div></div>`;
   const nota = 'Resultantes mayoradas · vacío = 0 · P: + tensión';
   if(c.tipo === 'base') return caja('Cargas en la base de la columna', [f('P', 'P [kN]', '+ compresión'), f('Vx', 'Vx [kN]', 'sentido N'), f('Vy', 'Vy [kN]', 'sentido B'), f('T', 'T [kN·m]', 'torsión'), f('Mx', 'Mx [kN·m]', 'flexión en el sentido N'), f('My', 'My [kN·m]', 'flexión en el sentido B')], 'Resultantes mayoradas · vacío = 0', false);
   if(c.tipo === 'grupo') return caja('Cargas sobre el grupo de pernos', [f('Pu', 'Pu en el plano [kN]'), f('e', 'Excentricidad e [mm]', 'al centro del grupo'), f('ang', 'Ángulo [°]', '0° = vertical'),
     f('Nt', 'N normal a la chapa [kN]', '+ tensión en los pernos'), f('Mx', 'Mx fuera del plano [kN·m]', 'eje horizontal'), f('My', 'My fuera del plano [kN·m]', 'eje vertical')], 'Resultantes mayoradas · vacío = 0', false);
   const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme'].includes(c.tipo) ? 'Mu' : 'M3';
-  return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]'), f(k2, 'V2 eje fuerte [kN]'), f('V3', 'V3 eje débil [kN]'),
-    f('T', 'T torsión [kN·m]'), f('M2', 'M2 eje débil [kN·m]'), f(k3, 'M3 eje fuerte [kN·m]')], nota);
+  return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]', 'a lo largo del eje 1'), f(k2, 'V2 [kN]', 'dirección 2 (alma)'), f('V3', 'V3 [kN]', 'dirección 3 (alas)'),
+    f('T', 'T torsión [kN·m]', 'alrededor del eje 1'), f('M2', 'M2 [kN·m]', 'alrededor de 2 · eje débil'), f(k3, 'M3 [kN·m]', 'alrededor de 3 · eje fuerte')], nota);
 }
 const cargasTxt = c => c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
   : c.tipo === 'grupo' ? `Pu ${nz(c.Pu)} kN a ${nz(c.ang)}° con e = ${nz(c.e)} mm · N ${nz(c.Nt)} kN · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`

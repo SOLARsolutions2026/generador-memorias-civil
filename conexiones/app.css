@@ -84,3 +84,6 @@ details.card:not([open]){padding-bottom:4px}details.card:not([open])>summary.ct{
 .carga6 .cg-f{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px}.carga6 .cg-f .f{width:auto}
 .carga6 .cg-ej{flex:none;width:130px}.carga6 .ejes{width:100%;height:auto}.carga6 .ejes .lbl{font-size:9px;fill:#334155}
 @media (max-width:600px){.carga6 .cg-bd{flex-direction:column}.carga6 .cg-f{grid-template-columns:repeat(2,minmax(0,1fr))}.carga6 .cg-ej{align-self:center}}
+.carga6 .cg-ej{width:260px}.carga6 .ejes text{font-size:11px}
+.ej-ley{font-size:10.5px;color:#475569;text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}.ej-ley .f{color:#b45309}.ej-ley .m{color:#7c3aed}
+.carga6 .cg-bd{flex-wrap:wrap;justify-content:center}.carga6 .cg-f{min-width:min(100%,360px)}.carga6 .cg-ej{width:240px}
