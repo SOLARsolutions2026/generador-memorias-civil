@@ -55,7 +55,7 @@ function defaults(){
   return {
     cub:{ perfil:'master1000', calibre:26, wManual:'' }, cielo:{ aplica:false, tipo:'Drywall', w:15 }, otras:'',     // kg/m²
     paneles:true, panel:null, riel:null, nRieles:2, Lr:'',                                                          // Lr kN/m² (vacío = mínimo por pendiente)
-    viento:{ tipoEd:'cerrada', grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'', expManual:'', flujo:'libre', zona:'3' },
+    viento:{ ejes:2, tipoEd:'cerrada', grupo:'I', huracan:false, V:22, L:'', W:'', He:'', Hr:'', rug:'B', distRug:'', cercaD:false, distD:'', expManual:'', flujo:'libre', zona:'3' },
     correas:[], fotos:[], obs:'',
   };
 }
@@ -100,11 +100,16 @@ const GCP = [
   { hasta:45, pos:[0.9,0.8], z1:[-1.0,-0.8], z2:[-1.2,-1.0], z3:[-1.2,-1.0], fig:'Figura B.6.5-11D (27° < θ ≤ 45°)' },
 ];
 const logInterp = (A, [a, b]) => A <= 0.93 ? a : A >= 9.3 ? b : a + (b - a) * Math.log10(A / 0.93) / Math.log10(9.3 / 0.93);
+// Convención (pedido de Amo 12-nov): W = luz entre los muros donde se apoyan las correas (paralelo a las correas);
+// L = longitud de la cubierta en la dirección de la pendiente (en planta). Las revisiones viejas tenían L y W al revés:
+// `migrarEjes` las intercambia una sola vez y marca v.ejes = 2 (no se pierde ningún dato).
+function migrarEjes(v){ if(!v || v.ejes === 2) return v; const L = v.L; v.L = v.W; v.W = L; v.ejes = 2; return v; }
 function geomViento(v){
+  migrarEjes(v);
   const L = num(v.L), W = num(v.W), He = num(v.He), Hr = num(v.Hr);
   const faltan = [['largo L', L], ['ancho W', W], ['altura de cornisa', He], ['altura de cumbrera', Hr]].filter(x => !(x[1] > 0)).map(x => x[0]);
   if(faltan.length) return { ok:false, faltan };
-  const theta = Hr > He ? Math.atan((Hr - He) / W) * 180 / Math.PI : 0, hm = (He + Hr) / 2;
+  const theta = Hr > He ? Math.atan((Hr - He) / L) * 180 / Math.PI : 0, hm = (He + Hr) / 2;
   return { ok:true, L, W, He, Hr, theta, hm };
 }
 function vientoCorrea(R, AnexoA, luz, s, zona){
@@ -421,7 +426,7 @@ function sugerir(R, cor, ctx){
   return out;
 }
 
-const api = { G, ACEROS, ACEROS_L, ACEROS_HSS, APOYOS, MADERAS, TXT_ARRIOSTRE, GCP, CAT_L, CAT_HSS, CAT_MAD, defaults, nuevaCorrea, cargasArea, LrMin, geomViento, vientoCorrea,
+const api = { G, ACEROS, ACEROS_L, ACEROS_HSS, APOYOS, MADERAS, TXT_ARRIOSTRE, GCP, CAT_L, CAT_HSS, CAT_MAD, defaults, nuevaCorrea, cargasArea, LrMin, geomViento, migrarEjes, vientoCorrea,
   cargasCorrea, combosLRFD, propsAngulo, propsHSS, MnHSS, coefMadera, revisar, revisarMetal, revisarMadera, sugerir, limites, num, fmt };
 if(typeof module !== 'undefined') module.exports = api; else root.Correas = api;
 })(typeof window !== 'undefined' ? window : globalThis);

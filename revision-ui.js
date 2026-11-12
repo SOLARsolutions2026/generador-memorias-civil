@@ -77,6 +77,7 @@ function faltanRev(m){
 
 // ─── Página ───
 function renderRevision(){
+  try{ Correas.migrarEjes(S.m?.anexos?.R?.viento); }catch(e){}
   const m = S.m, R = datosR(), F = m.ficha, ro = esIng() ? '' : 'disabled', ctx = ctxR(R);
   const cor = R.correas.find(c => c.id === R.activa);
   const inpF = (k, l, ph = '') => `<div class="f"><label>${l}</label><input data-fk="${k}" value="${esc(F[k] || '')}" placeholder="${esc(ph)}" ${ro}/></div>`;
@@ -117,7 +118,7 @@ function renderRevision(){
       ${selR('viento.grupo', 'Grupo de uso', Object.entries(AnexoA.GRUPOS).map(([k, v]) => [k, v.nombre]))}
       ${selR('viento.V', 'Velocidad básica V (m/s)', AnexoA.VELOCIDADES.map(v => [v, `${v} m/s`]), { h:'Figura B.6.4-1' })}
       ${selR('viento.zona', 'Zona de cubierta (por defecto)', [['1', 'Zona 1 — interior'], ['2', 'Zona 2 — borde'], ['3', 'Zona 3 — esquinas / borde (la más desfavorable)']])}</div>
-    <div class="fg g4">${inpR('viento.L', 'Largo L (m)', { n:1, h:'Paralelo a las correas (a lo largo del alero).' })}${inpR('viento.W', 'Ancho W (m)', { n:1, h:'En el sentido de la pendiente (de alero a cumbrera).' })}${inpR('viento.He', 'Altura de cornisa He (m)', { n:1, h:'Del piso al borde bajo de la cubierta.' })}${inpR('viento.Hr', 'Altura de cumbrera Hr (m)', { n:1, h:'Del piso al punto más alto.' })}</div>
+    <div class="fg g4">${inpR('viento.W', 'Ancho W (m)', { n:1, h:'Luz entre los muros donde se apoyan las correas.' })}${inpR('viento.L', 'Largo L (m)', { n:1, h:'Longitud de la cubierta en la dirección de la pendiente (de alero a cumbrera, en planta).' })}${inpR('viento.He', 'Altura de cornisa He (m)', { n:1, h:'Del piso al borde bajo de la cubierta.' })}${inpR('viento.Hr', 'Altura de cumbrera Hr (m)', { n:1, h:'Del piso al punto más alto.' })}</div>
     <div class="fg g4">${selR('viento.rug', 'Rugosidad del terreno', [['B', 'B — urbana / suburbana'], ['C', 'C — abierta'], ['D', 'D — plana sin obstrucciones']])}
       ${inpR('viento.distRug', 'Distancia con esa rugosidad (m)', { n:1 })}
       ${selR('viento.expManual', 'Exposición', [['', 'Automática (B.6.5.6.3)'], ['B', 'B'], ['C', 'C'], ['D', 'D']])}</div>
@@ -147,12 +148,13 @@ function cargasStrip(R, ctx){
 // ─── Dibujo de la cubierta para el viento: alzado (alturas, ancho, pendiente) y planta con las zonas 1, 2 y 3 ───
 function svgVientoRev(R, ctx, cor, imp){
   const v = R.viento, g = ctx.g, ok = g.ok, n = Correas.num;
-  const L = ok ? g.L : 20, W = ok ? g.W : 10, He = ok ? g.He : 3, Hr = ok ? g.Hr : 4, th = ok ? g.theta : 5.7;
+  // En el dibujo: «W» local = dimensión en la pendiente (= L de los datos) y «L» local = paralela a las correas (= W de los datos)
+  const L = ok ? g.W : 20, W = ok ? g.L : 10, He = ok ? g.He : 3, Hr = ok ? g.Hr : 4, th = ok ? g.theta : 5.7;
   const az = imp ? '#1f3a60' : '#1a56db', gr = '#64748b', tx = '#334155', amb = '#f59e0b';
   const t = (x, d = 2) => ok ? `${fR(x, d)} m` : '?';
   const cota = (x1, y1, x2, y2, lbl, vert) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${gr}" stroke-width=".8" marker-start="url(#rva)" marker-end="url(#rva)"/>`
     + (vert ? `<text x="${x1 - 4}" y="${(y1 + y2) / 2}" font-size="9" fill="${tx}" text-anchor="middle" transform="rotate(-90 ${x1 - 4} ${(y1 + y2) / 2})">${lbl}</text>` : `<text x="${(x1 + x2) / 2}" y="${y1 + 11}" font-size="9" fill="${tx}" text-anchor="middle">${lbl}</text>`);
-  // Alzado (ancho W en el sentido de la pendiente)
+  // Alzado (L en el sentido de la pendiente)
   const ax = 30, ay = 18, aw = 170, ah = 110, sc = Math.min(aw / W, ah / Math.max(Hr, He, 0.1)), bw = W * sc, x0 = ax + (aw - bw) / 2, yb = ay + ah;
   const yE = yb - He * sc, yR = yb - Hr * sc, tipo = v.tipoEd || 'cerrada';
   let muros = '';
@@ -161,8 +163,8 @@ function svgVientoRev(R, ctx, cor, imp){
     muros = fill + (tipo === 'parcial' ? `<rect x="${x0 + bw * 0.35}" y="${yb - Math.min(He * sc * 0.6, 40)}" width="${bw * 0.3}" height="${Math.min(He * sc * 0.6, 40)}" fill="#fff" stroke="${az}" stroke-width="1"/><text x="${x0 + bw / 2}" y="${yb - 4}" font-size="8" fill="${gr}" text-anchor="middle">abertura</text>` : ''); }
   const alz = `${muros}<line x1="${x0 - 6}" y1="${yE + 2}" x2="${x0 + bw + 6}" y2="${yR - 2 * (yE - yR) / bw * 6 / 2}" stroke="${az}" stroke-width="3"/>
     <line x1="${ax - 8}" y1="${yb}" x2="${ax + aw + 8}" y2="${yb}" stroke="${gr}" stroke-width="1.2"/>
-    ${cota(x0, yb + 6, x0 + bw, yb + 6, `W = ${t(W)}`)}${cota(x0 - 12, yb, x0 - 12, yE, `He = ${t(He)}`, true)}${cota(x0 + bw + 14, yb, x0 + bw + 14, yR, `Hr = ${t(Hr)}`, true)}
-    <text x="${x0 + bw / 2}" y="${Math.min(yE, yR) - 8}" font-size="9.5" fill="${tx}" text-anchor="middle">θ = ${ok ? fR(th, 1) + '°' : '?'}</text>
+    ${cota(x0, yb + 6, x0 + bw, yb + 6, `L = ${t(W)}`)}${cota(x0 - 12, yb, x0 - 12, yE, `He = ${t(He)}`, true)}${cota(x0 + bw + 14, yb, x0 + bw + 14, yR, `Hr = ${t(Hr)}`, true)}
+    <text x="${x0 + bw / 2}" y="${(yE + yR) / 2 + 16}" font-size="9.5" fill="${tx}" text-anchor="middle">θ = ${ok ? fR(th, 1) + '°' : '?'}</text>
     <path d="M${ax - 22},${ay + 30} h16 m-5,-4 l5,4 l-5,4" fill="none" stroke="${amb}" stroke-width="1.6"/><text x="${ax - 22}" y="${ay + 24}" font-size="8.5" fill="${amb}">V</text>
     <text x="${ax + aw / 2}" y="${ay - 4}" font-size="10" font-weight="700" fill="${tx}" text-anchor="middle">Alzado</text>`;
   // Planta con zonas
@@ -184,7 +186,7 @@ function svgVientoRev(R, ctx, cor, imp){
   }
   zonas += `<text x="${X + rw / 2}" y="${Y + rh / 2 + 3}" font-size="9" text-anchor="middle" fill="${tx}">1</text>`;
   const pl = `${zonas}<rect x="${X}" y="${Y}" width="${rw}" height="${rh}" fill="none" stroke="${az}" stroke-width="1.5"/>
-    ${cota(X, Y + rh + 6, X + rw, Y + rh + 6, `L = ${t(L)}`)}${cota(X - 10, Y, X - 10, Y + rh, `W = ${t(W)}`, true)}
+    ${cota(X, Y + rh + 6, X + rw, Y + rh + 6, `W = ${t(L)}`)}${cota(X - 10, Y, X - 10, Y + rh, `L = ${t(W)}`, true)}
     <text x="${px + pw / 2}" y="${py - 6}" font-size="10" font-weight="700" fill="${tx}" text-anchor="middle">Planta — zonas de viento</text>
     <text x="${px + pw / 2}" y="${py + ph + 30}" font-size="8.5" fill="${gr}" text-anchor="middle">a = ${ok ? fR(a, 2) + ' m' : '?'} · <tspan fill="#b45309">■</tspan> zona ${zSel}${cor ? ` (${esc(cor.nom)})` : ''}</text>`;
   if(imp) return `<svg viewBox="0 0 480 170" class="rv-vsvg" role="img" aria-label="Geometría de la cubierta para el viento: alzado y planta con zonas">
@@ -218,7 +220,7 @@ function correaHTML(R, c, ctx, ro){
     <div class="rv-row"><div style="flex:1">
       <h4 class="sub">Sección — ${mat ? 'madera (Título G, esfuerzos admisibles)' : 'acero (Título F, LRFD)'}</h4>${sec}
       <h4 class="sub">Geometría</h4>
-      <div class="fg g4">${i('s', 'Separación entre correas s (m)', { h:'Ancho aferente' })}${i('L', 'Luz entre apoyos L (m)')}${i('alfa', 'Inclinación (°)', { ph:th != null ? `${fR(th, 1)} (del viento)` : '' })}</div>
+      <div class="fg g4">${i('s', 'Separación entre correas s (m)', { h:'Ancho aferente' })}${i('L', 'Luz entre apoyos L (m)', { h:'Si la correa va de muro a muro, es el ancho W' })}${i('alfa', 'Inclinación (°)', { ph:th != null ? `${fR(th, 1)} (del viento)` : '' })}</div>
       <div class="fg g4">${s('zona', 'Zona de viento de esta correa', [['', `La general (zona ${R.viento.zona})`], ['1', 'Zona 1'], ['2', 'Zona 2'], ['3', 'Zona 3']])}${i('limV', 'Deflexión viva / viento: L /', { ph:R.cielo.aplica ? '360' : '240' })}${i('limT', 'Deflexión total: L /', { ph:R.cielo.aplica ? '240' : '180' })}</div>
       ${mat ? `<h4 class="sub">Condiciones de servicio — coeficientes G.2.2.3</h4>
       <div class="fg g4">${i('CHc', 'Humedad en la construcción (%)')}${i('CHs', 'Humedad en servicio (%)')}${i('temp', 'Temperatura (°C)')}${i('Kcr', 'Factor de deflexión diferida', { ph:Correas.num(c.CHs, 12) <= 19 ? '1.8 (seca)' : '2.0 (húmeda)', h:'Tabla G.3.2-5 (por confirmar con la norma)' })}</div>
@@ -415,6 +417,7 @@ function conclusionAuto(R, rs){
   return `${malos.map(x => x.c.nom).join(', ')} no ${malos.length > 1 ? 'cumplen' : 'cumple'} los requisitos de la NSR-10 para las cargas evaluadas (D/C máxima ${malos.map(x => fR(x.r.max, 2)).join(', ')}). Antes de instalar se debe reforzar o reemplazar la correa, reducir la separación entre correas o colocar apoyos intermedios, según las opciones indicadas en cada verificación.${ok.length ? ` ${ok.map(x => x.c.nom).join(', ')} ${ok.length > 1 ? 'cumplen' : 'cumple'}.` : ''}`;
 }
 async function revisionPrintHTML(){
+  try{ Correas.migrarEjes(S.m?.anexos?.R?.viento); }catch(e){}
   const m = S.m, R = datosR(), F = m.ficha, c = S.cfg, ctx = ctxR(R), sw = '';
   const rs = R.correas.map(cr => ({ c:cr, r:Correas.revisar(R, cr, ctx) }));
   const fotos = await Promise.all(R.fotos.map(async f => ({ ...f, url:await urlDe(f.path) })));
@@ -441,7 +444,7 @@ async function revisionPrintHTML(){
   ${w0?.ok ? `<h4>Viento (B.6.5, componentes y revestimiento)</h4><table class="ax-kv rv-kv-full">
     <tr><td>Tipo de edificación</td><td>${{ cerrada:'Cerrada', parcial:'Parcialmente cerrada', libre:'Cubierta libre' }[w0.tipo]}</td></tr>
     <tr><td>Velocidad básica V / grupo / I</td><td>${w0.V} m/s · ${esc((AnexoA.GRUPOS[R.viento.grupo] || {}).nombre || '')} · I = ${w0.I}</td></tr>
-    <tr><td>Geometría</td><td>${fR(w0.g.L, 2)} × ${fR(w0.g.W, 2)} m, cornisa ${fR(w0.g.He, 2)} m, cumbrera ${fR(w0.g.Hr, 2)} m, θ = ${fR(w0.g.theta, 1)}°, h = ${fR(w0.g.hm, 2)} m</td></tr>
+    <tr><td>Geometría</td><td>W = ${fR(w0.g.W, 2)} m (luz entre muros) × L = ${fR(w0.g.L, 2)} m (en la pendiente), cornisa ${fR(w0.g.He, 2)} m, cumbrera ${fR(w0.g.Hr, 2)} m, θ = ${fR(w0.g.theta, 1)}°, h = ${fR(w0.g.hm, 2)} m</td></tr>
     <tr><td>Exposición / Kz / Kd</td><td>${w0.ex.usada} · ${fR(w0.Kz, 3)} · ${w0.Kd}</td></tr>
     <tr><td>qh = 0.613·Kz·Kzt·Kd·V²·I</td><td>${fR(w0.qh, 3)} kN/m²</td></tr>
     <tr><td>Coeficientes</td><td>${w0.tipo === 'libre' ? 'CN de la Figura B.6.5-19A según zona y área' : `GCp de la ${w0.fig}, GCpi = ±${w0.GCpi}`}</td></tr>
