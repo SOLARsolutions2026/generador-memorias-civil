@@ -778,9 +778,58 @@ function calcSoldada(c){
   return fin(ch, req, av, pasos, { m, Ffu });
 }
 
+// ── Empalme de viga en Z soldado (pedido de Amo 12-nov) ─────────────
+// Corte en Z: la mitad superior (ala + medio alma) se corta en x1, el alma se corta a lo largo de su eje entre x1 y x2 (desfase a)
+// y la mitad inferior se corta en x2; así las soldaduras de las alas no quedan en la misma sección.
+// Cada corte vertical lleva solo medio alma → el cortante V2 pasa por media alma; la soldadura longitudinal del alma toma el flujo V2·Q/I en la longitud a.
+function defaultsEmpZ(){
+  return { tipo:'empZ', nom:'', desc:'', P:0, Vu:60, V3:0, T:0, M2:0, Mu:40, viga:'IPE 300', aceroViga:'A572 Gr 50', a:150,
+    union:'cjp', Ef:'', Ew:'', electrodo:'E70XX' };
+}
+function calcEmpZ(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.Mu), a = +c.a || 0;
+  const pf = (G.PERFILES_LAM || []).find(x => x[0] === c.viga); if(!pf) return { error:'Escoja el perfil de la viga.' };
+  const [nom, , d, bf, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy] = pf, ac = ACEROS[c.aceroViga], FEXX = ELECTRODOS[c.electrodo];
+  const cjp = c.union !== 'pjp', Ef = cjp ? tf : Math.min(nz(c.Ef) || tf / 2, tf), Ew = cjp ? tw : Math.min(nz(c.Ew) || tw / 2, tw);
+  const hw2 = d / 2 - tf, Af = bf * tf;
+  const Q = Af * (d - tf) / 2 + tw * hw2 * hw2 / 2;                 // primer momento de media sección respecto al eje neutro [mm³]
+  pasos.push(`${nom} (${c.aceroViga}): d = ${d}, bf = ${bf}, tf = ${tf}, tw = ${tw} mm, A = ${Math.round(A)} mm², Ix = ${(Ix / 1e6).toFixed(2)}·10⁶ mm⁴`);
+  pasos.push(`Corte en Z con desfase a = ${a} mm · soldadura ${cjp ? 'de penetración completa (resistencia del metal base)' : `de penetración parcial: garganta efectiva alas ${r1(Ef)} mm, alma ${r1(Ew)} mm`}`);
+  // 1. Ala cortada (cada corte vertical corta una sola ala): M3 + P + M2
+  const Ff = Math.abs(M3) * 1000 / (d - tf) + Math.abs(P) * Af / A, Mf = Math.abs(M2) / 2;
+  const fAla = Ff * 1000 / (bf * Ef) + Mf * 1e6 / (Ef * bf * bf / 6);
+  const capAla = cjp ? 0.9 * ac.Fy : Math.min(0.8 * 0.6 * FEXX, 0.9 * ac.Fy);
+  pasos.push(`Fuerza en el ala cortada Ff = M3/(d − tf) + P·Af/A = ${r2(Ff)} kN; flexión del ala en su plano por M2/2 = ${r2(Mf)} kN·m`);
+  add('soldadura', 'Ala cortada: esfuerzo normal por M3, P y M2', cjp ? 'F.2.10.2 Tabla J2.5 (CJP = metal base, φ 0.90)' : 'F.2.10.2 Tabla J2.5 (PJP, φ 0.80·0.6FEXX)', fAla, capAla, 'MPa', `f = Ff/(bf·E) + (M2/2)/(E·bf²/6)`);
+  const vAla = (Math.abs(V3) / 2 + Math.abs(T) * 1000 / (d - tf)) * 1000 / (bf * Ef);
+  add('soldadura', 'Ala cortada: cortante lateral (V3/2 + T/(d − tf))', cjp ? 'F.2.10.4.2 (J4-3), φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', vAla, cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX, 'MPa', '');
+  // 2. Media alma en el corte vertical: V2
+  const vWeb = Math.abs(V2) * 1000 / (Ew * hw2);
+  add('alma', 'Cortante V2 por la media alma del corte', cjp ? 'F.2.7.2 / J4-3 sobre d/2 − tf, φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', vWeb, cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX, 'MPa', `área = ${r1(Ew)} × ${r1(hw2)} mm`);
+  // 3. Soldadura longitudinal del alma
+  const H = Math.abs(V2) * Q / Ix * a;                               // kN
+  const capH = cjp ? 1.0 * 0.6 * ac.Fy * tw * a / 1000 : 0.75 * 0.6 * FEXX * Ew * a / 1000;
+  pasos.push(`Flujo de cortante en el eje del alma q = V2·Q/I = ${r2(Math.abs(V2) * Q / Ix * 1000)} N/mm (Q = ${Math.round(Q).toLocaleString('es-CO')} mm³); en a: H = ${r2(H)} kN`);
+  add('alma', 'Soldadura longitudinal del alma (longitud a)', cjp ? 'F.2.10.4.2 (J4-3), φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', H, capH, 'kN', `H = V2·Q·a/I`);
+  // 4. Sección del perfil en el empalme (la otra mitad sigue entera)
+  const Pc = 0.9 * ac.Fy * A / 1000, Mcx = 0.9 * ac.Fy * Zx / 1e6, Mcy = 0.9 * ac.Fy * Zy / 1e6, pr = Math.abs(P) / Pc;
+  const inter = pr >= 0.2 ? pr + 8 / 9 * (Math.abs(M3) / Mcx + Math.abs(M2) / Mcy) : pr / 2 + Math.abs(M3) / Mcx + Math.abs(M2) / Mcy;
+  add('viga', 'Sección del perfil en el empalme: axial + flexión en ambos ejes', 'F.2.8.1 (H1-1a/b), sin pandeo', inter, 1, '', `φPn ${r2(Pc)} kN, φMn3 ${r2(Mcx)}, φMn2 ${r2(Mcy)} kN·m`);
+  // Requisitos
+  req.push(['Desfase a ≥ máx(d/2; 100 mm) (recomendado)', a >= Math.max(d / 2, 100) - 1e-6, `${a} ≥ ${Math.max(d / 2, 100)} mm`]);
+  if(!cjp) { const mE = t => t <= 6 ? 3 : t <= 13 ? 5 : t <= 19 ? 6 : t <= 38 ? 8 : 10;
+    req.push(['Garganta efectiva mínima de penetración parcial (Tabla F.2.10.2-3)', Ef >= mE(tf) && Ew >= mE(tw), `alas ${r1(Ef)} ≥ ${mE(tf)}, alma ${r1(Ew)} ≥ ${mE(tw)} mm`]); }
+  req.push(['Soldadura precalificada con bisel y respaldo, inspección por ultrasonido de las alas', true, 'indicar en planos']);
+  req.push(['Agujero de acceso (ratonera) en el alma junto a las alas', true, 'AWS D1.1 / F.2.10.1.6']);
+  if(Math.abs(T) > 0) av.push('La torsión se reparte como cortante lateral en las alas; el alabeo no se revisa.');
+  if(!cjp) av.push('Penetración parcial: no se recomienda en empalmes de vigas sometidas a fatiga o a sismo con disipación (DES/DMO).');
+  return fin(ch, req, av, pasos, { pf:{ nom, d, bf, tw, tf }, a, Q });
+}
+
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
-const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada };
-const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada };
+const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
+const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { const r = (CALC[c.tipo] || calcAleta)(c); if(r.error || !EXTRA[c.tipo]) return r;
     EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
