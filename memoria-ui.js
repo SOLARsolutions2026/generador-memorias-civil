@@ -19,6 +19,8 @@ const CAPS = [
   [5, 'Características de los materiales'], [6, 'Avalúo de cargas'], [7, 'Coeficiente de disipación de energía'], [8, 'Combinaciones de carga'],
   [9, 'Análisis y diseño estructural'], [10, 'Anexos'],
 ];
+// En la revisión estructural se agrega el capítulo 10 de conclusiones y los anexos pasan a ser el 11
+const capsDe = () => S.m?.tipo === 'revest' ? [...CAPS.slice(0, 9), [10, 'Conclusiones y recomendaciones'], [11, 'Anexos']] : CAPS;
 const NOM_ACERO = { 'A572 Gr 50':'ASTM A572 Grado 50 (Fy = 345 MPa)', 'A36':'ASTM A36 / NTC 1920 (Fy = 250 MPa)', 'A500 Gr B':'ASTM A500 Grado B / NTC 4526 (Fy = 317 MPa)',
   'A500 Gr C':'ASTM A500 Grado C / NTC 4526 (Fy = 345 MPa)', 'A1065':'ASTM A1065 (Fy = 345 MPa)', 'A1085':'ASTM A1085 (Fy = 345 MPa)' };
 const uniq = a => [...new Set(a.filter(Boolean))];
@@ -116,6 +118,7 @@ function memDoc(ctx, ed){
   H(1, 'Introducción');
   T('intro', [`En el presente documento se desarrollan las memorias de diseño y cálculo estructural de la estructura metálica ${dat.uso ? 'para ' + dat.uso.toLowerCase() : 'para soporte de paneles solares'} del proyecto ${proy}${f.dir ? `, ubicado en ${f.dir}` : ''}${mun ? ` (${mun}${dep ? ', ' + dep : ''})` : ''}. ${area ? `La estructura tiene un área en planta de ${fx(area, 2)} m².` : ''}`,
     `El sistema estructural está conformado por elementos de acero estructural${cols.length ? `: las columnas son perfiles ${listaY(cols)}` : ''}${vigas.length ? `${cols.length ? ',' : ':'} las vigas son perfiles ${listaY(vigas)}` : ''}${diag.length ? ` y los arriostramientos son perfiles ${listaY(diag)}` : ''}.`,
+    S.m?.tipo === 'revest' ? 'El objeto del presente estudio es revisar el comportamiento estructural de la estructura metálica existente, determinando la capacidad de los elementos que conforman el sistema resistente frente a las cargas y combinaciones de diseño del Reglamento NSR-10, e indicar cuáles cumplen y cuáles requieren intervención.' :
     'El objeto del presente estudio es analizar y verificar el comportamiento estructural de la estructura metálica proyectada, determinando la capacidad de los elementos que conforman el sistema resistente frente a las cargas y combinaciones de diseño, y verificando las condiciones de resistencia, estabilidad y servicio durante su vida útil.',
     'El análisis y el diseño se desarrollan de acuerdo con el Reglamento Colombiano de Construcción Sismo Resistente NSR-10. La memoria contiene los criterios para determinar las cargas de diseño, el modelo y el análisis estructural, las combinaciones de carga y las verificaciones de los elementos, cuyo detalle se presenta en los anexos.'].join('\n\n'));
 
@@ -275,6 +278,29 @@ function memDoc(ctx, ed){
       fig('con.' + c.id, `Detalle de la conexión ${c.nom}`, c.tipo === 'placa' ? `<div class="m-2f">${svgPlacaPlanta(I, X, false, fl)}${svgPlacaAlzado(I, X, false, fl)}</div>` : c.tipo === 'vc' ? svgVC(I, X, false, fl) : svgSoldX({ ...I, _sec:s }, X, false, fl.falla));
       ver('E'); } }
 
+  // ══ Conclusiones y recomendaciones (solo revisión estructural, pedido de Amo 15-nov) ══
+  if(S.m?.tipo === 'revest'){
+    H(1, 'Conclusiones y recomendaciones');
+    const an = S.m.anexos || {}, Dd = an.D || {};
+    const items = [...(Dd.met || []).map(e => [e, 'Elemento metálico', e.nom + (e.perfil || e.H ? ' — ' + nomSec(e) : '')]), ...(Dd.ped || []).map(p => [p, 'Pedestal', `${p.nom} — ${p.b} × ${p.h} mm`]),
+      ...(Dd.zap || []).map(z => [z, 'Zapata', z.nom]), ...(an.E?.con || []).map(c => [c, 'Conexión', c.nom])];
+    const malos = items.filter(([x]) => x.res?.ok && !x.res.cumple), sinCalc = items.filter(([x]) => !x.res?.ok);
+    const der = ctx.C?.der?.res?.ok ? ctx.C.der.res : null;
+    T('concl', malos.length || (der && !der.cumple)
+      ? `Con base en la revisión de la estructura existente según el Reglamento NSR-10, se concluye que ${malos.length ? `${malos.length} de los ${items.length - sinCalc.length} elementos revisados NO cumplen los requisitos de resistencia o de detallado` : 'los elementos revisados cumplen'}${der && !der.cumple ? `${malos.length ? ', y ' : ', pero '}las derivas no cumplen el límite de 1.0 % de la altura (máximo ${fx(der.max * 100, 2)} %)` : ''}. Se deben ejecutar las intervenciones indicadas a continuación antes de someter la estructura a las cargas de diseño.`
+      : `Con base en la revisión de la estructura existente según el Reglamento NSR-10, se concluye que todos los elementos revisados cumplen los requisitos de resistencia y de detallado para las cargas y combinaciones de diseño consideradas.`);
+    tabla(['Elemento', 'Tipo', 'Relación D/C', 'Resultado'], items.filter(([x]) => x.res?.ok).map(([x, t, n]) => [esc(n), t, fx(x.res.ratio, 3), x.res.cumple ? 'Cumple' : 'NO cumple']), 'Resumen de la revisión de los elementos');
+    if(malos.length){
+      H(2, 'Recomendaciones');
+      const REC = { 'Elemento metálico':'Se recomienda reforzar el elemento o reemplazarlo por un perfil de mayor capacidad, o reducir su longitud no arriostrada con arriostramientos adicionales.',
+        'Pedestal':'Se recomienda encamisar o ampliar la sección del pedestal y completar el refuerzo longitudinal y transversal.',
+        'Zapata':'Se recomienda ampliar la zapata o reforzarla según el diseño que se adjunte.',
+        'Conexión':'Se recomienda reforzar la conexión (mayor espesor de placa, más pernos o anclajes, o soldadura de mayor tamaño) según el detalle que se adjunte.' };
+      for(const [x, t, n] of malos){ H(3, n); T('rec.' + (x.id || x.nom), `${t} ${n}: relación demanda/capacidad ${fx(x.res.ratio, 3)}. ${REC[t]}`); }
+    }
+    if(der && !der.cumple) T('rec.der', 'Para controlar las derivas se recomienda rigidizar la estructura con arriostramientos o aumentar la sección de las columnas.');
+  }
+
   // ══ 10. Anexos ══
   out(`<div class="m-anx">`); H(1, 'Anexos'); out(`</div>`);
   return { html, toc, tabs, figs, caps };
@@ -304,9 +330,9 @@ async function paneMemoria(){
   };
   const nMod = c => Object.keys(M.txt).filter(k => M.txt[k] && (doc.caps[c] || '').includes(`data-mk="${k}"`)).length;
   pane(`<p class="lead" style="margin-bottom:12px">El cuerpo de la memoria se arma solo con los datos de la ficha y de los anexos. Revisa cada capítulo: con <b>✎ Editar</b> cambias un texto (queda marcado) y con <b>↺ Automático</b> vuelves al texto de la app. En cada figura puedes usar tu propia imagen.</p>
-    <div class="d-grid"><div class="d-lista">${CAPS.map(([n, t]) => `<button type="button" class="d-el ${n === selCap ? 'on' : ''}" data-cap="${n}"><span><b>${n}.</b> ${esc(t)}${nMod(n) ? `<small>${nMod(n)} texto${nMod(n) > 1 ? 's' : ''} cambiado${nMod(n) > 1 ? 's' : ''}</small>` : ''}</span></button>`).join('')}
+    <div class="d-grid"><div class="d-lista">${capsDe().map(([n, t]) => `<button type="button" class="d-el ${n === selCap ? 'on' : ''}" data-cap="${n}"><span><b>${n}.</b> ${esc(t)}${nMod(n) ? `<small>${nMod(n)} texto${nMod(n) > 1 ? 's' : ''} cambiado${nMod(n) > 1 ? 's' : ''}</small>` : ''}</span></button>`).join('')}
       <p class="hint" style="margin-top:8px">${doc.tabs.length} tablas · ${doc.figs.length} figuras. La tabla de contenido y las listas de tablas, figuras y anexos se arman solas en el PDF final.</p></div>
-      <div class="card m-hoja"><div class="ct"><span>${selCap}. ${esc(CAPS[selCap - 1][1])}</span></div>
+      <div class="card m-hoja"><div class="ct"><span>${selCap}. ${esc((capsDe()[selCap - 1] || CAPS[0])[1])}</span></div>
         ${campos[selCap] ? `<div class="m-datos"><h4 class="sub">Datos de este capítulo</h4>${campos[selCap]}</div>` : ''}
         <div class="ax m-prev">${doc.caps[selCap] || '<p class="hint">Sin contenido.</p>'}</div></div></div>`);
   activarMemoria(M);

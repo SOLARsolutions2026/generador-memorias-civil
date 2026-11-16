@@ -10,6 +10,7 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
 const BUCKET = CFG.BUCKET;
 const CAP_MB = 1024;               // espacio de archivos del plan gratuito
 const TITULO_DEF = 'MEMORIA DE CÁLCULO ESTRUCTURA METÁLICA';
+const TITULO_REV = 'MEMORIA DE CÁLCULO — REVISIÓN ESTRUCTURAL';
 
 // Estado de la app (lo que está cargado en memoria)
 const S = { user:null, rol:'consulta', cfg:null, perfiles:[], mems:[], m:null, revs:[], editPerfil:null, urls:{} };
@@ -193,14 +194,14 @@ async function renderLista(){
   // Organización de la lista (opción A de Amo, 29-oct): pestañas por estado, buscador, tipo y año; terminadas/archivadas por mes
   const LF = S.lf = S.lf || { tab:(() => { try{ return localStorage.getItem('memTab') || 'wip'; }catch(e){ return 'wip'; } })(), q:'', tipo:'', anio:'' };
   const TABS = [['wip','En proceso'],['pau','Pausadas'],['apr','Terminadas'],['arch','Archivadas en NAS'],['todas','Todas']];
-  const tipoDe = m => m.tipo === 'revision' || m.tipo === 'verificacion' ? m.tipo : 'completo';
+  const tipoDe = m => ['revision', 'verificacion', 'revest'].includes(m.tipo) ? m.tipo : 'completo';
   const fechaDe = m => m.estado === 'arch' ? (m.archivada_en || m.updated_at) : m.updated_at;
   const anios = [...new Set(grupos.map(g => String(fechaDe(g.def) || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filaHTML = g => { const m = g.def, f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
-      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : ' <span class="vtag tipo dis">🏗️ Diseño</span>'}</div>
+      return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : m.tipo === 'revest' ? ' <span class="vtag tipo">🔎 Revisión estructural</span>' : ' <span class="vtag tipo dis">🏗️ Diseño</span>'}</div>
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div>
         ${m.estado === 'pau' ? `<div class="meta pausa">⏸ ${esc((f.pausa || '').trim() || 'Pausada sin motivo escrito')}</div>` : ''}</div>
         <div class="acts">${acts(g)}</div></div>
@@ -209,7 +210,7 @@ async function renderLista(){
     const cnt = k => k === 'todas' ? grupos.length : grupos.filter(g => (g.def.estado || 'wip') === k).length;
     $('#mfil').innerHTML = `<div class="mtabs" role="tablist">${TABS.map(([k, t]) => `<button type="button" role="tab" data-mtab="${k}" class="${LF.tab === k ? 'on' : ''}">${t}<b class="n">${cnt(k)}</b></button>`).join('')}</div>
       <div class="lbar"><input type="search" id="mq" placeholder="🔍 Buscar: cliente, proyecto, municipio, consecutivo…" value="${esc(LF.q)}" aria-label="Buscar memorias"/>
-        <div class="mchips">${[['','Todos'],['completo','🏗️ Diseño'],['revision','🔍 Revisión'],['verificacion','🧰 Verificación']].map(([k, t]) => `<button type="button" class="mchip ${LF.tipo === k ? 'on' : ''}" data-mtipo="${k}">${t}</button>`).join('')}</div>
+        <div class="mchips">${[['','Todos'],['completo','🏗️ Diseño'],['revision','🔍 Revisión'],['revest','🔎 Rev. estructural'],['verificacion','🧰 Verificación']].map(([k, t]) => `<button type="button" class="mchip ${LF.tipo === k ? 'on' : ''}" data-mtipo="${k}">${t}</button>`).join('')}</div>
         ${anios.length > 1 ? `<select id="manio" aria-label="Año"><option value="">Todos los años</option>${anios.map(a => `<option ${LF.anio === a ? 'selected' : ''}>${a}</option>`).join('')}</select>` : ''}</div>`;
     $$('[data-mtab]').forEach(b => b.onclick = () => { LF.tab = b.dataset.mtab; try{ localStorage.setItem('memTab', LF.tab); }catch(e){} pintarFil(); pintarLista(); });
     $$('[data-mtipo]').forEach(b => b.onclick = () => { LF.tipo = b.dataset.mtipo; pintarFil(); pintarLista(); });
@@ -273,6 +274,7 @@ function nuevaMemoria(){
     <div class="tipo-mem">
       <button type="button" class="tcard" data-tipo="completo"><span class="ic">🏗️</span><b>Diseño completo</b><span>Estructura metálica nueva: cargas, sismo, modelo, elementos, conexiones y cimentación.</span><small>Anexos A a G · sismo opcional</small></button>
       <button type="button" class="tcard" data-tipo="revision"><span class="ic">🔍</span><b>Revisión de cubierta</b><span>Verificar si la cubierta existente soporta los paneles solares u otra carga. Una sola página para llenar en campo.</span><small>Correas metálicas y de madera · viento · fotos</small></button></div>`);
+  $('.tipo-mem', md).insertAdjacentHTML('beforeend', `<button type="button" class="tcard" data-tipo="revest"><span class="ic">🔎</span><b>Revisión estructural</b><span>Estructura metálica existente: los mismos pasos del diseño completo, pero se termina aunque algo no cumpla y la memoria cierra con conclusiones y recomendaciones.</span><small>Anexos A a G · conclusiones</small></button>`);
   $('.tipo-mem', md).insertAdjacentHTML('beforeend', `<button type="button" class="tcard" data-tipo="verificacion"><span class="ic">🧰</span><b>Verificación puntual</b><span>Solo los módulos que necesites, con datos escritos a mano: un FHE, una conexión, un elemento…</span><small>Consecutivo, portada y PDF</small></button>`);
   $('.tipo-mem', md).insertAdjacentHTML('afterend', `<div class="ver-mods" id="verMods" hidden><h4 class="sub" style="margin-top:14px">Herramientas — verificaciones puntuales</h4>${herrHTML([])}
     <div class="nav-btns" style="margin-top:10px"><button class="btn pri" type="button" id="verCrear">Crear verificación</button></div></div>`);
@@ -321,8 +323,8 @@ async function crearMemoria(tipo, her){
     const perfil = S.perfiles.find(x => x.predeterminado) || S.perfiles[0];
     const hoy = hoyISO();
     const { data:m, error } = await sb.from('mem_memorias').insert({
-      consecutivo:cons, titulo:tipo === 'revision' ? 'Nueva revisión de cubierta' : tipo === 'verificacion' ? 'Nueva verificación puntual' : 'Nueva memoria', perfil_id:perfil?.id || null, tipo,
-      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:tipo === 'revision' ? 'MEMORIA DE CÁLCULO REVISIÓN DE CUBIERTA' : tipo === 'verificacion' ? 'MEMORIA DE CÁLCULO — VERIFICACIÓN ESTRUCTURAL' : TITULO_DEF },
+      consecutivo:cons, titulo:tipo === 'revision' ? 'Nueva revisión de cubierta' : tipo === 'revest' ? 'Nueva revisión estructural' : tipo === 'verificacion' ? 'Nueva verificación puntual' : 'Nueva memoria', perfil_id:perfil?.id || null, tipo,
+      ficha:{ tipo:'empresa', docTipo:'NIT', fecha:hoy, titulo_doc:tipo === 'revision' ? 'MEMORIA DE CÁLCULO REVISIÓN DE CUBIERTA' : tipo === 'revest' ? TITULO_REV : tipo === 'verificacion' ? 'MEMORIA DE CÁLCULO — VERIFICACIÓN ESTRUCTURAL' : TITULO_DEF },
       ...(tipo === 'verificacion' ? { anexos:{ her:her || [], mods:modsDeHer(her || []) } } : {}),
     }).select().single();
     if(error) throw error;
@@ -528,6 +530,10 @@ function huella(...objs){
   for(let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36) + '-' + t.length;
 }
+// Revisión estructural (tipo 'revest', pedido de Amo 15-nov): igual al diseño completo, pero «terminado» solo exige que todo esté calculado; lo que no cumple se informa.
+const esRevEst = () => S.m?.tipo === 'revest';
+const noCumplen = (id, an) => id === 'D' ? [...(an.D?.met || []), ...(an.D?.zap || []), ...(an.D?.ped || [])].filter(e => e.res?.ok && !e.res.cumple).length
+  : id === 'E' ? (an.E?.con || []).filter(c => c.res?.ok && !c.res.cumple).length : id === 'C' ? (an.C?.der?.res?.ok && !an.C.der.res.cumple ? 1 : 0) : 0;
 const ANEXOS_LISTO = {
   A: { n:'Anexo A', huella: an => huella(an.A), faltan(an){
     if(!an.A) return ['datos del anexo'];
@@ -548,18 +554,18 @@ const ANEXOS_LISTO = {
   D: { n:'Anexo D', huella: an => { const sin = l => (l || []).map(e => ({ ...e, res:undefined })); return huella(sin(an.D?.met), sin(an.D?.zap), sin(an.D?.ped), an.D?.cServ, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res); }, faltan(an){
     const met = an.D?.met || [], f = [];
     if(!met.length && !an.D?.zap?.length && !an.D?.ped?.length) f.push('elementos');
-    for(const e of [...met, ...(an.D?.zap || []), ...(an.D?.ped || [])]){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple) f.push(e.res.ratio > 1 ? `${e.nom} no cumple (relación ${e.res.ratio})` : `${e.nom} no cumple un requisito (separación, núcleo, esbeltez o anclaje)`); }
+    for(const e of [...met, ...(an.D?.zap || []), ...(an.D?.ped || [])]){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple && !esRevEst()) f.push(e.res.ratio > 1 ? `${e.nom} no cumple (relación ${e.res.ratio})` : `${e.nom} no cumple un requisito (separación, núcleo, esbeltez o anclaje)`); }
     return f; } },
   E: { n:'Anexo E', huella: an => huella((an.E?.con || []).map(c => ({ ...c, res:undefined })), (an.D?.met || []).map(e => ({ ...e, res:undefined })), an.D?.ped, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res), faltan(an){
     const con = an.E?.con || [], f = [];
     if(!con.length) f.push('conexiones');
-    for(const c of con){ if(!c.res?.ok) f.push(`${c.nom}: ${c.res?.error || 'sin calcular'}`); else if(!c.res.cumple) f.push(`${c.nom} no cumple (relación ${c.res.ratio})`); }
+    for(const c of con){ if(!c.res?.ok) f.push(`${c.nom}: ${c.res?.error || 'sin calcular'}`); else if(!c.res.cumple && !esRevEst()) f.push(`${c.nom} no cumple (relación ${c.res.ratio})`); }
     return f; } },
   C: { n:'Anexo C', huella: an => huella(an.C), faltan(an){
     const C = an.C, f = [];
     if(!C?.modelo) f.push('archivo del modelo (.$2k)');
     if(!C?.img) f.push('imagen del modelo');
-    if(an.B && an.B.aplica !== false && C?.modelo){ const r = C.der?.res; if(!r?.ok) f.push('revisar las derivas (Resultados → C-8)'); else if(!r.cumple) f.push(`las derivas no cumplen (máx. ${(r.max * 100).toFixed(2)} %)`); }
+    if(an.B && an.B.aplica !== false && C?.modelo){ const r = C.der?.res; if(!r?.ok) f.push('revisar las derivas (Resultados → C-8)'); else if(!r.cumple && !esRevEst()) f.push(`las derivas no cumplen (máx. ${(r.max * 100).toFixed(2)} %)`); }
     return f; } },
 };
 function estadoAnexo(id){
@@ -595,7 +601,8 @@ function pintarListo(){
   let est = null, f = [], X = {};
   if(D && esIng() && !(id === 'B' && S.m.anexos?.B?.aplica === false)){
     const an = S.m.anexos || {}; X = an[id] || {}; f = D.faltan(an); est = estadoAnexo(id);
-    h += est === 'ok' ? `<button class="btn grn" type="button" id="hdListo" title="Terminado">✓ Terminado</button>`
+    const nc = esRevEst() ? noCumplen(id, an) : 0;
+    h += est === 'ok' ? `<button class="btn grn" type="button" id="hdListo" title="Terminado">✓ Terminado${nc ? ` <span class="hd-nc">${nc} no cumple${nc > 1 ? 'n' : ''}</span>` : ''}</button>`
       : f.length ? `<button class="btn hd-falta" type="button" id="hdListo" title="Faltan datos">✓ Marcar terminado <span class="hd-n">${f.length}</span></button>`
       : `<button class="btn grn-o" type="button" id="hdListo">✓ Marcar terminado</button>`;
   }
@@ -673,7 +680,10 @@ gen(){ paneGen(); },
 ficha(){
   const m = S.m, F = m.ficha, emp = F.tipo !== 'natural', ro = !esIng() ? 'disabled' : '';
   const inp = (k, l, o={}) => `<div class="f ${o.cls||''}"><label for="f_${k}">${l}</label><input id="f_${k}" data-k="${k}" type="${o.type||'text'}" value="${esc(F[k])}" placeholder="${esc(o.ph||'')}" ${ro}/>${o.h?`<div class="hint">${o.h}</div>`:''}</div>`;
-  pane(`${m.tipo === 'verificacion' ? `<div class="card"><div class="ct">Herramientas de esta verificación</div>${herrHTML(herDe(m))}<p class="hint">Al quitar una herramienta sus datos no se borran: solo deja de verse en los pasos y en el PDF.</p></div>` : ''}
+  const propHTML = ['completo', 'revest'].includes(m.tipo || 'completo') && esIng() ? `<div class="card"><div class="ct">Propósito de la memoria</div>
+    <div class="seg" role="radiogroup">${[['completo', '🏗️ Diseño de estructura nueva'], ['revest', '🔎 Revisión de estructura existente']].map(([k, t]) => `<label class="seg-op ${(m.tipo || 'completo') === k ? 'on' : ''}"><input type="radio" name="propMem" value="${k}" ${(m.tipo || 'completo') === k ? 'checked' : ''}/> ${t}</label>`).join('')}</div>
+    <p class="hint">En una revisión se puede marcar cada paso como terminado aunque algún elemento no cumpla, y la memoria cierra con un capítulo de conclusiones y recomendaciones.</p></div>` : '';
+  pane(`${propHTML}${m.tipo === 'verificacion' ? `<div class="card"><div class="ct">Herramientas de esta verificación</div>${herrHTML(herDe(m))}<p class="hint">Al quitar una herramienta sus datos no se borran: solo deja de verse en los pasos y en el PDF.</p></div>` : ''}
   <div class="card"><div class="ct">Identificación del documento</div>
     <div class="fg g4">
       ${consHTML(m, ro)}
@@ -716,6 +726,14 @@ ficha(){
   $('#f_estado').onchange = e => { m.estado = e.target.value;
     if(m.estado === 'pau'){ const mot = prompt('¿Por qué se pausa? (opcional)', F.pausa || ''); if(mot !== null) F.pausa = mot.trim(); }
     guardarMemoria(); toast(m.estado==='apr' ? 'Terminada: ya la puede ver el personal de consulta.' : m.estado === 'pau' ? 'Pausada: solo tú la ves.' : 'En proceso: solo tú la ves.'); };
+  $$('[name=propMem]').forEach(r => r.onchange = async () => {
+    const nuevo = r.value, ant = m.tipo || 'completo'; if(nuevo === ant) return;
+    const { error } = await sb.from('mem_memorias').update({ tipo:nuevo }).eq('id', m.id);
+    if(error) return err(error, 'No se pudo cambiar el propósito');
+    m.tipo = nuevo;
+    if(nuevo === 'revest' && (!F.titulo_doc || F.titulo_doc === TITULO_DEF)) F.titulo_doc = TITULO_REV;
+    if(nuevo === 'completo' && F.titulo_doc === TITULO_REV) F.titulo_doc = TITULO_DEF;
+    guardarMemoria(); toast(nuevo === 'revest' ? 'Ahora es una revisión estructural.' : 'Ahora es un diseño nuevo.'); PANES.ficha(); pintarListo?.(); });
   if(m.tipo === 'verificacion') activarHerr($('#pane'), her => { if(!her.length) return toast('Deja al menos una herramienta.'), PANES.ficha(); m.anexos = m.anexos || {}; m.anexos.her = her; m.anexos.mods = modsDeHer(her); guardarMemoria(); renderWS('ficha'); });
   $$('[data-tipo]').forEach(b => b.onclick = () => {
     F.tipo = b.dataset.tipo;

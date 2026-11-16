@@ -189,6 +189,13 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Todo con datos a mano: D metálicos `fuerzas:'manual'` sin modelo, zapatas/pedestales con `cargasManCimHTML` (`el.man[]` servicio/resistencia; `usaManCim`), E `cargas:'manual'`. Pestañas del D y galería del E filtradas por las herramientas.
 - PDF: paso gen sin memoria general ni F/G; R con separador «ANEXO R — Verificación de correas» y marca `@@SR@@` (las expresiones de `unirPDF` aceptan R).
 
+## Revisión estructural (15-nov, opción A de Amo) — tipo `revest`
+- Cuarta tarjeta en «Nueva memoria» (🔎 Revisión estructural): mismos pasos y anexos del diseño completo, para estructuras metálicas EXISTENTES. Migración `mem_tipo_revest_estado_pau`: el check de `tipo` admite 'revest' y el de `estado` ahora admite 'pau' (antes no estaba y «Pausada» habría fallado al guardar).
+- `esRevEst()` en app.js: en `ANEXOS_LISTO` (D, E y derivas del C) lo que no cumple NO cuenta como faltante; solo sin calcular/errores. El botón «✓ Terminado» muestra `.hd-nc` «n no cumplen» (`noCumplen(id, an)`).
+- Ficha de diseño completo / revisión: tarjeta «Propósito de la memoria» (`name=propMem`) para cambiar entre 'completo' y 'revest' (actualiza `mem_memorias.tipo` y el título del documento `TITULO_DEF` ↔ `TITULO_REV` si no fue cambiado a mano).
+- Memoria general (`memoria-ui.js`): en revest la introducción dice «revisar … estructura existente», `capsDe()` agrega el capítulo 10 «Conclusiones y recomendaciones» (Anexos pasa a 11): texto `concl` automático (cuántos no cumplen + derivas), tabla resumen de elementos D/E con relación y resultado (desde `res` guardado), y por cada uno que no cumple un subtítulo con recomendación editable `rec.<id>` (texto base por tipo: elemento, pedestal, zapata, conexión) y `rec.der`.
+- Lista: etiqueta «🔎 Revisión estructural» y ficha de filtro «Rev. estructural».
+
 ## Convención de ejes (29-oct, pedido de Amo) — `ejes-ui.js`
 - Dibujos que aparecen al escoger cargas a mano: `ejesCim()` (zapata + pedestal: x = b/B, y = h/L, z arriba; P, Vx, Vy, Mx, My), `ejesMiembro()` (ejes locales 1-2-3 del perfil: V2/M3 fuerte, V3/M2 débil, T, P), `ejesPlaca()` (N, B, Mn, Mb, Vn, Vb), `ejesVC()` (viga–columna: M, V, P), `ejesSold()` (plano de la soldadura). Fuerzas naranja, momentos morados con doble flecha (mano derecha). `ejesMini()` pone x/y en `svgPedestal`.
 
@@ -196,7 +203,7 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - En pantallas ≤ 900 px cada `.d-lista` (D metálicos/zapatas/pedestales, E, memoria general) se convierte sola (MutationObserver) en una línea fija `.d-sel` con el elemento abierto ▾; al tocarla se despliega `.d-drop` con la lista y sus botones. En el computador no cambia.
 
 ## Organización de la lista (29-oct, opción A de Amo) — app.js `renderLista`
-- Estado nuevo `pau` = Pausada (sin restricción en la columna, no hizo falta migración; consulta sigue viendo solo apr/arch); motivo en `ficha.pausa` (se pide al pausar). `apr` se muestra como «Terminada».
+- Estado nuevo `pau` = Pausada (el check de la columna se amplió el 15-nov; consulta sigue viendo solo apr/arch); motivo en `ficha.pausa` (se pide al pausar). `apr` se muestra como «Terminada».
 - Pestañas `S.lf.tab` (wip/pau/apr/arch/todas, recordada en `localStorage.memTab`) con contadores, buscador (consecutivo, título, proyecto, cliente, municipio, motivo, variantes), fichas por tipo (completo/revision/verificacion) y año (si hay más de uno). Terminadas y archivadas agrupadas por mes. Estado editable en la fila (`select.est-sel` → `cambiarEstado`). Clase `.lbar` (ojo: `.mbar` ya existía para la barra móvil).
 
 ## Consecutivo editable (3-nov, pedido de Amo) — app.js `consHTML` / `activarCons`
