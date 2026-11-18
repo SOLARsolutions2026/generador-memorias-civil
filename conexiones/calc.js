@@ -26,7 +26,10 @@ const ELECTRODOS = { 'E60XX':414, 'E70XX':483 };
 const agujero = d => d + 1.6;                 // agujero estándar d + 1/16"
 const anchoNeto = d => agujero(d) + 1.6;      // F.2.4.3.2 (B4.3): para área neta se suma 1/16" más
 const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100, r3 = x => Math.round(x * 1000) / 1000;
-const bordeMin = d => BORDE_MIN[d] ?? Math.ceil(1.25 * d);
+// Bordes cortados con cizalla (columna «At sheared edges» de la misma tabla, AISC 360-10 J3.4); pedido de Amo 18-nov: casilla `cizalla` en cada conexión
+const BORDE_CIZ = { 12.7:22, 15.9:29, 19.1:32, 22.2:38, 25.4:44, 28.6:51 };
+let CIZ = false;
+const bordeMin = d => CIZ ? (BORDE_CIZ[d] ?? Math.ceil(1.75 * d)) : (BORDE_MIN[d] ?? Math.ceil(1.25 * d));
 
 // ── Método del centro instantáneo de rotación (Manual AISC parte 7) ─────────────
 // pernos: [{x, y}] en mm respecto a cualquier origen; e = excentricidad horizontal de la carga respecto al centroide (mm);
@@ -334,42 +337,73 @@ function defaultsAngular(){
     viga:'IPE 300', aceroViga:'A572 Gr 50', holgura:13,
     soporte:'ala', tSop:10.7, aceroSop:'A572 Gr 50', dosLados:false,
     bAng:89, tAng:7.9, aceroAng:'A36', n:3, s:75, Lev:38, g1:51, g2:51,
-    d:19.1, grado:'A325', rosca:'N' };
+    d:19.1, grado:'A325', rosca:'N',
+    unSop:'pernos', wS:6, electrodo:'E70XX',                      // unión al soporte: atornillada o soldada (pedido de Amo 18-nov)
+    destaje:'no', dct:35, dcb:35, cDes:110, LevB:38 };             // viga con destaje: no | sup | ambos
 }
 function calcAngular(c){
   const ch = [], av = [], pasos = [], req = [];
   const V = Math.abs(+c.Vu || 0), d = +c.d, n = Math.max(1, Math.round(+c.n || 1)), s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0;
   const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
   const an = ACEROS[c.aceroAng], av_ = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop], B = PERNOS[c.grado];
+  const sold = c.unSop === 'sold', des = ['sup', 'ambos'].includes(c.destaje) ? c.destaje : 'no';
   const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), Ab = Math.PI * d * d / 4, L = (n - 1) * s + 2 * Lev;
-  const LehA = b - Math.max(g1, g2), LehV = g1 - hol;
+  const LehA = b - (sold ? g1 : Math.max(g1, g2)), LehV = g1 - hol;
+  // Destaje: profundidades arriba (dct) y abajo (dcb), largo c, borde LevB del perno superior al corte; los angulares quedan bajo el corte
+  const dct = des !== 'no' ? +c.dct || 0 : 0, dcb = des === 'ambos' ? +c.dcb || 0 : 0, cD = des !== 'no' ? +c.cDes || 0 : 0, LevB = +c.LevB || 0;
+  const ho = vg.d - dct - dcb, yb = des !== 'no' ? dct + LevB - Lev : (vg.d - L) / 2;
   pasos.push(`Viga ${vg.nom}: d = ${vg.d}, tw = ${vg.tw}, T = ${r1(vg.T)} mm · Vu = ${r2(V)} kN`);
-  pasos.push(`Angulares 2L ${b}×${b}×${t} mm (${c.aceroAng}), largo L = (n − 1)·s + 2·Lev = ${r1(L)} mm; ${n} pernos en el alma (doble cortante) y ${2 * n} en el soporte (cortante simple)`);
+  pasos.push(`Angulares 2L ${b}×${b}×${t} mm (${c.aceroAng}), largo L = (n − 1)·s + 2·Lev = ${r1(L)} mm; ${n} pernos en el alma (doble cortante)${sold ? ' y soldados al soporte' : ` y ${2 * n} en el soporte (cortante simple)`}`);
+  if(des !== 'no') pasos.push(`Destaje ${des === 'sup' ? 'del ala superior' : 'de las dos alas'}: dc = ${dct}${dcb ? ` / ${dcb}` : ''} mm, c = ${cD} mm → altura del alma que queda ho = ${r1(ho)} mm; perno superior a ${LevB} mm del corte`);
   req.push(['Largo de los angulares L ≥ T/2 (estabilidad)', L >= vg.T / 2 - 1e-6, `${r1(L)} ≥ ${r1(vg.T / 2)} mm`]);
-  req.push(['Largo de los angulares L ≤ T (caben entre las alas)', L <= vg.T + 1e-6, `${r1(L)} ≤ ${r1(vg.T)} mm`]);
+  if(des === 'no') req.push(['Largo de los angulares L ≤ T (caben entre las alas)', L <= vg.T + 1e-6, `${r1(L)} ≤ ${r1(vg.T)} mm`]);
+  else { const fondo = des === 'ambos' ? vg.d - dcb : vg.d - vg.tf - (vg.r || 0);
+    req.push(['Los angulares caben en el alma bajo el destaje', yb >= dct - 1e-6 && yb + L <= fondo + 1e-6, `de ${r1(yb)} a ${r1(yb + L)} mm (alma libre de ${r1(dct)} a ${r1(fondo)} mm)`]);
+    req.push(['Borde del perno superior al corte del destaje LevB ≥ mín.', LevB >= bm, `${LevB} ≥ ${bm} mm`]);
+    req.push(['Largo del destaje c ≤ 2d (validez de las ecuaciones del Manual AISC parte 9)', cD <= 2 * vg.d, `${cD} ≤ ${2 * vg.d} mm`]);
+    if(des === 'sup') req.push(['Profundidad del destaje dc ≤ d/2', dct <= vg.d / 2, `${dct} ≤ ${r1(vg.d / 2)} mm`]);
+    else req.push(['Profundidades del destaje dc ≤ 0.2d (arriba y abajo)', Math.max(dct, dcb) <= 0.2 * vg.d, `${Math.max(dct, dcb)} ≤ ${r1(0.2 * vg.d)} mm`]);
+    if(cD < hol + b) av.push(`Revise que el destaje alcance a librar el ala del soporte: c = ${cD} mm y holgura + b = ${r1(hol + b)} mm (depende del ancho del ala que se cruza).`); }
   req.push(['Separación s ≥ 2.67d (preferible 3d)', s >= 2.67 * d - 1e-6, `${s} ≥ ${r1(2.67 * d)} mm`]);
   req.push(['Borde vertical Lev ≥ mín. Tabla F.2.10.3-4', Lev >= bm, `${Lev} ≥ ${bm} mm`]);
   req.push(['Borde horizontal del angular b − g ≥ mín.', LehA >= bm, `${r1(LehA)} ≥ ${bm} mm`]);
   req.push(['Borde horizontal en la viga g₁ − holgura ≥ mín.', LehV >= bm, `${r1(LehV)} ≥ ${bm} mm`]);
-  req.push(['Espacio para apretar: g ≥ d + 12.7 mm', Math.min(g1, g2) >= d + 12.7 - 1e-6, `${Math.min(g1, g2)} ≥ ${r1(d + 12.7)} mm`]);
+  req.push(['Espacio para apretar: g ≥ d + 12.7 mm', (sold ? g1 : Math.min(g1, g2)) >= d + 12.7 - 1e-6, `${sold ? g1 : Math.min(g1, g2)} ≥ ${r1(d + 12.7)} mm`]);
   req.push(['Angulares flexibles: t ≤ 16 mm (Manual AISC parte 10)', t <= 16, `${t} mm`]);
-  req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
 
   // Pernos en el alma de la viga: doble cortante
   const rv = 0.75 * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
   const brg = (lc, tt, Fu) => aplast(lc, tt, d, Fu).phiRn;
   const lcE = Lev - dh / 2, lcI = s - dh;
   const angE = brg(lcE, t, an.Fu), angI = brg(lcI, t, an.Fu), web = 0.75 * 2.4 * d * vg.tw * av_.Fu / 1000;
-  const rWebE = Math.min(2 * rv, web, 2 * angE), rWebI = Math.min(2 * rv, web, 2 * angI);
+  // con destaje la carga sube contra el borde del corte: el perno superior desgarra el alma hacia el destaje
+  const webE = des !== 'no' ? brg(LevB - dh / 2, vg.tw, av_.Fu) : web;
+  const rWebE = Math.min(2 * rv, webE, 2 * angE), rWebI = Math.min(2 * rv, web, 2 * angI);
   const capWeb = rWebE + (n - 1) * rWebI;
-  pasos.push(`Corte de un perno φrn = 0.75·Fnv·Ab = ${r2(rv)} kN; aplastamiento en el angular: borde ${r2(angE)} kN (lc = ${r1(lcE)}), interior ${r2(angI)} kN (lc = ${r1(lcI)}); alma de la viga ${r2(web)} kN`);
+  pasos.push(`Corte de un perno φrn = 0.75·Fnv·Ab = ${r2(rv)} kN; aplastamiento en el angular: borde ${r2(angE)} kN (lc = ${r1(lcE)}), interior ${r2(angI)} kN (lc = ${r1(lcI)}); alma de la viga ${r2(web)} kN${des !== 'no' ? `, perno junto al destaje ${r2(webE)} kN (lc = ${r1(LevB - dh / 2)})` : ''}`);
   add('pernos', `Pernos en el alma de la viga (${n}, doble cortante)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, capWeb, 'kN', `por perno: borde ${r2(rWebE)}, interior ${r2(rWebI)} kN`);
-  // Pernos en el soporte: cortante simple, 2 por fila
-  const sop = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000 / (c.dosLados ? 2 : 1);
-  const rSE = Math.min(rv, angE, sop), rSI = Math.min(rv, angI, sop), capSop = 2 * (rSE + (n - 1) * rSI);
-  add('pernos', `Pernos en el soporte (${2 * n}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, capSop, 'kN', `por perno: borde ${r2(rSE)}, interior ${r2(rSI)} kN; soporte ${r2(sop)} kN${c.dosLados ? ' (comparte agujeros)' : ''}`);
-  pasos.push('Se desprecia la excentricidad de los pernos (angulares flexibles, Manual AISC parte 10).');
+  if(!sold){
+    // Pernos en el soporte: cortante simple, 2 por fila
+    const sop = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000 / (c.dosLados ? 2 : 1);
+    const rSE = Math.min(rv, angE, sop), rSI = Math.min(rv, angI, sop), capSop = 2 * (rSE + (n - 1) * rSI);
+    add('pernos', `Pernos en el soporte (${2 * n}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', V, capSop, 'kN', `por perno: borde ${r2(rSE)}, interior ${r2(rSI)} kN; soporte ${r2(sop)} kN${c.dosLados ? ' (comparte agujeros)' : ''}`);
+    pasos.push('Se desprecia la excentricidad de los pernos (angulares flexibles, Manual AISC parte 10).');
+  } else {
+    // Soldadura en las alas salientes (Manual AISC parte 10, «soldadura B»): dos líneas verticales de largo L con retorno arriba, excentricidad e = b
+    const FEXX = ELECTRODOS[c.electrodo] || 482, w = +c.wS || 0, fwl = 0.75 * 0.6 * FEXX * 0.707 * w / 1000;
+    const fr = V / (2 * L * L) * Math.sqrt(L * L + 12.96 * b * b);
+    pasos.push(`Soldadura en el soporte: filete ${w} mm ${c.electrodo} en el borde de cada angular (largo L = ${r1(L)} mm, retorno de 2w arriba); e = b = ${b} mm`);
+    pasos.push(`f = Vu/(2L²)·√(L² + 12.96·e²) = ${r3(fr)} kN/mm; φ·0.6·FEXX·0.707·w = ${r3(fwl)} kN/mm`);
+    add('soldadura', 'Filetes de los angulares al soporte (con la excentricidad e = b)', 'F.2.10.2.4 (J2-4) · Manual AISC parte 10', fr, fwl, 'kN/mm', `f = Vu/(2L²)·√(L² + 12.96·b²)`);
+    add('soldadura', 'Metal base del angular junto al filete', 'F.2.10.2.4 (J2-2) · J4-4', fr, 0.75 * 0.6 * an.Fu * t / 1000, 'kN/mm', '0.75·0.6·Fu·t');
+    const tS = +c.tSop || 0;
+    add('soporte', 'Metal base del soporte junto a los filetes', 'F.2.10.2.4 (J2-2) · J4-4', fr * (c.dosLados ? 2 : 1), 0.75 * 0.6 * sp.Fu * tS / 1000, 'kN/mm', `0.75·0.6·Fu·t${c.dosLados ? ' · con conexión a los dos lados del alma (2 filetes sobre el mismo espesor)' : ''}`);
+    const tmin = Math.min(t, tS), wmin = tmin <= 6 ? 3 : tmin <= 13 ? 5 : tmin <= 19 ? 6 : 8, wmax = t < 6 ? t : t - 1.6;
+    req.push(['Filete mínimo Tabla J2.4 (parte más delgada)', w >= wmin, `${w} ≥ ${wmin} mm`]);
+    req.push(['Filete máximo en el borde del angular (t − 1.6 mm)', w <= wmax + 1e-6, `${w} ≤ ${r1(wmax)} mm`]);
+    req.push(['Retorno del filete en la parte superior = 2w', true, `${r1(2 * w)} mm (indicar en planos)`]);
+  }
 
   // Angulares (los dos)
   const Agv = 2 * L * t, Anv = 2 * (L - n * dn) * t;
@@ -377,13 +411,47 @@ function calcAngular(c){
   add('angulares', 'Rotura por cortante (2 angulares)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * an.Fu * Anv / 1000, 'kN', `Anv = 2·(L − n·${r1(dn)})·t = ${r1(Anv)} mm²`);
   const bloque = Lh => { const agv = (L - Lev) * t, anv = (L - Lev - (n - 0.5) * dn) * t, ant = (Lh - 0.5 * dn) * t;
     return { phiRn: 2 * 0.75 * Math.min(0.6 * an.Fu * anv + an.Fu * ant, 0.6 * an.Fy * agv + an.Fu * ant) / 1000, agv, anv, ant }; };
-  const bkW = bloque(b - g1), bkS = bloque(b - g2);
+  const bkW = bloque(b - g1);
   add('angulares', 'Bloque de cortante, ala sobre la viga (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, bkW.phiRn, 'kN', `por angular Agv = ${r1(bkW.agv)}, Anv = ${r1(bkW.anv)}, Ant = ${r1(bkW.ant)} mm²`);
-  add('angulares', 'Bloque de cortante, ala sobre el soporte (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, bkS.phiRn, 'kN', `por angular Agv = ${r1(bkS.agv)}, Anv = ${r1(bkS.anv)}, Ant = ${r1(bkS.ant)} mm²`);
+  if(!sold){ const bkS = bloque(b - g2);
+    add('angulares', 'Bloque de cortante, ala sobre el soporte (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, bkS.phiRn, 'kN', `por angular Agv = ${r1(bkS.agv)}, Anv = ${r1(bkS.anv)}, Ant = ${r1(bkS.ant)} mm²`); }
   // Viga
-  add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', V, 1.0 * 0.6 * av_.Fy * vg.d * vg.tw / 1000, 'kN', '0.6·Fy·d·tw (viga sin destaje)');
+  if(des === 'no') add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', V, 1.0 * 0.6 * av_.Fy * vg.d * vg.tw / 1000, 'kN', '0.6·Fy·d·tw (viga sin destaje)');
+  else {
+    const tw = vg.tw;
+    add('viga', 'Alma con destaje: fluencia por cortante', 'F.2.10.4.2 (J4-3)', V, 1.0 * 0.6 * av_.Fy * ho * tw / 1000, 'kN', `0.6·Fy·ho·tw, ho = ${r1(ho)} mm`);
+    add('viga', 'Alma con destaje: rotura por cortante', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * av_.Fu * (ho - n * dn) * tw / 1000, 'kN', `Anv = (ho − n·${r1(dn)})·tw = ${r1((ho - n * dn) * tw)} mm²`);
+    const agv = (LevB + (n - 1) * s) * tw, anv = agv - (n - 0.5) * dn * tw, ant = (LehV - 0.5 * dn) * tw;
+    add('viga', 'Alma con destaje: bloque de cortante', 'F.2.10.4.3 (J4-5), Ubs = 1.0 · Manual AISC parte 9', V, bloqueRn(av_.Fy, av_.Fu, agv, anv, ant), 'kN', `Agv = ${r1(agv)}, Anv = ${r1(anv)}, Ant = ${r1(ant)} mm² (hacia el destaje y el extremo de la viga)`);
+    // Sección en la cara del destaje: T (ala inferior + alma) si se corta arriba; rectángulo si se cortan las dos alas
+    const tf = vg.tf, bf = vg.bf, hw = des === 'sup' ? ho - tf : ho;
+    const partes = des === 'sup' ? [{ b:bf, h:tf, y:tf / 2 }, { b:tw, h:hw, y:tf + hw / 2 }] : [{ b:tw, h:ho, y:ho / 2 }];
+    const A = partes.reduce((a, q) => a + q.b * q.h, 0), yc = partes.reduce((a, q) => a + q.b * q.h * q.y, 0) / A;
+    const I = partes.reduce((a, q) => a + q.b * q.h ** 3 / 12 + q.b * q.h * (q.y - yc) ** 2, 0), Snet = I / Math.max(yc, ho - yc);
+    // eje plástico: la mitad del área a cada lado
+    let yp; if(des === 'sup'){ yp = bf * tf >= A / 2 ? A / 2 / bf : tf + (A / 2 - bf * tf) / tw; } else yp = ho / 2;
+    const Znet = partes.reduce((a, q) => { const y0 = q.y - q.h / 2, y1 = q.y + q.h / 2;
+      const ab = Math.max(0, Math.min(y1, yp) - y0), ar = Math.max(0, y1 - Math.max(y0, yp));
+      return a + q.b * ab * (yp - (y0 + ab / 2)) + q.b * ar * ((Math.max(y0, yp) + ar / 2) - yp); }, 0);
+    const e = cD + hol, Mu = V * e / 1000;
+    let Fcr, txt;
+    if(des === 'sup'){
+      const f = cD / vg.d <= 1 ? 2 * cD / vg.d : 1 + cD / vg.d, k = cD / ho <= 1 ? 2.2 * Math.pow(ho / Math.max(cD, 1), 1.65) : 2.2 * ho / cD;
+      const Fe = 180700 * (tw / ho) ** 2 * f * k; Fcr = Math.min(av_.Fy, Fe);
+      txt = `ala superior: f = ${r3(f)}, k = ${r3(k)}, Fcr = 26 210 ksi·(tw/ho)²·f·k = ${r1(Fe)} ≤ Fy → ${r1(Fcr)} MPa (Manual AISC 9-6)`;
+    } else {
+      const Fyk = av_.Fy / 6.89476, lam = ho * Math.sqrt(Fyk) / (10 * tw * Math.sqrt(475 + 280 * (ho / Math.max(cD, 1)) ** 2));
+      const Q = lam <= 0.7 ? 1 : lam <= 1.41 ? 1.34 - 0.486 * lam : 1.30 / (lam * lam); Fcr = av_.Fy * Q;
+      txt = `dos alas: λ = ${r3(lam)}, Q = ${r3(Q)}, Fcr = Fy·Q = ${r1(Fcr)} MPa (Manual AISC 9-14 a 9-16)`;
+    }
+    pasos.push(`Sección en la cara del destaje: A = ${r1(A)} mm², ȳ = ${r1(yc)} mm, I = ${Math.round(I)} mm⁴, Snet = ${Math.round(Snet)} mm³, Znet = ${Math.round(Znet)} mm³; e = c + holgura = ${r1(e)} mm → Mu = Vu·e = ${r3(Mu)} kN·m`);
+    add('viga', 'Alma con destaje: fluencia por flexión y pandeo local', 'Manual AISC parte 9 (9-6 / 9-14) · φb = 0.90', Mu, 0.9 * Fcr * Snet / 1e6, 'kN·m', txt);
+    add('viga', 'Alma con destaje: rotura por flexión', 'Manual AISC (9-4) · φ = 0.75', Mu, 0.75 * av_.Fu * Znet / 1e6, 'kN·m', `0.75·Fu·Znet`);
+    av.push('Viga con destaje: el borde cortado debe quedar con esquinas redondeadas (radio ≥ 13 mm, F.2.10 / J1.6) y sin muescas.');
+  }
+  req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
   const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
-  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, L, dh, gage:2 * g2 + vg.tw } };
+  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, L, dh, gage:2 * g2 + vg.tw, yb, ho, dct, dcb, cD, sold, des } };
 }
 
 // ═════════ Tipos agregados el 10-nov (pedido de Amo: «creamos todas y después las revisamos») ═════════
@@ -639,11 +707,13 @@ const EXTRA = {
     const bA = +c.bAng, hol = +c.holgura || 0, rW = Math.min(2 * fv(c, d), aplast(+c.g1 - hol - dh / 2, vg.tw, d, ACEROS[c.aceroViga].Fu).phiRn, 2 * aplast(Math.min(+c.Lev, bA - +c.g1) - dh / 2, +c.tAng, d, an.Fu).phiRn);
     const bw = pernos3D(Array.from({ length:n }, (_, i) => ({ u:0, v:i * s })), { Fu:P, Fv:V2, Mn:M3, N:Math.abs(V3), Mu:T, Mv:M2 }, { ...op, planos:2, rCorte:rW });
     add('pernos', 'Pernos en el alma con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', bw.rat, 1, '', `cortante ${r2(bw.r)} kN (φrn ${r2(rW)}), tensión ${r2(bw.t)} kN${bw.nota}`);
-    const rS = Math.min(fv(c, d), aplast(Math.min(+c.Lev, bA - g2) - dh / 2, +c.tAng, d, an.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
+    if(c.unSop === 'sold'){ const w = soldLinea('2', 2 * bA + vg.tw, r.geo.L, +c.wS, c.electrodo, Math.min(+c.tAng, +c.tSop), { H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
+      if(w) add('soldadura', 'Filetes al soporte con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `dos líneas de ${r1(r.geo.L)} mm separadas 2b + tw = ${r1(2 * bA + vg.tw)} mm; f máx. ${r1(w.f)} N/mm`); }
+    else { const rS = Math.min(fv(c, d), aplast(Math.min(+c.Lev, bA - g2) - dh / 2, +c.tAng, d, an.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
     const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < n; i++) pts.push({ u:sg * (g2 + vg.tw / 2), v:i * s });
     const bs = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { ...op, rCorte:rS });
-    add('pernos', 'Pernos en el soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', bs.rat, 1, '', `cortante ${r2(bs.r)} kN (φrn ${r2(rS)}), tensión ${r2(bs.t)} kN`);
-    if(P > 0 || Math.abs(M3) > 0 || Math.abs(M2) > 0) av.push('Con tensión o momentos los angulares se doblan y los pernos del soporte trabajan con efecto palanca, que aquí no se calcula. Revise el espesor de los angulares o use una chapa de testa.'); },
+    add('pernos', 'Pernos en el soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', bs.rat, 1, '', `cortante ${r2(bs.r)} kN (φrn ${r2(rS)}), tensión ${r2(bs.t)} kN`); }
+    if(c.unSop !== 'sold' && (P > 0 || Math.abs(M3) > 0 || Math.abs(M2) > 0)) av.push('Con tensión o momentos los angulares se doblan y los pernos del soporte trabajan con efecto palanca, que aquí no se calcula. Revise el espesor de los angulares o use una chapa de testa.'); },
   testaV(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2', 'M3'])) return;
     const d = +c.d, n = Math.round(+c.n), s = +c.s, g = +c.g, dh = agujero(d), pl = ACEROS[c.aceroPl], vg = r.geo.vg, Lp = r.geo.Lp;
     const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
@@ -833,8 +903,9 @@ function calcEmpZ(c){
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
 const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
 const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
-const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
-  calc: c => { const r = (CALC[c.tipo] || calcAleta)(c); if(r.error || !EXTRA[c.tipo]) return r;
+const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
+  calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
+    if(r.error || !EXTRA[c.tipo]) return r;
     EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
   defaults: t => (DEF[t] || defaultsAleta)() };
 G.Conex = Conex;

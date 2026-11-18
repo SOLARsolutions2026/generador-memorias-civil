@@ -158,7 +158,8 @@ const dnom = c => (Conex.DIAM.find(x => x[1] === +c.d) || [`${c.d} mm`])[0];
 const SOPN = { ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga principal' };
 function seccionesDe(c){
   const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
-  const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] })];
+  const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] }),
+    `<div class="f"><label class="ck"><input type="checkbox" data-k="cizalla" ${c.cizalla ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Bordes cortados con cizalla</label><div class="hint">Borde mínimo ${Conex.BORDE_CIZ[+c.d] ?? '—'} mm (con soplete o laminado ${Conex.BORDE_MIN[+c.d] ?? '—'} mm), Tabla F.2.10.3-4</div></div>`];
   if(c.tipo === 'aleta') return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`,
       g3(campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) }), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'holgura', 'Holgura viga–soporte [mm]', { h:'Del extremo de la viga a la cara del soporte' }))],
@@ -240,17 +241,23 @@ function seccionesDe(c){
       g3(campo(c, 'perno', 'Diámetro', { sel:['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'] }), campo(c, 'anclaje', 'Acero', { sel:['A36', 'F1554 Gr 36', 'F1554 Gr 55', 'F1554 Gr 105'] }), campo(c, 'nB', 'Pernos por fila', { sel:['2', '3', '4'] }),
         campo(c, 'S1', 'S1: entre filas (sentido N) [mm]'), campo(c, 'S2', 'S2: extremos de la fila (sentido B) [mm]'), campo(c, 'hef', 'Empotramiento hef [mm]'),
         campo(c, 'cabeza', 'Anclaje', { sel:[['tuerca', 'Tuerca y arandela'], ['gancho', 'Gancho']] }), campo(c, 'arandela', 'Lado de la arandela [mm]'))] ];
-  if(c.tipo === 'angular') return [
+  if(c.tipo === 'angular'){ const sold = c.unSop === 'sold', des = c.destaje || 'no';
+    return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`,
       g3(campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) }), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'holgura', 'Holgura viga–soporte [mm]', { h:'Del extremo de la viga a la cara del soporte' }))],
-    ['sop', 'Soporte', () => `${SOPN[c.soporte]} · t ${c.tSop} mm · ${c.aceroSop}`,
-      g3(campo(c, 'soporte', 'Se atornilla a', { sel:Object.entries(SOPN) }), campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }))
-      + (c.soporte !== 'ala' ? `<div class="f"><label class="ck"><input type="checkbox" data-k="dosLados" ${c.dosLados ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Hay otra conexión al otro lado del alma (comparte los pernos)</label></div>` : '')],
+    ['des', 'Destaje de la viga', () => des === 'no' ? 'sin destaje' : `${des === 'sup' ? 'ala superior' : 'las dos alas'} · dc ${c.dct}${des === 'ambos' ? ` / ${c.dcb}` : ''} mm · c ${c.cDes} mm`,
+      g3(campo(c, 'destaje', 'Destaje', { sel:[['no', 'Sin destaje'], ['sup', 'Ala superior'], ['ambos', 'Las dos alas']], h:'Recorte de las alas para que la viga entre en el soporte' }),
+        ...(des === 'no' ? [] : [campo(c, 'dct', 'Profundidad arriba dc [mm]', { h:'Desde el borde superior de la viga' }), ...(des === 'ambos' ? [campo(c, 'dcb', 'Profundidad abajo [mm]')] : []),
+          campo(c, 'cDes', 'Largo del destaje c [mm]', { h:'Desde el extremo de la viga' }), campo(c, 'LevB', 'Perno superior al corte LevB [mm]', { h:'Borde en el alma de la viga, hacia el destaje' })]))],
+    ['sop', 'Soporte', () => `${SOPN[c.soporte]} · t ${c.tSop} mm · ${c.aceroSop} · ${sold ? `soldados, filete ${c.wS} mm` : 'atornillados'}`,
+      g3(campo(c, 'unSop', 'Angulares al soporte', { sel:[['pernos', 'Atornillados'], ['sold', 'Soldados']] }), campo(c, 'soporte', 'Soporte', { sel:Object.entries(SOPN) }), campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }),
+        ...(sold ? [campo(c, 'wS', 'Filete w [mm]', { h:'En el borde de cada angular, con retorno de 2w arriba' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })] : []))
+      + (c.soporte !== 'ala' ? `<div class="f"><label class="ck"><input type="checkbox" data-k="dosLados" ${c.dosLados ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Hay otra conexión al otro lado del alma (${sold ? 'suelda sobre el mismo espesor' : 'comparte los pernos'})</label></div>` : '')],
     ['ang', 'Angulares', () => `2L ${c.bAng}×${c.bAng}×${c.tAng} mm · ${c.aceroAng}`,
       g3(campo(c, 'bAng', 'Ancho de las alas b [mm]', { h:'Angular de alas iguales' }), campo(c, 'tAng', 'Espesor t [mm]'), campo(c, 'aceroAng', 'Acero', { sel:SEL_ACERO }))],
-    ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} en el alma + ${2 * c.n} en el soporte · s ${c.s} · Lev ${c.Lev}`,
+    ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} en el alma${sold ? '' : ` + ${2 * c.n} en el soporte`} · s ${c.s} · Lev ${c.Lev}${c.cizalla ? ' · cizalla' : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'n', 'Pernos por línea n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Lev', 'Borde vertical Lev [mm]'),
-        campo(c, 'g1', 'g₁: talón a pernos de la viga [mm]'), campo(c, 'g2', 'g₂: talón a pernos del soporte [mm]'))] ];
+        campo(c, 'g1', 'g₁: talón a pernos de la viga [mm]'), ...(sold ? [] : [campo(c, 'g2', 'g₂: talón a pernos del soporte [mm]')]))] ]; }
   if(c.tipo === 'testa') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga}`, g3(campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) }), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))],
     ['col', 'Columna', () => c.columna ? `${c.columna} · ${c.aceroCol}${c.colTope ? ' · en el extremo superior' : ''}` : 'sin revisar',
@@ -347,6 +354,9 @@ function renderEditor(){
   $$('#ed [data-secall]').forEach(b => b.onclick = () => { $$('#ed .sec').forEach(s => { s.classList.toggle('on', b.dataset.secall === '1'); $('.sec-hd', s).setAttribute('aria-expanded', b.dataset.secall === '1'); }); guardaAb(); });
   $$('#ed [data-k]').forEach(el => { const k = el.dataset.k;
     const fn = () => { if(el.type === 'checkbox') c[k] = el.checked; else if(el.dataset.num) c[k] = el.value === '' ? '' : Number(el.value.replace(',', '.')); else c[k] = el.value;
+      if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
+      if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
+      if(['cizalla', 'd'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -373,27 +383,36 @@ function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, a
 const ICO_ANG = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="8" height="38" fill="#cbd5e1"/><rect x="18" y="6" width="40" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="12" y="9" width="18" height="22" fill="#93c5fd" stroke="#1e3a8a"/><rect x="12" y="9" width="3" height="22" fill="#1e3a8a"/><circle cx="23" cy="14" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="20" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="26" r="2" fill="#fff" stroke="#1e3a8a"/></svg>';
 function dibAngular(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0, ts = +c.tSop || 10;
-  const k = Math.min(230 / (b + 170), 300 / (vg.d + 40)), X = v => 92 + v * k, Y = v => 50 + v * k, yb = (vg.d - g.L) / 2;
+  const xe = Math.max(b + 150, (g.cD || 0) + 60), k = Math.min(230 / (xe + 20), 300 / (vg.d + 40)), X = v => 92 + v * k, Y = v => 50 + v * k, yb = g.yb ?? (vg.d - g.L) / 2;
+  const dct = g.dct || 0, dcb = g.dcb || 0, cD = g.cD || 0, xc = hol + cD;
+  // contorno de la viga con el destaje (ala superior y, si aplica, inferior)
+  const contorno = (dct || dcb) ? `M${X(hol)},${Y(dct)} L${X(xc)},${Y(dct)} L${X(xc)},${Y(0)} L${X(xe)},${Y(0)} L${X(xe)},${Y(vg.d)} L${X(xc)},${Y(vg.d)} L${X(xc)},${Y(vg.d - dcb)} L${X(hol)},${Y(vg.d - dcb)} Z`
+    : `M${X(hol)},${Y(0)} L${X(xe)},${Y(0)} L${X(xe)},${Y(vg.d)} L${X(hol)},${Y(vg.d)} Z`;
   let h = `<rect x="${X(-ts)}" y="${Y(-12)}" width="${ts * k}" height="${(vg.d + 24) * k}" class="sop"/>
-    <rect x="${X(hol)}" y="${Y(0)}" width="${(b + 150 - hol) * k}" height="${vg.d * k}" class="vg"/>
-    <line x1="${X(hol)}" y1="${Y(vg.tf)}" x2="${X(b + 150)}" y2="${Y(vg.tf)}" class="vgl"/><line x1="${X(hol)}" y1="${Y(vg.d - vg.tf)}" x2="${X(b + 150)}" y2="${Y(vg.d - vg.tf)}" class="vgl"/>
+    <path d="${contorno}" class="vg"/>
+    <line x1="${X(dct ? xc : hol)}" y1="${Y(vg.tf)}" x2="${X(xe)}" y2="${Y(vg.tf)}" class="vgl"/><line x1="${X(dcb ? xc : hol)}" y1="${Y(vg.d - vg.tf)}" x2="${X(xe)}" y2="${Y(vg.d - vg.tf)}" class="vgl"/>
     <rect x="${X(0)}" y="${Y(yb)}" width="${b * k}" height="${g.L * k}" class="pl"/><rect x="${X(0)}" y="${Y(yb)}" width="${t * k}" height="${g.L * k}" fill="#1e3a8a"/>`;
+  if(dct) h += cotaV(X(xc) + 10, Y(0), Y(dct), `dc ${dct}`, 1) + cotaH(Y(-4) - 10, X(hol), X(xc), `c = ${cD}`);
+  if(dcb) h += cotaV(X(xc) + 10, Y(vg.d - dcb), Y(vg.d), `${dcb}`, 1);
+  if(g.sold) h += `<line x1="${X(0) - 2}" y1="${Y(yb)}" x2="${X(0) - 2}" y2="${Y(yb + g.L)}" stroke="#ea580c" stroke-width="4"/>
+    <text x="${X(-ts) - 6}" y="${Y(yb + g.L) + 14}" class="lbl" text-anchor="start" fill="#c2410c">filete ${esc(String(c.wS))} mm</text>`;
   for(let i = 0; i < n; i++){ const y = Y(yb + Lev + i * s);
-    h += `<circle cx="${X(g1)}" cy="${y}" r="${Math.max(3, g.dh / 2 * k)}" class="bolt"/><line x1="${X(-ts - 6)}" y1="${y}" x2="${X(t + 6)}" y2="${y}" class="bl"/>`; }
+    h += `<circle cx="${X(g1)}" cy="${y}" r="${Math.max(3, g.dh / 2 * k)}" class="bolt"/>${g.sold ? '' : `<line x1="${X(-ts - 6)}" y1="${y}" x2="${X(t + 6)}" y2="${y}" class="bl"/>`}`; }
   h += cotaV(X(-ts - 16), Y(yb), Y(yb + g.L), `L ${f2(g.L, 0)}`) + (n > 1 ? cotaV(X(b + 12), Y(yb + Lev), Y(yb + Lev + s), `s = ${s}`, 1) : '')
     + cotaV(X(b + 12), Y(yb + g.L - Lev), Y(yb + g.L), `Lev = ${Lev}`, 1) + cotaH(Y(vg.d) + 16, X(0), X(g1), `g₁ = ${g1}`)
-    + `<text x="${X(b + 100)}" y="${Y(vg.d / 2)}" class="lbl" text-anchor="middle">${esc(vg.nom)}</text><text x="${X(b / 2)}" y="${Y(yb) - 5}" class="lbl" text-anchor="middle">2L ${b}×${t}</text>`;
+    + `<text x="${X((xe + b) / 2 + 20)}" y="${Y(vg.d / 2)}" class="lbl" text-anchor="middle">${esc(vg.nom)}</text><text x="${X(b / 2)}" y="${Y(yb) - 5}" class="lbl" text-anchor="middle">2L ${b}×${t}</text>`;
   // planta (vista superior), a la derecha
-  const k2 = Math.min(1.1, 175 / (b * 2 + vg.tw)), ox = X(b + 170), cy = Y(vg.d / 2), P = (x, y) => `${ox + x * k2},${cy + y * k2}`;
+  const k2 = Math.min(1.1, 175 / (b * 2 + vg.tw)), ox = X(xe + 20), cy = Y(vg.d / 2), P = (x, y) => `${ox + x * k2},${cy + y * k2}`;
   const tw = vg.tw, L1 = (sg) => `M${P(0, sg * tw / 2)} L${P(b, sg * tw / 2)} L${P(b, sg * (tw / 2 + t))} L${P(t, sg * (tw / 2 + t))} L${P(t, sg * (tw / 2 + b))} L${P(0, sg * (tw / 2 + b))} Z`;
   h += `<rect x="${ox - ts * k2}" y="${cy - (b + tw / 2 + 25) * k2}" width="${ts * k2}" height="${(2 * b + tw + 50) * k2}" class="sop"/>
     <rect x="${ox + hol * k2}" y="${cy - tw / 2 * k2}" width="${(b + 60 - hol) * k2}" height="${tw * k2}" fill="#94a3b8"/>
     <path d="${L1(1)}" class="pl"/><path d="${L1(-1)}" class="pl"/>
     <line x1="${ox + g1 * k2}" y1="${cy - (tw / 2 + t + 6) * k2}" x2="${ox + g1 * k2}" y2="${cy + (tw / 2 + t + 6) * k2}" class="bl"/>
-    ${[-1, 1].map(sg => `<line x1="${ox - (ts + 6) * k2}" y1="${cy + sg * (tw / 2 + g2) * k2}" x2="${ox + (t + 6) * k2}" y2="${cy + sg * (tw / 2 + g2) * k2}" class="bl"/>`).join('')}
+    ${g.sold ? [-1, 1].map(sg => `<path d="M${ox},${cy + sg * (tw / 2 + b) * k2} l${-6},0 l6,${sg * 6} z" fill="#ea580c"/>`).join('')
+      : [-1, 1].map(sg => `<line x1="${ox - (ts + 6) * k2}" y1="${cy + sg * (tw / 2 + g2) * k2}" x2="${ox + (t + 6) * k2}" y2="${cy + sg * (tw / 2 + g2) * k2}" class="bl"/>`).join('')}
     <text x="${ox + b * k2 / 2}" y="${cy - (b + tw / 2 + 30) * k2}" class="lbl" text-anchor="middle">planta</text>`;
   return `<svg viewBox="0 0 ${ox + (b + 70) * k2} ${Y(vg.d) + 40}" class="dsvg" role="img" aria-label="Doble angular: elevación y planta">${h}</svg>
-    <div class="hint" style="text-align:center">Izquierda: elevación · Derecha: planta · gramil en el soporte = 2g₂ + tw = ${f2(g.gage, 1)} mm</div>`;
+    <div class="hint" style="text-align:center">Izquierda: elevación · Derecha: planta · ${g.sold ? 'soldados al soporte en el borde de cada angular (naranja)' : `gramil en el soporte = 2g₂ + tw = ${f2(g.gage, 1)} mm`}${g.des && g.des !== 'no' ? ` · destaje ho = ${f2(g.ho, 0)} mm` : ''}</div>`;
 }
 const ICO_TESTA = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="7" height="38" fill="#cbd5e1"/><rect x="11" y="3" width="5" height="34" fill="#93c5fd" stroke="#1e3a8a"/><rect x="16" y="9" width="42" height="3" fill="#475569"/><rect x="16" y="28" width="42" height="3" fill="#475569"/><rect x="16" y="12" width="42" height="16" fill="#f1f5f9" stroke="#94a3b8"/><line x1="2" y1="6" x2="20" y2="6" stroke="#1e3a8a" stroke-width="2"/><line x1="2" y1="15" x2="20" y2="15" stroke="#1e3a8a" stroke-width="2"/><line x1="2" y1="25" x2="20" y2="25" stroke="#1e3a8a" stroke-width="2"/><line x1="2" y1="34" x2="20" y2="34" stroke="#1e3a8a" stroke-width="2"/></svg>';
 
@@ -610,8 +629,9 @@ function datosPrint(c){
   if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base', 'soldada', 'empZ'].includes(c.tipo)){
     const carga = cargasTxt(c);
     return `<table class="t kv">${t('Cargas', carga)}${seccionesDe(c).map(([, tt, res]) => t(esc(tt), esc(res()))).join('')}</table>`; }
-  if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
-    ${t('Angulares', `2L ${c.bAng}×${c.bAng}×${c.tAng} mm · ${esc(c.aceroAng)}`)}${t('Pernos', `${c.n} en el alma + ${2 * c.n} en el soporte, ${dn} ${esc(c.grado)}-${esc(c.rosca)}`)}${t('Distancias', `s = ${c.s} · Lev = ${c.Lev} · g₁ = ${c.g1} · g₂ = ${c.g2} mm`)}</table>`;
+  if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)} · angulares ${c.unSop === 'sold' ? `soldados (filete ${c.wS} mm ${esc(c.electrodo || '')}, retorno 2w)` : 'atornillados'}`)}
+    ${c.destaje && c.destaje !== 'no' ? t('Destaje', `${c.destaje === 'sup' ? 'ala superior' : 'las dos alas'}: dc = ${c.dct}${c.destaje === 'ambos' ? ` / ${c.dcb}` : ''} mm, c = ${c.cDes} mm, perno superior a ${c.LevB} mm del corte`) : ''}
+    ${t('Angulares', `2L ${c.bAng}×${c.bAng}×${c.tAng} mm · ${esc(c.aceroAng)}`)}${t('Pernos', `${c.n} en el alma${c.unSop === 'sold' ? '' : ` + ${2 * c.n} en el soporte`}, ${dn} ${esc(c.grado)}-${esc(c.rosca)}${c.cizalla ? ' · bordes con cizalla' : ''}`)}${t('Distancias', `s = ${c.s} · Lev = ${c.Lev} · g₁ = ${c.g1}${c.unSop === 'sold' ? '' : ` · g₂ = ${c.g2}`} mm`)}</table>`;
   if(c.tipo === 'testa') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Columna', c.columna ? `${esc(c.columna)} · ${esc(c.aceroCol)}` : 'no revisada')}
     ${t('Placa', `${c.tp} × ${c.bp} mm · ${esc(c.aceroPl)} · extensión ${c.ambos ? 'arriba y abajo' : 'arriba'}`)}${t('Pernos', `${c.ambos ? 8 : 4 + (+c.nbc || 0)} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} pretensionados · g = ${c.g} mm`)}
     ${t('Distancias', `pfo = ${c.pfo} · pfi = ${c.pfi} · de = ${c.de} mm`)}${t('Soldaduras', `alas: ${c.soldAla === 'cjp' ? 'penetración completa' : `filete ${c.wAla} mm`} · alma: filete ${c.wAlma} mm · ${esc(c.electrodo)}`)}</table>`;
