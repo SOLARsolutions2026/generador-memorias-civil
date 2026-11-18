@@ -133,7 +133,7 @@ function calcAleta(c){
   pasos.push(`Aplastamiento en la chapa (F.2.10.3.10): borde lc = ${r1(lcE)} mm → ${r2(bpE.phiRn)} kN; interior lc = ${r1(lcI)} mm → ${r2(bpI.phiRn)} kN`);
   pasos.push(`Aplastamiento en el alma de la viga: lc = ${r1(lcI)} mm, tw = ${vg.tw} mm → ${r2(bv.phiRn)} kN`);
   pasos.push(`Centro instantáneo con e = a = ${a} mm: C = ${r3(ic.C)} (${ic.metodo}); φRn = C·φrn,mín = ${r3(ic.C)}·${r2(rn)} = ${r2(ic.C * rn)} kN (controla ${cual})`);
-  add('pernos', 'Pernos con excentricidad (centro instantáneo)', 'F.2.10.3 · Manual AISC parte 7', V, ic.C * rn, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rn)} kN (${cual})`);
+  add('pernos', 'Pernos con excentricidad (centro instantáneo): cortante y aplastamiento', 'F.2.10.3 (J3-1, J3-6) · Manual AISC parte 7', V, ic.C * rn, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rn)} kN, el menor de: corte ${r2(pc.phiRn)}; aplastamiento chapa borde ${r2(bpE.phiRn)} / interior ${r2(bpI.phiRn)}; alma de la viga ${r2(bv.phiRn)} kN → controla ${cual}`);
 
   // 2. Chapa
   const Agv = Lp * tp, Anv = (Lp - n * dn) * tp;
