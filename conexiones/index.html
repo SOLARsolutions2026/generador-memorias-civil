@@ -27,6 +27,9 @@
     <span class="uchip" id="uChip"></span>
     <button type="button" class="tbtn" id="btnSalir" title="Cerrar sesión"><svg class="ico" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="tl">Salir</span></button></div>
 </header>
+<script>/* Estilo B desde el primer instante (evita ver la barra azul vieja mientras carga): si hay sesión guardada, se arranca ya con la barra lateral. */
+try{ if(Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k))){ document.body.classList.add('con-sb'); document.getElementById('sbar').hidden = false; } }catch(e){}</script>
+
 <main class="wrap no-print" id="app"><p class="muted">Cargando…</p></main>
 <div id="print-area"></div>
 <div class="toast" id="toast" hidden></div>
