@@ -87,3 +87,17 @@ details.card:not([open]){padding-bottom:4px}details.card:not([open])>summary.ct{
 .carga6 .cg-ej{width:260px}.carga6 .ejes text{font-size:11px}
 .ej-ley{font-size:10.5px;color:#475569;text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}.ej-ley .f{color:#b45309}.ej-ley .m{color:#7c3aed}
 .carga6 .cg-bd{flex-wrap:wrap;justify-content:center}.carga6 .cg-f{min-width:min(100%,360px)}.carga6 .cg-ej{width:240px}
+/* Estilo B (18-nov): la lista de conexiones vive en la barra lateral en el computador */
+body.con-sb .d-grid.sin-lista{display:block}
+.sbar .d-lista{position:static;background:none;padding:0;margin:0}
+.sbar .d-el{border:none;border-radius:12px;padding:8px 10px;margin-bottom:2px;background:none;box-shadow:none}
+.sbar .d-el:hover{background:var(--gray-bg)}
+.sbar .d-el.on{background:var(--blue-bg);box-shadow:none;outline:none}
+.sbar .d-el b{color:var(--navy)}
+.sbar .gal-cat{font-size:10.5px;font-weight:700;letter-spacing:1px;color:#94a3b8;margin:16px 10px 6px}
+.sbar .gal{gap:4px;margin-top:4px}
+.sbar .gal-it{border:1px dashed #cbd5e1;border-radius:12px;padding:5px 8px;font-size:12px;background:#fff}
+.sbar .gal-it svg{width:40px;height:28px}
+a.sb-it{text-decoration:none}
+body.con-sb .ws-bar.fila-mem>a.btn,body.con-sb .ws-bar.fila-mem>.code{display:none}
+body.con-sb .ws-bar.fila-mem{justify-content:flex-end}

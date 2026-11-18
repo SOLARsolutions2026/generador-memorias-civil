@@ -621,6 +621,40 @@ function datosPrint(c){
     ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)}`)}${t('Soporte', `t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}</table>`;
 }
 
+
+/* Barra lateral (estilo B de Amo, 18-nov; igual al generador de memorias). En un proyecto, en el computador, la lista de
+   conexiones y la galería para agregar pasan a la barra lateral; en el celular quedan como antes (lista desplegable). */
+const ICOS = { con:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+  doc:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>' };
+const icoL = k => `<svg class="ico" viewBox="0 0 24 24">${ICOS[k]}</svg>`;
+function cerrarLateral(){ $('#sbar')?.classList.remove('open'); const s = $('#sbScrim'); if(s) s.hidden = true; }
+function pintarLateral(){
+  const sbar = $('#sbar'), slot = $('#sbSlot'), hd = $('#hdSlot'), app = $('#app'); if(!sbar || !slot) return;
+  const con = !!S.user && !app.querySelector('.login');
+  document.body.classList.toggle('con-sb', con); sbar.hidden = !con; $('#sbMenu').hidden = !con;
+  if(!con){ slot.innerHTML = ''; if(hd) hd.innerHTML = ''; return; }
+  const u = $('#uChip'); if(u){ const em = S.user.email || '', ini = em.replace(/@.*/, '').split(/[._-]/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || 'U';
+    u.innerHTML = `<i>${esc(ini)}</i><span><b>${esc(em.replace(/@.*/, ''))}</b><small>${esIng() ? 'Ingeniero' : 'Consulta'}</small></span>`; u.title = em; }
+  const p = S.p, bar = app.querySelector('.ws-bar');
+  if(hd) hd.innerHTML = p && bar ? `<div class="crumb"><a class="btn sm" href="#/">← Proyectos</a><span class="hint"><b>${esc(p.consecutivo)}</b> · ${esc(p.titulo || '')}</span></div>` : '';
+  if(p && bar){ bar.classList.add('fila-mem'); const g = bar.querySelector('#gEst'); if(g) hd.querySelector('.crumb').appendChild(g); }
+  const it = (href, ic, t, s, on) => `<a class="sb-it ${on ? 'on' : ''}" href="${href}"><span class="tile">${icoL(ic)}</span><span class="lbl">${t}<small>${s}</small></span></a>`;
+  if(p && bar){
+    const L = p.datos.con, ok = L.filter(c => c.res && c.res.ok).length, mal = L.filter(c => c.res && !c.res.ok);
+    slot.innerHTML = `<button type="button" class="sb-mem" id="sbMem" title="Volver a la lista de proyectos"><span class="tile">${icoL('con')}</span><span><b>${esc(p.consecutivo)}</b><small>${esc((p.titulo || '').slice(0, 40))}</small></span></button>`;
+    const lista = app.querySelector('.d-lista');
+    if(lista && matchMedia('(min-width:901px)').matches){ const t = document.createElement('div'); t.className = 'ph'; t.textContent = 'Conexiones del proyecto'; slot.append(t, lista); app.querySelector('.d-grid')?.classList.add('sin-lista'); }
+    if(L.length){ const av = document.createElement('div'); av.className = 'sb-av';
+      av.innerHTML = `<small>Resumen del proyecto</small><b>${ok} de ${L.length} cumplen</b><div class="bar"><i style="width:${Math.round(100 * ok / L.length)}%"></i></div><small>${mal.length ? esc(mal.slice(0, 3).map(c => `${c.nom} (${f2(c.res.max)})`).join(', ')) + ' no cumple' + (mal.length > 1 ? 'n' : '') : 'Todas las conexiones calculadas cumplen'}</small>`;
+      slot.appendChild(av); }
+    $('#sbMem').onclick = () => ir('#/');
+  } else slot.innerHTML = `<div class="ph">Conexiones</div>${it('#/', 'con', 'Proyectos de conexiones', 'Lista y buscador', true)}<div class="ph">Otras apps</div>${it('../', 'doc', 'Memorias de cálculo', 'Generador de memorias', false)}`;
+  slot.querySelectorAll('a, .d-el, .gal-it').forEach(a => a.addEventListener('click', cerrarLateral));
+  cerrarLateral();
+}
+new MutationObserver(ms => { if(ms.some(m => m.addedNodes.length)) pintarLateral(); }).observe($('#app'), { childList:true });
+$('#sbMenu').onclick = () => { $('#sbar').classList.add('open'); $('#sbScrim').hidden = false; };
+$('#sbScrim').onclick = cerrarLateral;
 $('#btnSalir').onclick = async () => { await sb.auth.signOut(); location.hash = ''; };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(() => {}); let r = false; navigator.serviceWorker.addEventListener('controllerchange', () => { if(!r){ r = true; location.reload(); } }); }
 arrancar();

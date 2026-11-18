@@ -950,3 +950,65 @@ function armarListaMovil(L){
 new MutationObserver(() => document.querySelectorAll('.d-lista').forEach(armarListaMovil))
   .observe(document.body, { childList:true, subtree:true });
 document.addEventListener('click', e => document.querySelectorAll('.d-lista.abierta').forEach(L => { if(!L.contains(e.target)) L.classList.remove('abierta'); }));
+
+/* ═══ Barra lateral (estilo B de Amo, 18-nov) ═══
+   Escritorio: barra blanca fija a la izquierda. Si hay una memoria abierta muestra su consecutivo, los pasos (el mismo
+   #stepsNav que arma renderWS, movido aquí) y el avance; si no, el menú (Memorias, Conexiones, Respaldo, Configuración).
+   La fila «← Memorias · consecutivo · Historial» de cada memoria pasa a la barra de arriba (#hdSlot).
+   Celular: la barra lateral es un cajón; «Pasos» (o ☰) la abre. Nada de esto cambia datos ni cálculos. */
+const ICO = {
+  doc:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  bolt:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+  shield:'<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+  layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>' };
+const ico = k => `<svg class="ico" viewBox="0 0 24 24">${ICO[k]}</svg>`;
+const TIPO_TXT = { completo:'Diseño', revision:'Revisión de cubierta', verificacion:'Verificación', revest:'Revisión estructural' };
+function cerrarLateral(){ $('#sbar')?.classList.remove('open'); $$('#sbar .steps.open').forEach(n => n.classList.remove('open')); const s = $('#sbScrim'); if(s) s.hidden = true; const s2 = $('#scrim'); if(s2) s2.hidden = true; }
+function pintarLateral(){
+  const sbar = $('#sbar'), slot = $('#sbSlot'), hd = $('#hdSlot'), app = $('#app');
+  if(!sbar || !slot) return;
+  const con = !!S.user && !app.querySelector('.login');
+  document.body.classList.toggle('con-sb', con); sbar.hidden = !con; $('#sbMenu').hidden = !con;
+  if(!con){ slot.innerHTML = ''; if(hd) hd.innerHTML = ''; return; }
+  // usuario
+  const u = $('#uChip'); if(u && S.user){ const em = S.user.email || '', ini = em.replace(/@.*/, '').split(/[._-]/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || 'U';
+    u.innerHTML = `<i>${esc(ini)}</i><span><b>${esc(em.replace(/@.*/, ''))}</b><small>${esIng() ? 'Ingeniero' : 'Consulta'}</small></span>`; u.title = em; }
+  // fila de la memoria → barra de arriba
+  const h = location.hash.replace(/^#\/?/, '').split('/'), enMem = h[0] === 'm' && S.m;
+  // «← Memorias · consecutivo» en la barra de arriba; la fila original (Historial, guardado, terminar…) sigue en la página
+  const fila = app.querySelector('#back')?.parentElement; if(fila) fila.classList.add('fila-mem');
+  if(hd) hd.innerHTML = enMem && fila ? `<div class="crumb"><button class="btn sm" type="button" id="hdBack">← Memorias</button><span class="hint"><b>${esc(S.m.consecutivo || '')}</b> · ${esc(S.m.titulo || '')}</span></div>` : '';
+  $('#hdBack')?.addEventListener('click', () => ir('#/'));
+  const cr = hd?.querySelector('.crumb');
+  if(cr && fila){ const vc = fila.querySelector('.vchip'), sv = fila.querySelector('#saved'); if(vc) cr.appendChild(vc); if(sv) cr.appendChild(sv);
+    if(fila.querySelector('#btnHist')){ const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.id = 'hdHist'; b.title = 'Historial: copias anteriores de esta memoria';
+      b.innerHTML = '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="tl">Historial</span>'; b.onclick = () => $('#btnHist').click(); cr.appendChild(b); } }
+  const nav = app.querySelector('.steps');
+  let html = '';
+  if(enMem){ const m = S.m;
+    html += `<button type="button" class="sb-mem" id="sbMem" title="Volver a la lista de memorias"><span class="tile">${ico('layers')}</span><span><b>${esc(m.consecutivo || '')}</b><small>${esc((m.ficha?.proyecto || m.titulo || '').slice(0, 40))} · ${TIPO_TXT[m.tipo] || 'Diseño'}</small></span></button>`; }
+  else {
+    const it = (k, ic, t, s, on, extra = '') => `<button type="button" class="sb-it ${on ? 'on' : ''}" data-sb="${k}"><span class="tile">${ico(ic)}</span><span class="lbl">${t}<small>${s}</small></span>${extra}</button>`;
+    html += `<div class="ph">Memorias</div>${it('lista', 'doc', 'Memorias de cálculo', 'Lista, estados y variantes', h[0] !== 'config')}${it('con', 'bolt', 'Conexiones', 'App de conexiones metálicas')}`;
+    if(esIng()) html += `<div class="ph">Administración</div>${it('resp', 'shield', 'Respaldo', 'Copia de seguridad (.zip)', false, `<span class="ydot" ${diasDesde(S.cfg.ultimo_respaldo) > 7 ? '' : 'hidden'}></span>`)}${it('cfg', 'gear', 'Configuración', 'Firma, membretes, biblioteca', h[0] === 'config')}`;
+  }
+  slot.innerHTML = html;
+  if(nav){ slot.appendChild(nav);
+    const pas = [...nav.querySelectorAll('.step:not(:disabled)')], ok = pas.filter(b => b.querySelector('.dot.ok')), fal = pas.filter(b => !b.querySelector('.dot.ok'));
+    const nom = b => (b.querySelector('.lbl')?.firstChild?.textContent || '').replace(/^Anexo /, '').replace(/ —.*/, '').trim();
+    const av = document.createElement('div'); av.className = 'sb-av';
+    av.innerHTML = `<small>Avance de la memoria</small><b>${ok.length} de ${pas.length} pasos</b><div class="bar"><i style="width:${pas.length ? Math.round(100 * ok.length / pas.length) : 0}%"></i></div><small>${fal.length ? 'Faltan: ' + esc(fal.slice(0, 4).map(nom).join(', ')) + (fal.length > 4 ? '…' : '') : 'Todos los pasos están terminados'}</small>`;
+    slot.appendChild(av); }
+  $('#sbMem')?.addEventListener('click', () => ir('#/'));
+  $$('[data-sb]', slot).forEach(b => b.onclick = () => { cerrarLateral(); const k = b.dataset.sb;
+    if(k === 'lista') ir('#/'); else if(k === 'con') location.href = 'conexiones/'; else if(k === 'resp') modalRespaldo(); else if(k === 'cfg') ir('#/config'); });
+  nav?.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', cerrarLateral));
+  cerrarLateral();
+}
+// cada vez que una pantalla nueva se dibuja en #app (solo hijos directos: mover los pasos no la vuelve a disparar en falso)
+new MutationObserver(ms => { if(ms.some(m => m.addedNodes.length)) pintarLateral(); }).observe($('#app'), { childList:true });
+$('#sbMenu').onclick = () => { $('#sbar').classList.add('open'); $('#sbScrim').hidden = false; };
+$('#sbScrim').onclick = cerrarLateral;
+// el botón «Pasos» de la barra móvil abre el cajón (los pasos ya viven en la barra lateral)
+document.addEventListener('click', e => { if(e.target.closest('#openSteps')){ $('#sbar').classList.add('open'); $('#sbScrim').hidden = false; } if(e.target.closest('#closeSteps')) cerrarLateral(); }, true);

@@ -11,15 +11,23 @@
 <link rel="stylesheet" href="app.css"/>
 </head>
 <body>
+<aside class="sbar no-print" id="sbar" hidden aria-label="Menú">
+  <div class="sb-brand"><img src="icons/logo-pe.png" alt="P. Electric S.A.S."/><div><b>Memorias de Cálculo</b><span>P. Electric S.A.S. · Depto. Civil</span></div></div>
+  <div class="sb-slot" id="sbSlot"></div>
+</aside>
+<div class="sb-scrim no-print" id="sbScrim" hidden></div>
 <header class="topbar no-print">
+  <button type="button" class="tbtn sb-menu" id="sbMenu" aria-label="Abrir el menú" hidden><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <img src="icons/logo-pe.png" alt="P. Electric S.A.S."/>
   <div class="tt"><div class="ttl">Generador de Memorias de Cálculo</div><div class="sub">P. Electric S.A.S. · Departamento Civil · NSR-10</div></div>
+  <div class="hd-slot" id="hdSlot"></div>
   <div class="sp"></div>
   <div id="userbox" hidden>
-    <button type="button" class="tbtn" id="btnResp" hidden title="Respaldo de la información">🛡 Respaldo<i class="rdot" id="respDot" hidden></i></button>
-    <a class="tbtn" href="conexiones/" title="App de diseño de conexiones metálicas">🔩 Conexiones</a>
-    <button type="button" class="tbtn" id="btnCfg">⚙ Configuración</button>
-    <button type="button" class="tbtn" id="btnSalir">Salir</button>
+    <button type="button" class="tbtn" id="btnResp" hidden title="Respaldo de la información"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/></svg><span class="tl">Respaldo</span><i class="rdot" id="respDot" hidden></i></button>
+    <a class="tbtn" href="conexiones/" title="App de diseño de conexiones metálicas"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg><span class="tl">Conexiones</span></a>
+    <button type="button" class="tbtn" id="btnCfg" title="Configuración"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg><span class="tl">Configuración</span></button>
+    <span class="uchip" id="uChip"></span>
+    <button type="button" class="tbtn" id="btnSalir" title="Cerrar sesión"><svg class="ico" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="tl">Salir</span></button>
   </div>
 </header>
 <div class="offbar no-print" id="offbar" role="alert" hidden></div>

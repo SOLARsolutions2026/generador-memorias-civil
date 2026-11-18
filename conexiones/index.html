@@ -12,11 +12,20 @@
 <link rel="stylesheet" href="app.css"/>
 </head>
 <body>
+<aside class="sbar no-print" id="sbar" hidden aria-label="Menú">
+  <div class="sb-brand"><img src="../icons/logo-pe.png" alt="P. Electric S.A.S."/><div><b>Conexiones Metálicas</b><span>P. Electric S.A.S. · NSR-10 F.2</span></div></div>
+  <div class="sb-slot" id="sbSlot"></div>
+</aside>
+<div class="sb-scrim no-print" id="sbScrim" hidden></div>
 <header class="topbar no-print">
+  <button type="button" class="tbtn sb-menu" id="sbMenu" aria-label="Abrir el menú" hidden><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <img src="../icons/logo-pe.png" alt="P. Electric S.A.S."/>
   <div class="tt"><div class="ttl">Diseño de Conexiones Metálicas</div><div class="sub">P. Electric S.A.S. · Departamento Civil · NSR-10 F.2</div></div>
+  <div class="hd-slot" id="hdSlot"></div>
   <div class="sp"></div>
-  <div id="userbox" hidden><a class="tbtn" href="../">📄 Memorias</a><button type="button" class="tbtn" id="btnSalir">Salir</button></div>
+  <div id="userbox" hidden><a class="tbtn" href="../" title="Generador de memorias de cálculo"><svg class="ico" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><span class="tl">Memorias</span></a>
+    <span class="uchip" id="uChip"></span>
+    <button type="button" class="tbtn" id="btnSalir" title="Cerrar sesión"><svg class="ico" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="tl">Salir</span></button></div>
 </header>
 <main class="wrap no-print" id="app"><p class="muted">Cargando…</p></main>
 <div id="print-area"></div>

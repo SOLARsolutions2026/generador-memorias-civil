@@ -236,6 +236,13 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Empalme en Z soldado `empZ` (EZ-n, 12-nov, pedido de Amo; categoría A momento): corte en Z = mitad superior cortada en x1, eje del alma a lo largo del desfase `a`, mitad inferior en x2. `union` cjp (resistencia del metal base) | pjp (gargantas `Ef`, `Ew`; vacías = t/2; Tabla J2.5 φ 0.80·0.6FEXX normal, 0.75·0.6FEXX corte). Chequeos: ala cortada (Ff = M3/(d − tf) + P·Af/A y M2/2 en su plano → f ≤ 0.9Fy o PJP), cortante lateral del ala (V3/2 + T/(d − tf)), V2 por media alma (d/2 − tf), soldadura longitudinal H = V2·Q·a/I (Q de media sección), sección del perfil H1-1a/b. Requisitos: a ≥ máx(d/2; 100) recomendado, garganta mínima PJP, bisel/respaldo/ultrasonido, ratonera. Dibujo `dibEmpZ`. `chequeosHTML` ya no pierde grupos sin nombre en `GRUPOS` (se agregó `alma`).
 - Pendientes de las conexiones: rigidez/clasificación, empalme de columna, angular con destaje, 8 pernos rigidizada.
 
+## Estilo B de la interfaz (18-nov, opción B de Amo sobre sus imágenes de referencia; mismos colores y mismo orden de pasos)
+- Barra lateral blanca fija `#sbar` (index.html, también en conexiones/) con marca arriba y `#sbSlot`; barra superior blanca (`.topbar` con `body.con-sb`) con `#hdSlot` a la izquierda (← Memorias · consecutivo · ✓ Guardado · Historial) y botones con íconos SVG + nombre de usuario (`#uChip`).
+- `pintarLateral()` (app.js, al final) corre con un MutationObserver sobre los hijos directos de `#app`: con memoria abierta mueve el `#stepsNav` de `renderWS` al `#sbSlot` + tarjeta de avance «n de m pasos» (`.sb-av`, cuenta los `.dot.ok`); sin memoria muestra el menú (Memorias, Conexiones, Respaldo, Configuración). La fila «← Memorias…» de la página queda con clase `.fila-mem` (se ocultan su #back, .hint y #btnHist; `#saved` y `.vchip` pasan arriba; Historial = `#hdHist` que hace clic en `#btnHist`).
+- Celular (≤ 900 px): la barra lateral es un cajón (`.sbar.open` o `:has(.steps.open)`); «Pasos» o ☰ (`#sbMenu`) la abren, `#sbScrim` la cierra.
+- Conexiones: mismo esquema; en el computador la `.d-lista` (conexiones + galería) se mueve a la barra lateral (`.d-grid.sin-lista`), con resumen «n de m cumplen»; en el celular sigue la lista desplegable.
+- Estilos al final de app.css (bloque «ESTILO B»): tarjetas 18 px con sombra suave, botones 11 px, campos 11 px con foco azul, pastillas redondas, ventanas 22 px, observaciones en panel blanco (la primera pendiente resaltada en amarillo).
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
 Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
