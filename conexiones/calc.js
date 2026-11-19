@@ -231,23 +231,53 @@ function defaultsTesta(){
     columna:'HEB 200', aceroCol:'A572 Gr 50', colTope:false,
     tp:22.2, bp:170, aceroPl:'A36', g:100, pfo:38, pfi:38, de:38,
     d:19.1, grado:'A325', rosca:'N',
-    soldAla:'filete', wAla:8, wAlma:8, electrodo:'E70XX' };
+    soldAla:'filete', wAla:8, wAlma:8, electrodo:'E70XX',
+    // Ampliaciones pedidas por Amo el 19-nov:
+    config:'4E', pb:89, tsE:10, wsE:8,                     // 4E = 4 pernos sin rigidizar · 8ES = 8 pernos con rigidizador de la extensión
+    dosLados:false, Mu2:60, sentido2:'opuesto',            // viga al otro lado de la columna (opuesto = gravedad; mismo = sismo/viento)
+    rigCol:'auto', tsC:'', bsC:'', wsC:'', aceroRigC:'A36', // rigidizadores (placas de continuidad) de la columna
+    sismo:'no', Lh:6, Vg:30 };                             // F.3 (AISC 358): DMO = pórtico intermedio, DES = especial
 }
+const RY = ac => /A36/.test(ac) ? 1.5 : 1.1;                // NSR-10 F.3 / AISC 341 Tabla A3.1
+const ESP_PL = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4, 28.6, 31.8, 38.1];
 function calcTesta(c){
   const ch = [], av = [], pasos = [], req = [];
-  const Mu = Math.abs(+c.Mu || 0), Vu = Math.abs(+c.Vu || 0), d = +c.d, tp = +c.tp, bp = +c.bp, g = +c.g, pfo = +c.pfo, pfi = +c.pfi, de = +c.de;
-  const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
+  const d = +c.d, tp = +c.tp, bp = +c.bp, g = +c.g, pfo = +c.pfo, pfi = +c.pfi, de = +c.de;
+  const vg = perfil(c.viga), vgX = perfilX(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
   const cl = c.columna ? perfil(c.columna) : null;
-  const pl = ACEROS[c.aceroPl], av_ = ACEROS[c.aceroViga], ac = ACEROS[c.aceroCol], FEXX = ELECTRODOS[c.electrodo], B = PERNOS[c.grado];
+  const pl = ACEROS[c.aceroPl], av_ = ACEROS[c.aceroViga], ac = ACEROS[c.aceroCol], FEXX = ELECTRODOS[c.electrodo], B = PERNOS[c.grado], E = 200000;
   const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), Ab = Math.PI * d * d / 4;
   const db = vg.d, tbf = vg.tf, bbf = vg.bf, tbw = vg.tw;
   const ras = c.tipo === 'ras', nfR = ras && +c.filas === 1 ? 1 : 2, pb = +c.pb || 0;
-  // Extendida: h0 = fila exterior, h1 = interior. A ras: h1 = primera fila bajo el ala, h2 = segunda (pb más abajo)
-  const h0 = ras ? 0 : db - tbf / 2 + pfo, h1 = db - 1.5 * tbf - pfi, h2 = ras && nfR === 2 ? h1 - pb : 0, gr = ras ? 1.25 : 1.0;
-  const Ffu = Mu * 1000 / (db - tbf);                                   // fuerza en el ala [kN]
+  const e8 = !ras && c.config === '8ES';
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '';
+  // Factores φ: con sismo (AISC 358) φn = 0.90 para estados no dúctiles (pernos) y φd = 1.00 para los dúctiles (placa, ala de la columna)
+  const phB = sis ? 0.9 : 0.75, phD = sis ? 1.0 : 0.9;
+  // Brazos: extendida 4E h0 (exterior), h1 (interior); 8ES h1..h4 de afuera hacia adentro; a ras h1, h2
+  let H; if(ras) H = { h1:db - 1.5 * tbf - pfi }, H.h2 = nfR === 2 ? H.h1 - pb : 0;
+  else if(e8){ H = { h1:db - tbf / 2 + pfo + pb, h2:db - tbf / 2 + pfo, h3:db - 1.5 * tbf - pfi }; H.h4 = H.h3 - pb; }
+  else H = { h0:db - tbf / 2 + pfo, h1:db - 1.5 * tbf - pfi };
+  const sumH = Object.values(H).reduce((a, x) => a + x, 0), gr = ras ? 1.25 : 1.0;
+  const h0 = H.h0 || 0, h1 = H.h1, h2 = H.h2 || 0;
+
+  // ── Momento de diseño: con sismo, Mf en la cara de la columna (AISC 358 cap. 6) ──
+  let Mu = Math.abs(+c.Mu || 0), Vu = Math.abs(+c.Vu || 0);
   pasos.push(`Viga ${vg.nom}: d = ${db}, bf = ${bbf}, tf = ${tbf}, tw = ${tbw} mm · Mu = ${r2(Mu)} kN·m, Vu = ${r2(Vu)} kN`);
+  if(sis){
+    const Fy = av_.Fy, Fu = av_.Fu, Ry = RY(c.aceroViga), Cpr = Math.min(1.2, (Fy + Fu) / (2 * Fy)), Zx = vgX ? vgX.Zx : bbf * tbf * (db - tbf) + tbw * (db - 2 * tbf) ** 2 / 4;
+    const Mpr = Cpr * Ry * Fy * Zx / 1e6;
+    const hst = pfo + pb + de, Lst = hst / Math.tan(Math.PI / 6), Sh = e8 ? Lst + tp : Math.min(db / 2, 3 * bbf);
+    const Lh = Math.max(+c.Lh || 0, 0.1) * 1000, Vh = 2 * Mpr * 1000 / Lh + Math.abs(+c.Vg || 0), Mf = Mpr + Vh * Sh / 1000;
+    pasos.push(`Sismo ${sis} (AISC 358, NSR-10 F.3): Cpr = (Fy + Fu)/(2Fy) ≤ 1.2 = ${r3(Cpr)}, Ry = ${Ry}, Zx = ${Math.round(Zx)} mm³ → Mpr = Cpr·Ry·Fy·Zx = ${r2(Mpr)} kN·m`);
+    pasos.push(`Rótula a Sh = ${e8 ? `Lst + tp = ${r1(Lst)} + ${tp}` : 'mín(d/2; 3bf)'} = ${r1(Sh)} mm de la cara; Vu = 2Mpr/L'h + Vg = 2·${r2(Mpr)}/${r2(Lh / 1000)} + ${r2(+c.Vg || 0)} = ${r2(Vh)} kN; Mf = Mpr + Vu·Sh = ${r2(Mf)} kN·m`);
+    if(Mf > Mu){ Mu = Mf; av.push(`Con sismo ${sis} la conexión se diseña con Mf = ${r2(Mf)} kN·m (momento probable de la viga), no con el momento del modelo.`); }
+    if(Vh > Vu) Vu = Vh;
+    pasos.push(`Factores de AISC 358: pernos φn = 0.90; placa y ala de la columna φd = 1.00`);
+  }
+  const Ffu = Mu * 1000 / (db - tbf);                                   // fuerza en el ala [kN]
   pasos.push(ras ? `Placa a ras con ${nfR} fila(s) de 2 pernos bajo el ala en tensión: h₁ = d − 1.5tf − pfi = ${r1(h1)} mm${nfR === 2 ? `, h₂ = h₁ − pb = ${r1(h2)} mm` : ''}; Ffu = ${r2(Ffu)} kN`
+    : e8 ? `8 pernos en tensión (8ES): h₁ = d − tf/2 + pfo + pb = ${r1(H.h1)}, h₂ = ${r1(H.h2)}, h₃ = d − 1.5tf − pfi = ${r1(H.h3)}, h₄ = h₃ − pb = ${r1(H.h4)} mm; Ffu = Mu/(d − tf) = ${r2(Ffu)} kN`
     : `h₀ = d − tf/2 + pfo = ${r1(h0)} mm; h₁ = d − 1.5tf − pfi = ${r1(h1)} mm; Ffu = Mu/(d − tf) = ${r2(Ffu)} kN`);
 
   // Requisitos de geometría
@@ -258,80 +288,186 @@ function calcTesta(c){
     if(nfR === 2) req.push(['pb ≥ 2.67d', pb >= 2.67 * d - 1e-6, `${pb} ≥ ${r1(2.67 * d)} mm`]);
     req.push(['Los pernos caben antes de la mitad del alma: h₂ (o h₁) > d/2', (nfR === 2 ? h2 : h1) > db / 2, `${r1(nfR === 2 ? h2 : h1)} > ${r1(db / 2)} mm`]); }
   else { req.push(['pfo, pfi ≥ d + 12.7 mm (espacio para apretar)', Math.min(pfo, pfi) >= d + 12.7 - 1e-6, `${Math.min(pfo, pfi)} ≥ ${r1(d + 12.7)} mm`]);
-  req.push(['Borde de la extensión de ≥ mín. Tabla F.2.10.3-4', de >= bm, `${de} ≥ ${bm} mm`]); }
+    req.push(['Borde de la extensión de ≥ mín. Tabla F.2.10.3-4', de >= bm, `${de} ≥ ${bm} mm`]);
+    if(e8) req.push(['Separación entre filas pb ≥ 2.67d', pb >= 2.67 * d - 1e-6, `${pb} ≥ ${r1(2.67 * d)} mm`]); }
   req.push(['Borde lateral (bp − g)/2 ≥ mín.', (bp - g) / 2 >= bm, `${r1((bp - g) / 2)} ≥ ${bm} mm`]);
   if(cl) req.push(['Gramil cabe en el ala de la columna: (bfc − g)/2 ≥ borde mín.', (cl.bf - g) / 2 >= bm, `${r1((cl.bf - g) / 2)} ≥ ${bm} mm`]);
   req.push(['Pernos pretensionados (F.2.10.3.1, conexión a momento)', true, 'indicar en planos']);
-  req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
 
-  // 1. Pernos a tensión sin palanca: φMnp = φ·2·Pt·(h0 + h1)
-  const Pt = B.Fnt * Ab / 1000, phiMnp = 0.75 * 2 * Pt * (ras ? h1 + h2 : h0 + h1) / 1000;
-  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = Fnt·Ab = ${B.Fnt}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = 0.75·2·Pt·Σh = ${r2(phiMnp)} kN·m`);
-  add('pernos', 'Rotura de los pernos a tensión (sin palanca)', 'F.2.10.3.6 (J3-1) · Guía AISC 4', Mu, phiMnp, 'kN·m', ras ? `Pt = ${r2(Pt)} kN, h₁ = ${r1(h1)}${nfR === 2 ? `, h₂ = ${r1(h2)}` : ''} mm` : `Pt = ${r2(Pt)} kN, h₀ = ${r1(h0)}, h₁ = ${r1(h1)} mm`);
+  // Límites de precalificación (AISC 358 Tabla 6.1, en mm) — solo con sismo
+  if(sis){
+    if(ras) req.push(['La placa a ras NO está precalificada para pórticos DMO/DES (AISC 358)', false, 'use placa extendida 4E u 8ES']);
+    else { const L = e8 ? { tbf:[14, 25], bbf:[190, 311], d:[457, 914], tp:[19, 64], bp:[229, 381], g:[127, 152], pf:[41, 51], pb:[89, 95] }
+                        : { tbf:[10, 19], bbf:[152, 235], d:[349, 1397], tp:[13, 57], bp:[178, 273], g:[102, 152], pf:[38, 114] };
+      const rg = (n, v, [a, b]) => req.push([`Precalificación AISC 358: ${n} entre ${a} y ${b} mm`, v >= a - 0.5 && v <= b + 0.5, `${r1(v)} mm`]);
+      rg('espesor del ala de la viga', tbf, L.tbf); rg('ancho del ala de la viga', bbf, L.bbf); rg('altura de la viga', db, L.d); rg('espesor de la placa', tp, L.tp);
+      rg('ancho de la placa', bp, L.bp); rg('gramil', g, L.g); rg('pfo y pfi', Math.min(pfo, pfi), L.pf); if(Math.max(pfo, pfi) > L.pf[1] + 0.5) rg('pfo y pfi', Math.max(pfo, pfi), L.pf);
+      if(e8) rg('separación pb', pb, L.pb);
+      req.push(['Soldadura de las alas de la viga a la placa de penetración completa (AISC 358 §6.7)', c.soldAla === 'cjp', c.soldAla === 'cjp' ? 'CJP' : 'cambie a penetración completa']);
+      req.push([`Zona protegida (sin soldaduras ni perforaciones) hasta ${e8 ? 'Lst + d/2... ver AISC 358 §6.3' : 'la mitad de la altura de la viga o 3bf desde la cara'} — indicar en planos`, true, 'indicar en planos']);
+      if(sis === 'DES') av.push('Pórtico DES: revise también columna fuerte–viga débil (ΣM*pc/ΣM*pb > 1) y la zona de panel con NSR-10 F.3.5 (AISC 341 E3); esta app no tiene la carga axial de la columna.'); } }
+
+  // 1. Pernos a tensión sin palanca: φMnp = φ·2·Pt·Σh
+  const Pt = B.Fnt * Ab / 1000, phiMnp = phB * 2 * Pt * sumH / 1000;
+  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = Fnt·Ab = ${B.Fnt}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = ${phB}·2·Pt·Σh = ${r2(phiMnp)} kN·m (Σh = ${r1(sumH)} mm)`);
+  add('pernos', 'Rotura de los pernos a tensión (sin palanca)', `F.2.10.3.6 (J3-1) · ${sis ? 'AISC 358 (6.10-?) φn = 0.90' : 'Guía AISC 4'}`, Mu, phiMnp, 'kN·m',
+    `Pt = ${r2(Pt)} kN, ` + Object.entries(H).filter(([, v]) => v).map(([k, v]) => `${k.replace('h', 'h')} = ${r1(v)}`).join(', ') + ' mm');
   // 2. Pernos a cortante en la zona de compresión
-  const nb = c.ambos ? (ras ? 2 * nfR : 4) : Math.max(0, Math.round(+c.nbc || 0));
-  const rv = 0.75 * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
+  const nb = c.ambos ? (ras ? 2 * nfR : e8 ? 8 : 4) : Math.max(0, Math.round(+c.nbc || 0));
+  const rv = phB * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
   const bPl = ras ? Infinity : aplast(de - dh / 2, tp, d, pl.Fu).phiRn, bPlI = 2.4 * d * tp * pl.Fu * 0.75 / 1000;
   const bCol = cl ? 0.75 * 2.4 * d * cl.tf * ac.Fu / 1000 : Infinity;
   const rb = Math.min(rv, c.ambos ? Math.min(bPl, bPlI) : bPlI, bCol);
   add('pernos', `Cortante en los ${nb} pernos de la zona de compresión`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', Vu, nb * rb, 'kN', `φrn = ${r2(rb)} kN por perno (corte ${r2(rv)}, aplastamiento placa ${r2(Math.min(bPl, bPlI))}${cl ? `, ala columna ${r2(bCol)}` : ''})`);
   if(!nb) av.push('No hay pernos en la zona de compresión para tomar el cortante.');
 
-  // 3. Placa: líneas de fluencia (placa gruesa: φb·Mpl ≥ 1.11·φMnp)
+  // 3. Placa: líneas de fluencia (placa gruesa: φd·Mpl ≥ 1.11·Mf o 1.11·φMnp)
   const sP = 0.5 * Math.sqrt(bp * g), pfiY = Math.min(pfi, sP);
-  const Yp = !ras ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h0 / pfo - 0.5) + 2 / g * (h1 * (pfiY + sP))
-    : nfR === 1 ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) - 0.5) + 2 / g * (h1 * (pfiY + sP))
-    : bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h2 / sP - 0.5) + 2 / g * (h1 * (pfiY + 0.75 * pb) + h2 * (sP + 0.25 * pb)) + g / 2;    // Guía AISC 16, tablas de placa a ras
-  const phiMpl = 0.9 * pl.Fy * tp * tp * Yp / 1e6, tpReq = Math.sqrt(1.11 * gr * phiMnp * 1e6 / (0.9 * pl.Fy * Yp));
-  pasos.push(`Placa: s = ½√(bp·g) = ${r1(sP)} mm${pfi > sP ? ` (pfi se limita a s)` : ''}; Yp = ${Math.round(Yp)} mm; φMpl = 0.9·Fy·tp²·Yp = ${r2(phiMpl)} kN·m`);
-  pasos.push(`Espesor para comportamiento de placa gruesa: tp,req = √(1.11·γr·φMnp/(0.9·Fy·Yp)) = ${r1(tpReq)} mm (γr = ${gr})`);
-  add('placa', 'Placa gruesa: flexión por líneas de fluencia', 'Guía AISC 4/16 · φb = 0.90', 1.11 * gr * phiMnp, phiMpl, 'kN·m', `exige 1.11·γr·φMnp (γr = ${gr}); tp,req = ${r1(tpReq)} mm`);
+  let Yp;
+  if(ras) Yp = nfR === 1 ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) - 0.5) + 2 / g * (h1 * (pfiY + sP))
+    : bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h2 / sP - 0.5) + 2 / g * (h1 * (pfiY + 0.75 * pb) + h2 * (sP + 0.25 * pb)) + g / 2;    // Guía AISC 16
+  else if(e8){ const { h1:a1, h2:a2, h3:a3, h4:a4 } = H;                // AISC 358 Tabla 6.4 / Guía 4 (8ES)
+    Yp = de <= sP ? bp / 2 * (a1 / (2 * de) + a2 / pfo + a3 / pfi + a4 / sP) + 2 / g * (a1 * (de + pb / 4) + a2 * (pfo + 3 * pb / 4) + a3 * (pfi + pb / 4) + a4 * (sP + 3 * pb / 4) + pb * pb) + g
+                  : bp / 2 * (a1 / sP + a2 / pfo + a3 / pfi + a4 / sP) + 2 / g * (a1 * (sP + pb / 4) + a2 * (pfo + 3 * pb / 4) + a3 * (pfi + pb / 4) + a4 * (sP + 3 * pb / 4) + pb * pb) + g; }
+  else Yp = bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h0 / pfo - 0.5) + 2 / g * (h1 * (pfiY + sP));
+  const demPl = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
+  const phiMpl = phD * pl.Fy * tp * tp * Yp / 1e6, tpReq = Math.sqrt(demPl * 1e6 / (phD * pl.Fy * Yp));
+  pasos.push(`Placa: s = ½√(bp·g) = ${r1(sP)} mm${pfi > sP && !e8 ? ` (pfi se limita a s)` : ''}; Yp = ${Math.round(Yp)} mm; φMpl = ${phD}·Fy·tp²·Yp = ${r2(phiMpl)} kN·m`);
+  pasos.push(`Espesor para comportamiento de placa gruesa: tp,req = √(${sis ? '1.11·Mf' : '1.11·γr·φMnp'}/(${phD}·Fy·Yp)) = ${r1(tpReq)} mm${sis ? '' : ` (γr = ${gr})`}`);
+  add('placa', 'Placa gruesa: flexión por líneas de fluencia', `Guía AISC 4/16${sis ? ' · AISC 358' : ''} · φ = ${phD}`, demPl, phiMpl, 'kN·m', `exige ${sis ? '1.11·Mf' : `1.11·γr·φMnp (γr = ${gr})`}; tp,req = ${r1(tpReq)} mm`);
   if(!ras){
-  add('placa', 'Fluencia por cortante de la extensión', 'F.2.10.4.2 (J4-3)', Ffu / 2, 1.0 * 0.6 * pl.Fy * bp * tp / 1000, 'kN', `Ffu/2; Agv = bp·tp = ${r1(bp * tp)} mm²`);
-  const An = (bp - 2 * dn) * tp;
-  add('placa', 'Rotura por cortante de la extensión', 'F.2.10.4.2 (J4-4)', Ffu / 2, 0.75 * 0.6 * pl.Fu * An / 1000, 'kN', `Anv = (bp − 2·${r1(dn)})·tp = ${r1(An)} mm²`); }
+    add('placa', 'Fluencia por cortante de la extensión', 'F.2.10.4.2 (J4-3)', Ffu / 2, 1.0 * 0.6 * pl.Fy * bp * tp / 1000, 'kN', `Ffu/2; Agv = bp·tp = ${r1(bp * tp)} mm²`);
+    const An = (bp - 2 * dn) * tp;
+    add('placa', 'Rotura por cortante de la extensión', 'F.2.10.4.2 (J4-4)', Ffu / 2, 0.75 * 0.6 * pl.Fu * An / 1000, 'kN', `Anv = (bp − 2·${r1(dn)})·tp = ${r1(An)} mm²`); }
+  // 3b. 8ES: rigidizador de la extensión (AISC 358 §6.10 paso 6 y Guía 4)
+  if(e8){ const tsE = +c.tsE || 0, hst = pfo + pb + de, Lst = hst / Math.tan(Math.PI / 6), FyS = pl.Fy;
+    pasos.push(`Rigidizador de la extensión: alto hst = pfo + pb + de = ${r1(hst)} mm, largo Lst = hst/tan30° = ${r1(Lst)} mm, espesor ${tsE} mm`);
+    req.push(['Rigidizador de la extensión: ts ≥ tw·Fy,viga/Fy,rig', tsE >= tbw * av_.Fy / FyS - 1e-6, `${tsE} ≥ ${r1(tbw * av_.Fy / FyS)} mm`]);
+    req.push(['Rigidizador de la extensión: hst/ts ≤ 0.56·√(E/Fy) (pandeo local)', hst / tsE <= 0.56 * Math.sqrt(E / FyS) + 1e-6, `${r1(hst / tsE)} ≤ ${r1(0.56 * Math.sqrt(E / FyS))}`]);
+    const wE = +c.wsE || 0, LwE = 2 * (Lst - 25);                  // filetes a ambas caras sobre el ala de la viga (chaflán 25 mm)
+    const Rst = 0.6 * FyS * tsE * Lst / 1000;                      // fuerza de cortante que debe desarrollar la unión al ala (fluencia del rigidizador)
+    add('soldadura', 'Rigidizador de la extensión al ala de la viga (desarrolla su fluencia por cortante)', 'F.2.10.2.4 (J2-4) · AISC 358 §6.10', Rst, fw2(FEXX, wE) * LwE, 'kN', `filetes ${wE} mm por ambas caras, L = 2·(Lst − 25) = ${r1(LwE)} mm${tsE > 10 ? ' · con ts > 10 mm AISC 358 pide penetración completa a la placa' : ''}`);
+    if(tsE > 10) req.push(['Rigidizador de la extensión con ts > 10 mm: soldadura CJP a la placa (AISC 358 §6.10)', true, 'indicar en planos']); }
 
   // 4. Soldaduras
-  const fw = w => 0.75 * 0.6 * FEXX * 0.707 * w / 1000;                // kN/mm, F.2.10.2.4 (J2-4)
+  const fw = w => fw2(FEXX, w);
   if(c.soldAla === 'cjp') pasos.push('Alas: soldadura de penetración completa (resistencia igual a la del ala, F.2.10.2.4 Tabla J2.5)');
   else { const Lw = 2 * bbf - tbw, wA = +c.wAla;
     add('soldadura', 'Filetes ala–placa (transversales, ambas caras)', 'F.2.10.2.4 (J2-4, J2-5: 1.0 + 0.5 sen¹·⁵θ = 1.5)', Ffu, 1.5 * fw(wA) * Lw, 'kN', `w = ${wA} mm, L = 2bf − tw = ${r1(Lw)} mm`);
-    req.push(['Filete del ala ≥ mín. Tabla J2.4', wA >= (Math.max(tp, tbf) > 19 ? 8 : Math.max(tp, tbf) > 12.7 ? 6 : 5), `${wA} mm`]); }
+    const tm = Math.min(tp, tbf); req.push(['Filete del ala ≥ mín. Tabla J2.4', wA >= (tm <= 6 ? 3 : tm <= 13 ? 5 : tm <= 19 ? 6 : 8), `${wA} mm`]); }
   const wW = +c.wAlma;
   add('soldadura', 'Alma–placa cerca de los pernos en tensión (desarrolla Fy del alma)', 'Guía AISC 4 · F.2.10.2.4', 0.9 * av_.Fy * tbw / 1000, 2 * fw(wW), 'kN/mm', `0.9·Fy·tw contra 2 filetes de ${wW} mm`);
   const LwV = Math.max(0, Math.min(db / 2 - tbf, db - 2 * tbf - pfi - 2 * d));
   add('soldadura', 'Alma–placa a cortante', 'F.2.10.2.4 (J2-4)', Vu, 2 * fw(wW) * LwV, 'kN', `L = mín(d/2 − tf; d − 2tf − pfi − 2d) = ${r1(LwV)} mm por cara`);
   add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', Vu, 1.0 * 0.6 * av_.Fy * db * tbw / 1000, 'kN', `0.6·Fy·d·tw`);
 
-  // 5. Columna (ala sin rigidizar y alma)
+  // 5. Columna (ala, alma, panel) con o sin rigidizadores y con viga al otro lado
+  let rig = null;
   if(cl){
-    const sC = 0.5 * Math.sqrt(cl.bf * g), cc = ras ? pfi + tbf + (nfR === 2 ? pb : 0) : pfo + pfi + tbf, kc = cl.tf + cl.r;
-    const Yc = !ras ? cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2
-      : nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2
-      : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;     // por confirmar (Guía AISC 16)
-    const phiMcf = 0.9 * ac.Fy * cl.tf * cl.tf * Yc / 1e6, tcfReq = Math.sqrt(1.11 * gr * phiMnp * 1e6 / (0.9 * ac.Fy * Yc));
-    pasos.push(`Columna ${cl.nom}: bf = ${cl.bf}, tf = ${cl.tf}, tw = ${cl.tw}, k = tf + r = ${r1(kc)} mm; s = ${r1(sC)}, c = ${r1(cc)} mm; Yc = ${Math.round(Yc)} mm; φMcf = ${r2(phiMcf)} kN·m`);
-    add('columna', 'Flexión del ala de la columna (sin rigidizadores)', 'Guía AISC 4/16 · φb = 0.90', Mu, phiMcf, 'kN·m', `Yc = ${Math.round(Yc)} mm; tcf para placa gruesa = ${r1(tcfReq)} mm`);
-    if(cl.tf < tcfReq) av.push(`El ala de la columna (${cl.tf} mm) es más delgada que ${r1(tcfReq)} mm: habrá algo de palanca en los pernos. Considere rigidizadores o una columna de ala más gruesa.`);
-    const N = tbf + 2 * (c.soldAla === 'cjp' ? 0 : +c.wAla);
-    const ly = c.colTope ? 2.5 * kc + N + 2 * tp : 6 * kc + N + 2 * tp;
-    add('columna', 'Fluencia local del alma (compresión)', `F.2.10.10.2 (J10-${c.colTope ? 3 : 2})`, Ffu, 1.0 * ac.Fy * cl.tw * ly / 1000, 'kN', `L = ${c.colTope ? '2.5' : '6'}k + N + 2tp = ${r1(ly)} mm`);
-    const dc = cl.d, lN = N + 2 * tp;
-    const crip = c.colTope && lN / dc > 0.2
-      ? 0.4 * cl.tw * cl.tw * (1 + (4 * lN / dc - 0.2) * Math.pow(cl.tw / cl.tf, 1.5)) * Math.sqrt(200000 * ac.Fy * cl.tf / cl.tw)
-      : (c.colTope ? 0.4 : 0.8) * cl.tw * cl.tw * (1 + 3 * (lN / dc) * Math.pow(cl.tw / cl.tf, 1.5)) * Math.sqrt(200000 * ac.Fy * cl.tf / cl.tw);
-    add('columna', 'Aplastamiento del alma (compresión)', 'F.2.10.10.3 (J10-4/5)', Ffu, 0.75 * crip / 1000, 'kN', `lb = N + 2tp = ${r1(lN)} mm`);
-    const lt = (c.colTope ? 3 : 6) * kc + cc;
-    add('columna', 'Fluencia local del alma (tensión)', 'Guía AISC 4 · F.2.10.10.2', Ffu, 1.0 * ac.Fy * cl.tw * lt / 1000, 'kN', `L = ${c.colTope ? '3' : '6'}k + c = ${r1(lt)} mm`);
-    add('columna', 'Zona de panel (cortante del alma)', 'F.2.10.10.6 (J10-9), φ = 0.90', Ffu, 0.9 * 0.6 * ac.Fy * dc * cl.tw / 1000, 'kN', `0.6·Fy·dc·tw (sin cortante de la columna)`);
+    const kc = cl.tf + cl.r, dc = cl.d, hcw = dc - 2 * kc, sC = 0.5 * Math.sqrt(cl.bf * g);
+    const cc = ras ? pfi + tbf + (nfR === 2 ? pb : 0) : pfo + pfi + tbf;
+    const dos = !!c.dosLados, Mu2 = dos ? Math.abs(+c.Mu2 || 0) : 0, F2 = Mu2 * 1000 / (db - tbf), opuesto = dos && c.sentido2 !== 'mismo';
+    const Fcol = Math.max(Ffu, F2);                                 // fuerza de ala que llega a cada lado (la mayor)
+    if(dos) pasos.push(`Viga al otro lado: M₂ = ${r2(Mu2)} kN·m → F₂ = ${r2(F2)} kN; momentos ${opuesto ? 'opuestos (gravedad): las alas inferiores aprietan el alma desde los dos lados (J10-8) y el panel recibe la diferencia' : 'del mismo sentido (sismo/viento): el panel recibe la suma'}`);
+    // a) sin rigidizadores
+    let Yc;
+    if(ras) Yc = nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2 : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;   // por confirmar (Guía 16)
+    else if(e8) Yc = cl.bf / 2 * (H.h1 / sC + H.h4 / sC) + 2 / g * (H.h1 * (pb + cc / 2 + sC) + H.h2 * (pb / 2 + cc / 4) + H.h3 * (pb / 2 + cc / 2) + H.h4 * sC) + g / 2;   // AISC 358 Tabla 6.5 (8ES), por confirmar
+    else Yc = cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2;
+    // Demanda en el ala: sin sismo, Mu (la palanca se avisa con tcf,req de placa gruesa); con sismo, 1.11·Mf (AISC 358)
+    const demCf = sis ? 1.11 * Mu : Mu, demThick = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
+    const phiMcf = phD * ac.Fy * cl.tf * cl.tf * Yc / 1e6, tcfReq = Math.sqrt(demThick * 1e6 / (phD * ac.Fy * Yc));
+    const N = tbf + 2 * (c.soldAla === 'cjp' ? 0 : +c.wAla), lN = N + 2 * tp;
+    const ly = (c.colTope ? 2.5 : 6) * kc + N + 2 * tp, lt = (c.colTope ? 3 : 6) * kc + cc;
+    const Rly = 1.0 * ac.Fy * cl.tw * ly / 1000, Rlt = 1.0 * ac.Fy * cl.tw * lt / 1000;
+    const crip = c.colTope && lN / dc > 0.2 ? 0.4 * cl.tw ** 2 * (1 + (4 * lN / dc - 0.2) * (cl.tw / cl.tf) ** 1.5) * Math.sqrt(E * ac.Fy * cl.tf / cl.tw)
+      : (c.colTope ? 0.4 : 0.8) * cl.tw ** 2 * (1 + 3 * (lN / dc) * (cl.tw / cl.tf) ** 1.5) * Math.sqrt(E * ac.Fy * cl.tf / cl.tw);
+    const Rcr = 0.75 * crip / 1000;
+    const Rpb = opuesto ? 0.9 * 24 * cl.tw ** 3 * Math.sqrt(E * ac.Fy) / hcw / 1000 * (c.colTope ? 0.5 : 1) : Infinity;   // J10-8
+    const Rfl = phiMcf * 1000 / (db - tbf);                          // fuerza de ala que aguanta el ala de la columna sin rigidizar
+    // b) ¿hacen falta rigidizadores? fuerza que deben tomar = la mayor diferencia
+    const faltas = [['flexión del ala de la columna', Rfl, cl.tf < tcfReq ? Fcol : 0], ['fluencia local del alma (compresión)', Rly, Fcol], ['aplastamiento del alma', Rcr, Fcol],
+      ['fluencia local del alma (tensión)', Rlt, Fcol], ...(opuesto ? [['pandeo del alma por las dos alas (J10-8)', Rpb, Math.min(Ffu, F2)]] : [])];
+    const Rst = Math.max(0, ...faltas.map(([, R, F]) => F - R), cl.tf < tcfReq ? Fcol - Rfl : 0);
+    // Con sismo (AISC 341 E3.6f / NSR-10 F.3): placas de continuidad salvo que tcf ≥ 0.4·√(1.8·bbf·tbf·Ryb·Fyb/(Ryc·Fyc)) y tcf ≥ bbf/6
+    const tcfSis = Math.max(0.4 * Math.sqrt(1.8 * bbf * tbf * RY(c.aceroViga) * av_.Fy / (RY(c.aceroCol) * ac.Fy)), bbf / 6), sisPide = sis && cl.tf < tcfSis;
+    if(sis) pasos.push(`Sismo: el ala de la columna evita placas de continuidad si tcf ≥ máx(0.4·√(1.8·bf·tf·Ry·Fy,viga/(Ry·Fy,col)); bf/6) = ${r1(tcfSis)} mm → ${sisPide ? 'se requieren' : 'no las exige el sismo'}`);
+    const usar = c.rigCol === 'si' || (c.rigCol !== 'no' && (Rst > 0 || cl.tf < tcfReq || sisPide));
+    if(!usar){
+      add('columna', 'Flexión del ala de la columna (sin rigidizadores)', `Guía AISC 4/16 · φ = ${phD}`, demCf, phiMcf, 'kN·m', `Yc = ${Math.round(Yc)} mm; tcf para placa gruesa = ${r1(tcfReq)} mm`);
+      if(cl.tf < tcfReq) av.push(`El ala de la columna (${cl.tf} mm) es más delgada que ${r1(tcfReq)} mm: habrá palanca en los pernos. Active los rigidizadores de la columna o use una de ala más gruesa.`);
+      add('columna', 'Fluencia local del alma (compresión)', `F.2.10.10.2 (J10-${c.colTope ? 3 : 2})`, Fcol, Rly, 'kN', `L = ${c.colTope ? '2.5' : '6'}k + N + 2tp = ${r1(ly)} mm`);
+      add('columna', 'Aplastamiento del alma (compresión)', 'F.2.10.10.3 (J10-4/5)', Fcol, Rcr, 'kN', `lb = N + 2tp = ${r1(lN)} mm`);
+      add('columna', 'Fluencia local del alma (tensión)', 'Guía AISC 4 · F.2.10.10.2', Fcol, Rlt, 'kN', `L = ${c.colTope ? '3' : '6'}k + c = ${r1(lt)} mm`);
+      if(opuesto) add('columna', 'Pandeo del alma por compresión de las dos alas', 'F.2.10.10.5 (J10-8), φ = 0.90', Math.min(Ffu, F2), Rpb, 'kN', `24·tw³·√(E·Fy)/h, h = ${r1(hcw)} mm`);
+      if(Rst > 0 && c.rigCol === 'no') av.push(`Faltan ${r2(Rst)} kN en la columna: cambie «Rigidizadores de la columna» a automático para diseñarlos.`);
+    } else {
+      // c) Rigidizadores transversales (placas de continuidad) a la altura de las dos alas de la viga, a ambos lados del alma — F.2.10.10.7/8 (J10.7, J10.8)
+      const ar = ACEROS[c.aceroRigC] || ACEROS.A36, clip = 20, bsMax = (cl.bf - cl.tw) / 2;
+      const bsMin = Math.max(bbf / 3 - cl.tw / 2, 0);
+      const bs = +c.bsC > 0 ? +c.bsC : Math.floor(bsMax - 2);
+      const Lr = dc - 2 * cl.tf;                                     // largo completo entre alas
+      const Fst = Rst;                                               // fuerza que el alma no alcanza a tomar (J10.7)
+      const capT = t => 0.9 * ar.Fy * 2 * (bs - clip) * t / 1000;    // tensión: 2 placas, área en contacto con el ala
+      const capC = t => { const Ae = 2 * bs * t + 25 * cl.tw * cl.tw, Ie = t * (2 * bs + cl.tw) ** 3 / 12, rr = Math.sqrt(Ie / Ae), KL = 0.75 * Lr;
+        return 0.9 * fcrE3(ar.Fy, KL / rr) * Ae / 1000; };
+      const tMin = Math.max(tbf / 2, bs / (0.56 * Math.sqrt(E / ar.Fy)), sis ? (dos ? tbf : tbf / 2) : 0);
+      const ts = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tMin - 1e-6 && capT(t) >= Fst && capC(t) >= Fst) || 38.1);
+      const fwr = w => fw2(FEXX, w);
+      const wsMin = Math.min(ts, cl.tf) <= 6 ? 3 : Math.min(ts, cl.tf) <= 13 ? 5 : Math.min(ts, cl.tf) <= 19 ? 6 : 8;
+      // filetes al ala: 2 placas × 2 caras × (bs − clip), transversales (×1.5); al alma: 2 placas × 2 caras × (Lr − 2·clip)
+      const wsReq = Math.max(wsMin, ...[3, 5, 6, 8, 10, 12, 14, 16].filter(w => 1.5 * fwr(w) * 4 * (bs - clip) >= Fst && fwr(w) * 4 * (Lr - 2 * clip) >= Fst).slice(0, 1));
+      const ws = +c.wsC > 0 ? +c.wsC : wsReq;
+      rig = { bs, ts, ws, Lr, clip };
+      pasos.push(`Rigidizadores de la columna (${c.rigCol === 'si' ? 'pedidos' : sisPide ? 'exigidos con sismo' : 'necesarios'}): fuerza que deben tomar Rst = ${r2(Fst)} kN${faltas.filter(([, R, F]) => F > R).length ? ` (falla sin ellos: ${faltas.filter(([, R, F]) => F > R).map(([n]) => n).join(', ')})` : ''}`);
+      pasos.push(`2 placas por cada ala de la viga (una a cada lado del alma): ${bs} × ${ts} mm, largo ${r1(Lr)} mm, ${c.aceroRigC || 'A36'}, chaflán ${clip} mm; filetes de ${ws} mm`);
+      // ala de la columna rigidizada: Yc con placas de continuidad (AISC 358 Tablas 6.5/6.6), pso = psi = (c − ts)/2
+      // a ras: la placa queda a la altura del ala de la viga y la fila interior a psi = pfi + tf/2 − ts/2 de ella
+      const ps = Math.max(ras ? pfi + tbf / 2 - ts / 2 : (cc - ts) / 2, 1);
+      let YcS;
+      if(e8) YcS = cl.bf / 2 * (H.h1 / sC + H.h2 / ps + H.h3 / ps + H.h4 / sC) + 2 / g * (H.h1 * (sC + pb / 4) + H.h2 * (ps + 3 * pb / 4) + H.h3 * (ps + pb / 4) + H.h4 * (sC + 3 * pb / 4) + pb * pb) + g;   // por confirmar
+      else if(ras) YcS = nfR === 1 ? cl.bf / 2 * (h1 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps))
+        : cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h2 / sC) + 2 / g * (h1 * (ps + 3 * pb / 4) + h2 * (sC + pb / 4) + pb * pb / 2) + g / 2;   // Guía AISC 16, por confirmar
+      else YcS = cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h0 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps) + h0 * (sC + ps));
+      YcS = Math.max(YcS, Yc);                                       // rigidizar nunca baja la capacidad del ala
+      const phiMcfS = phD * ac.Fy * cl.tf * cl.tf * YcS / 1e6;
+      const tcfReqS = Math.sqrt(demThick * 1e6 / (phD * ac.Fy * YcS));
+      add('columna', 'Flexión del ala de la columna (con rigidizadores)', `Guía AISC 4 / AISC 358 · φ = ${phD}`, demCf, phiMcfS, 'kN·m', `Yc rigidizada = ${Math.round(YcS)} mm (${ras ? 'psi' : 'pso = psi'} = ${r1(ps)} mm); tcf para placa gruesa = ${r1(tcfReqS)} mm`);
+      if(!sis && cl.tf < tcfReqS) av.push(`Aun con rigidizadores el ala de la columna (${cl.tf} mm) es más delgada que ${r1(tcfReqS)} mm: habrá algo de palanca en los pernos. Use una columna de ala más gruesa o revise los pernos con palanca.`);
+      add('columna', 'Alma en compresión: fluencia local + rigidizadores', `F.2.10.10.2 (J10-2) + J10.8`, Fcol, Rly + capT(ts), 'kN', `alma ${r2(Rly)} + placas ${r2(capT(ts))} kN`);
+      add('columna', 'Alma en compresión: aplastamiento + rigidizadores', 'F.2.10.10.3 (J10-4) + J10.8', Fcol, Rcr + capC(ts), 'kN', `alma ${r2(Rcr)} + placas como columna ${r2(capC(ts))} kN`);
+      add('columna', 'Alma en tensión: fluencia local + rigidizadores', 'Guía AISC 4 + J10.8', Fcol, Rlt + capT(ts), 'kN', `alma ${r2(Rlt)} + placas ${r2(capT(ts))} kN`);
+      if(opuesto) add('columna', 'Pandeo del alma por las dos alas + rigidizadores', 'F.2.10.10.5 (J10-8) + J10.8', Math.min(Ffu, F2), Rpb + capC(ts), 'kN', `alma ${r2(Rpb)} + placas ${r2(capC(ts))} kN`);
+      if(Fst > 0){
+      add('rigidizador', 'Placas de continuidad: fluencia a tensión', 'F.2.10.10.8 (J10.8) · φ = 0.90', Fst, capT(ts), 'kN', `0.9·Fy·2·(bs − ${clip})·ts`);
+      add('rigidizador', 'Placas de continuidad: compresión como columna (K = 0.75, 25tw de alma)', 'F.2.10.10.8 (J10.8) · F.2.5 (E3)', Fst, capC(ts), 'kN', `L = ${r1(Lr)} mm`);
+      add('soldadura', 'Filetes de los rigidizadores al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 = 1.5)', Fst, 1.5 * fwr(ws) * 4 * (bs - clip), 'kN', `4 filetes de ${ws} mm × ${bs - clip} mm`);
+      add('soldadura', 'Filetes de los rigidizadores al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, fwr(ws) * 4 * (Lr - 2 * clip), 'kN', `4 filetes de ${ws} mm × ${r1(Lr - 2 * clip)} mm`); }
+      else pasos.push('El alma no necesita fuerza adicional: los rigidizadores van con las dimensiones mínimas de J10.8 para que el ala de la columna trabaje como placa gruesa (sin palanca en los pernos).');
+      req.push(['Rigidizador: bs + tw/2 ≥ bf de la viga/3 (J10.8)', bs >= bsMin - 1e-6, `${bs} ≥ ${r1(bsMin)} mm`]);
+      req.push(['Rigidizador: bs ≤ (bfc − twc)/2 (cabe en el ala)', bs <= bsMax + 1e-6, `${bs} ≤ ${r1(bsMax)} mm`]);
+      req.push(['Rigidizador: ts ≥ tf de la viga/2 (J10.8)', ts >= tbf / 2 - 1e-6, `${ts} ≥ ${r1(tbf / 2)} mm`]);
+      req.push(['Rigidizador: bs/ts ≤ 0.56·√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy) + 1e-6, `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
+      if(sisPide) req.push([`Con sismo: placas de continuidad ts ≥ ${dos ? 'tf de la viga (conexión a los dos lados)' : 'tf/2 de la viga'} (AISC 341 E3.6f)`, ts >= (dos ? tbf : tbf / 2) - 1e-6, `${ts} mm`]);
+      req.push(['Filete de los rigidizadores ≥ mín. Tabla J2.4', ws >= wsMin, `${ws} ≥ ${wsMin} mm`]);
+      req.push([`Chaflán de ${clip} mm en las esquinas de las placas (radio de la columna)`, true, 'indicar en planos']);
+    }
+    // d) zona de panel: una viga, suma (mismo sentido) o diferencia (opuestos)
+    const Vp = !dos ? Ffu : opuesto ? Math.abs(Ffu - F2) : Ffu + F2, Rv = 0.9 * 0.6 * ac.Fy * dc * cl.tw / 1000;
+    add('columna', 'Zona de panel (cortante del alma)', 'F.2.10.10.6 (J10-9), φ = 0.90', Vp, Rv, 'kN', `${!dos ? 'Ffu' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`);
+    if(Vp > Rv){ const tdq = Vp * 1000 / (0.9 * 0.6 * ac.Fy * dc) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (dc - 2 * cl.tf) / 90) - 1e-6) || 38.1;
+      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${c.aceroCol}), soldada al alma y a las alas de la columna, o use una columna de alma más gruesa.`); }
+    pasos.push(`Columna ${cl.nom}: bf = ${cl.bf}, tf = ${cl.tf}, tw = ${cl.tw}, k = ${r1(kc)} mm; s = ${r1(sC)}, c = ${r1(cc)} mm; Yc sin rigidizar = ${Math.round(Yc)} mm, φMcf = ${r2(phiMcf)} kN·m, tcf,req = ${r1(tcfReq)} mm`);
   } else av.push('No se revisó la columna: escoja su perfil para revisar el ala y el alma.');
 
+  req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
   const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
-  const Hp = ras ? db + 50 : c.ambos ? db + 2 * (pfo + de) : db + pfo + de + 25;
-  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, cl, Hp, h0, h1, h2, ras, nfR, dh, nTot: ras ? (c.ambos ? 4 * nfR : 2 * nfR + nb) : c.ambos ? 8 : 4 + nb } };
+  const ext = e8 ? pfo + pb + de : pfo + de;
+  const Hp = ras ? db + 50 : c.ambos ? db + 2 * ext : db + ext + 25;
+  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ vg, cl, Hp, h0, h1, h2, H, e8, ras, nfR, dh, rig, Mu, nTot: ras ? (c.ambos ? 4 * nfR : 2 * nfR + nb) : e8 ? (c.ambos ? 16 : 8 + nb) : c.ambos ? 8 : 4 + nb } };
 }
+const fw2 = (FEXX, w) => 0.75 * 0.6 * FEXX * 0.707 * w / 1000;      // kN/mm, F.2.10.2.4 (J2-4)
 
-// ── Doble angular de alma (atornillado a la viga y al soporte) — Manual AISC parte 10, fórmulas NSR-10 F.2.10 ─────────────
 function defaultsAngular(){
   return { tipo:'angular', nom:'', desc:'', Vu:80,
     viga:'IPE 300', aceroViga:'A572 Gr 50', holgura:13,
