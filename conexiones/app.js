@@ -116,13 +116,17 @@ const NOMBRES = { aleta:'Chapa de aleta (shear tab)', angular:'Doble angular de 
 const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme', 'empZ']], ['Axiales y otras', ['cartela', 'grupo', 'base']]];
 const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB' };
 
+// Resumen de los datos de portada para la franja cerrada (pedido de Amo 19-nov: que se vea que se puede abrir)
+const resumenDatos = F => [F.proyecto, F.prop, [F.mun, F.depto].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos: toque para llenarlos (van a la portada)';
 function renderProyecto(){
   const p = S.p, F = p.ficha, ro = esIng() ? '' : 'disabled';
   const inp = (k, l, ph = '') => `<div class="f"><label>${l}</label><input data-fk="${k}" value="${esc(F[k] || '')}" placeholder="${esc(ph)}" ${ro}/></div>`;
   $('#app').innerHTML = `<div class="ws-bar"><a class="btn sm" href="#/">← Proyectos</a><span class="code">${esc(p.consecutivo)}</span><span class="muted" id="gEst"></span>
       <span class="sp"></span>${esIng() ? `<select id="pEst" class="est-sel est-${p.estado === 'apr' ? 'apr' : 'wip'}"><option value="wip" ${p.estado !== 'apr' ? 'selected' : ''}>En proceso</option><option value="apr" ${p.estado === 'apr' ? 'selected' : ''}>Terminado</option></select>` : ''}
       <button class="btn sm pri" type="button" id="imp">🖨 Imprimir memoria</button></div>
-    <details class="card" ${F.proyecto ? '' : 'open'}><summary class="ct" style="cursor:pointer">Datos del proyecto <span class="hint" style="font-weight:400">· van a la portada</span></summary>
+    <details class="card pd" id="pDatos" ${F.proyecto ? '' : 'open'}><summary class="pd-hd" title="Toque para abrir o cerrar">
+        <span class="pd-ico" aria-hidden="true">▸</span><span class="pd-tt">Datos del proyecto<small id="pdRes">${esc(resumenDatos(F))}</small></span>
+        <span class="pd-btn"><span class="ab">Ver y editar ▾</span><span class="ce">Ocultar ▴</span></span></summary>
       <div class="fg g3">${inp('proyecto', 'Nombre del proyecto', 'Ej.: Conexiones bodega Pérez')}${inp('prop', 'Cliente / propietario')}${inp('doc', 'Identificación (NIT / C.C.)')}
         ${inp('dir', 'Dirección del predio')}${inp('mun', 'Municipio')}${inp('depto', 'Departamento')}
         <div class="f"><label>Fecha</label><input type="date" data-fk="fecha" value="${esc(F.fecha || '')}" ${ro}/></div>
@@ -131,7 +135,7 @@ function renderProyecto(){
         ${p.datos.con.map(c => { const r = c.res; return `<button type="button" class="d-el ${c.id === S.sel ? 'on' : ''}" data-sel="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(NOMBRES[c.tipo].split(' (')[0])}<small>${esc(c.desc || '')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}
         ${esIng() ? CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div><div class="gal">${L.map(t => `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('') : ''}
       </div><div id="ed">${S.sel ? '' : '<div class="card empty">Agregue una conexión con los botones de la izquierda.</div>'}</div></div>`;
-  $$('[data-fk]').forEach(el => el.oninput = () => { F[el.dataset.fk] = el.value; guardar(); });
+  $$('[data-fk]').forEach(el => el.oninput = () => { F[el.dataset.fk] = el.value; const r = $('#pdRes'); if(r) r.textContent = resumenDatos(F); guardar(); });
   if($('#pPerfil')) $('#pPerfil').onchange = e => { p.perfil_id = e.target.value; guardar(); };
   if($('#pEst')) $('#pEst').onchange = e => { p.estado = e.target.value; e.target.className = `est-sel est-${p.estado}`; guardar(); toast(p.estado === 'apr' ? 'Terminado: lo puede ver el personal de consulta.' : 'En proceso.'); };
   $$('[data-sel]').forEach(b => b.onclick = () => { S.sel = b.dataset.sel; history.replaceState(null, '', `#/p/${p.id}/c/${S.sel}`); renderProyecto(); });

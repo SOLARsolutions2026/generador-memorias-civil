@@ -101,3 +101,15 @@ body.con-sb .d-grid.sin-lista{display:block}
 a.sb-it{text-decoration:none}
 body.con-sb .ws-bar.fila-mem>a.btn,body.con-sb .ws-bar.fila-mem>.code{display:none}
 body.con-sb .ws-bar.fila-mem{justify-content:flex-end}
+/* Datos del proyecto plegable (19-nov, pedido de Amo): flecha, resumen y botón visibles para saber que se abre */
+details.pd{padding:0;overflow:hidden}
+details.pd>summary.pd-hd{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none}
+details.pd>summary.pd-hd:hover{background:#f8fafc}
+.pd-ico{width:28px;height:28px;border-radius:9px;background:var(--blue-bg,#eff6ff);color:var(--blue,#1a56db);display:grid;place-items:center;font-size:13px;transition:transform .15s;flex:none}
+details.pd[open] .pd-ico{transform:rotate(90deg)}
+.pd-tt{flex:1;min-width:0;font-size:15.5px;font-weight:700;color:var(--navy,#0f2d5e)}
+.pd-tt small{display:block;font-size:12px;font-weight:400;color:var(--muted,#64748b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.pd-btn{border:1px solid var(--border,#dbe2ec);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--navy,#0f2d5e);background:#fff;white-space:nowrap;flex:none}
+details.pd .ce,details.pd[open] .ab{display:none}details.pd[open] .ce{display:inline}
+details.pd[open]>summary.pd-hd{border-bottom:1px solid #eef2f6;margin-bottom:0}
+details.pd>.fg{padding:16px 18px 6px}
