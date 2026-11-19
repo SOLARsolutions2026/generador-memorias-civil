@@ -1118,13 +1118,181 @@ function calcEmpZ(c){
 }
 
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
+
+// ── Nudo: varias vigas que llegan a la misma columna (opción C de Amo, 19-nov) ─────────────
+// Cada conexión se diseña sola; el nudo revisa lo que comparten: zona de panel con las dos vigas del eje fuerte,
+// pandeo del alma por las dos alas (J10-8), cargas concentradas de cada viga en la columna, placas de continuidad
+// (también las que reciben las vigas a momento del eje débil), cortante de las alas por el eje débil y la coherencia
+// de los datos de cada conexión con la columna del nudo.
+const CARAS = { ala1:'Ala 1', ala2:'Ala 2 (opuesta)', alma1:'Alma, lado 1', alma2:'Alma, lado 2' };
+const MOMENTO = ['testa', 'ras', 'soldada'], CORTANTE = ['aleta', 'angular', 'testaV', 'asiento'];
+function defaultsNudo(){
+  return { nom:'', desc:'', columna:'HEB 300', aceroCol:'A572 Gr 50', colTope:false, Pc:0, Vc:0,
+    sentido:'opuesto', sentidoW:'opuesto', rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36', electrodo:'E70XX', cons:[] };
+}
+// Viga que llega con cada conexión: perfil, momento, cortante y axial
+function vigaDe(c){
+  let vg = null;
+  if(c.tipo === 'soldada' && c.miembro === 'H') vg = { nom:`Tubo ${c.H}×${c.B}×${c.tt}`, d:+c.H, bf:+c.B, tw:+c.tt, tf:+c.tt, r:0 };
+  else vg = perfil(c.viga);
+  const mom = MOMENTO.includes(c.tipo);
+  return { vg, mom, M:mom ? Math.abs(+c.Mu || 0) : 0, V:Math.abs(+c.Vu || 0), P:mom ? Math.abs(+c.P || 0) : 0 };
+}
+function calcNudo(n, lista){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch), E = 200000;
+  const cl = perfil(n.columna), ac = ACEROS[n.aceroCol];
+  if(!cl) return { error:'Escoja el perfil de la columna del nudo.' };
+  if(!lista.length) return { error:'Agregue las conexiones que llegan a esta columna (botón «＋ Agregar conexión al nudo»).' };
+  const Pcol = (G.PERFILES_LAM || []).find(x => x[0] === n.columna), Acol = Pcol ? Pcol[7] : cl.d * cl.tw + 2 * cl.bf * cl.tf;
+  const kc = cl.tf + cl.r, hcw = cl.d - 2 * kc, tope = !!n.colTope, ar = ACEROS[n.aceroRigC] || ACEROS.A36, FEXX = ELECTRODOS[n.electrodo] || 483;
+  const wMin = tt => tt <= 6 ? 3 : tt <= 13 ? 5 : tt <= 19 ? 6 : 8;
+  pasos.push(`Columna ${cl.nom} (${n.aceroCol}): d = ${cl.d}, bf = ${cl.bf}, tw = ${cl.tw}, tf = ${cl.tf}, k = tf + r = ${r1(kc)}, h = d − 2k = ${r1(hcw)} mm; Fy = ${ac.Fy}, Fu = ${ac.Fu} MPa.`);
+  // Vigas por cara
+  const V = lista.map(({ c, cara }) => { const v = vigaDe(c); return { c, cara, ...v, F: v.mom && v.vg ? v.M * 1000 / (v.vg.d - v.vg.tf) + v.P / 2 : 0 }; });
+  V.forEach(v => { if(!v.vg) av.push(`${v.c.nom}: no se encontró el perfil de la viga.`);
+    if(!MOMENTO.includes(v.c.tipo) && !CORTANTE.includes(v.c.tipo)) req.push([`${v.c.nom}: tipo de conexión que llega a una columna`, false, 'Empalmes, cartelas, grupos y placas base no van en un nudo']);
+    else pasos.push(`${v.c.nom} en ${CARAS[v.cara].toLowerCase()}: ${v.vg ? v.vg.nom : '—'}; ${v.mom ? `M = ${r2(v.M)} kN·m, P = ${r2(v.P)} kN → fuerza en cada ala F = M/(d − tf) + P/2 = ${r2(v.F)} kN` : `solo cortante V = ${r2(v.V)} kN`}.`); });
+  const en = cara => V.filter(v => v.cara === cara && v.vg);
+  Object.keys(CARAS).forEach(k => { if(en(k).length > 1) av.push(`${CARAS[k]}: hay ${en(k).length} conexiones en la misma cara; revise que no choquen (alturas distintas).`); });
+  const momF = k => en(k).filter(v => v.mom), Fcara = k => Math.max(0, ...momF(k).map(v => v.F));
+  const F1 = Fcara('ala1'), F2 = Fcara('ala2'), W1 = Fcara('alma1'), W2 = Fcara('alma2');
+  const hayFuerte = F1 > 0 || F2 > 0, hayDebil = W1 > 0 || W2 > 0;
+  const opuesto = n.sentido !== 'mismo', opW = n.sentidoW !== 'mismo';
+
+  // Coherencia de cada conexión con la columna del nudo
+  V.forEach(v => { const c = v.c, ala = v.cara.startsWith('ala');
+    if(MOMENTO.includes(c.tipo) && ala){
+      if(c.tipo === 'soldada' && c.soporte === 'placa') req.push([`${c.nom}: se suelda al ala de la columna`, false, 'en la conexión está «a una placa»']);
+      else req.push([`${c.nom}: revisa la misma columna (${n.columna}, ${n.aceroCol})`, c.columna === n.columna && c.aceroCol === n.aceroCol, c.columna ? `${c.columna} · ${c.aceroCol}` : 'la conexión no revisa la columna']);
+      if(c.tipo !== 'soldada'){ const otro = momF(v.cara === 'ala1' ? 'ala2' : 'ala1')[0];
+        if(otro) req.push([`${c.nom}: tiene en cuenta la viga del otro lado (${otro.c.nom})`, !!c.dosLados && Math.abs((+c.Mu2 || 0) - otro.M) < 0.01 && (c.sentido2 || 'opuesto') === n.sentido, c.dosLados ? `M₂ = ${c.Mu2} kN·m, ${c.sentido2}` : 'sin viga al otro lado']); }
+    }
+    if(MOMENTO.includes(c.tipo) && !ala){
+      if(c.tipo === 'soldada') req.push([`${c.nom}: alas soldadas a las placas de continuidad`, c.soporte === 'placa', c.soporte === 'placa' ? `placa t ${c.tSop} mm` : 'en la conexión está «al ala de una columna»']);
+      else av.push(`${c.nom} es una chapa de testa contra el alma de la columna: el alma tendría que resistir la flexión de los pernos (no se revisa). Lo usual en el eje débil es soldar las alas de la viga a las placas de continuidad prolongadas 50–75 mm fuera de las alas de la columna.`);
+    }
+    if(CORTANTE.includes(c.tipo)){ const t = ala ? cl.tf : cl.tw;
+      if(c.soporte && c.soporte !== (ala ? 'ala' : 'alma')) req.push([`${c.nom}: soporte = ${ala ? 'ala' : 'alma'} de la columna`, false, `en la conexión: ${c.soporte}`]);
+      req.push([`${c.nom}: espesor del soporte = ${ala ? 'tf' : 'tw'} de la columna`, Math.abs(+c.tSop - t) < 0.05 && c.aceroSop === n.aceroCol, `${c.tSop} mm ${c.aceroSop} (columna ${t} mm ${n.aceroCol})`]);
+      const opu = !ala && en(v.cara === 'alma1' ? 'alma2' : 'alma1').some(o => !o.mom);
+      if(opu && c.tipo !== 'asiento') req.push([`${c.nom}: marcada «otra conexión al otro lado del alma»`, !!c.dosLados, 'el alma recibe las dos vigas en el mismo sitio']);
+      if(opu && c.tipo === 'asiento') av.push(`${c.nom}: hay otra viga al otro lado del alma; el asiento no revisa el alma con las dos reacciones.`);
+    }
+  });
+
+  // Placas de continuidad (rigidizadores) de la columna
+  const Ab = vv => vv.vg.tf;   // N = espesor del ala de la viga (conservador; sin contar soldaduras ni placa de testa)
+  let Rst = 0;
+  const locales = [];
+  ['ala1', 'ala2'].forEach(k => momF(k).forEach(v => { const N = Ab(v), F = v.F, mitad = tope ? 0.5 : 1;
+    const Rly = 1.0 * ac.Fy * cl.tw * ((tope ? 2.5 : 5) * kc + N) / 1000;
+    const Rcr = 0.75 * (tope ? 0.40 : 0.80) * cl.tw ** 2 * (1 + 3 * (N / cl.d) * (cl.tw / cl.tf) ** 1.5) * Math.sqrt(E * ac.Fy * cl.tf / cl.tw) / 1000;
+    const Rfb = v.c.tipo === 'soldada' ? 0.9 * 6.25 * ac.Fy * cl.tf ** 2 / 1000 * mitad : Infinity;
+    locales.push({ v, N, F, Rly, Rcr, Rfb }); Rst = Math.max(Rst, F - Rly, F - Rcr, F - Rfb); }));
+  const Rpb = opuesto && F1 > 0 && F2 > 0 ? 0.9 * 24 * cl.tw ** 3 * Math.sqrt(E * ac.Fy) / hcw / 1000 * (tope ? 0.5 : 1) : Infinity;
+  if(isFinite(Rpb)) Rst = Math.max(Rst, Math.min(F1, F2) - Rpb);
+  const pide = hayDebil || Rst > 0;
+  const usar = n.rigCol === 'si' || (n.rigCol === 'auto' && pide);
+  if(hayDebil && n.rigCol === 'no') req.push(['Placas de continuidad para las vigas a momento del eje débil', false, 'son obligatorias: escoja «Automático» o «Sí»']);
+  if(!usar && Rst > 0) av.push(`Las alas de la viga piden rigidizadores en la columna (faltan ${r2(Rst)} kN); escoja «Automático» o «Sí» en placas de continuidad.`);
+  const clip = Math.max(cl.r, 15), bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lw = cl.d - 2 * cl.tf - 2 * clip;
+  const tfV = Math.max(0, ...V.filter(v => v.mom && v.vg).map(v => v.vg.tf));
+  const vDeb = [...momF('alma1'), ...momF('alma2')];
+  let ts = 0, ws = 0;
+  if(usar){
+    // espesor: ≥ tf de las vigas que llegan (J10.8 y práctica), y que resista la fuerza que le toca
+    const tReq = Math.max(tfV / (hayDebil ? 1 : 2), ...vDeb.map(v => v.F * 1000 / (0.9 * ar.Fy * Math.min(v.vg.bf, cl.d - 2 * cl.tf))),
+      Rst > 0 ? Rst * 1000 / (0.9 * ar.Fy * 2 * Lf) : 0, bs / (0.56 * Math.sqrt(E / ar.Fy)));
+    ts = +n.tsC > 0 ? +n.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1);
+    const Fpl = Math.max(W1, W2, Rst);
+    const capW = w => fw2(FEXX, w) * 4 * Lf;
+    ws = +n.wsC > 0 ? +n.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMin(Math.min(ts, cl.tf)) && capW(w) >= Fpl) || 16);
+    pasos.push(`Placas de continuidad (un par a la altura de cada ala de las vigas): ancho por lado bs = (bf − tw)/2 = ${r1(bs)} mm, despunte ${r1(clip)} mm, largo junto al ala Lf = ${r1(Lf)} mm, junto al alma ${r1(Lw)} mm; ts = ${ts} mm (${n.aceroRigC}${+n.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm ${n.electrodo}${+n.wsC > 0 ? '' : ' (automático)'}.`);
+    req.push(['Placas: ts ≥ tf de las vigas a momento', ts >= tfV / (hayDebil ? 1 : 2) - 1e-6, `${ts} ≥ ${r1(tfV / (hayDebil ? 1 : 2))} mm${hayDebil ? '' : ' (tf/2, J10.8)'}`]);
+    req.push(['Placas: bs/ts ≤ 0.56√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy), `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
+    req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMin(Math.min(ts, cl.tf)), `${ws} ≥ ${wMin(Math.min(ts, cl.tf))} mm`]);
+    if(Fpl > 0) add('placas', 'Filetes de la placa a las dos alas de la columna', 'F.2.10.2.4 (J2-4), φ = 0.75', Fpl, capW(ws), 'kN', `2 alas × 2 filetes × Lf ${r1(Lf)} mm · ${ws} mm (fuerza paralela al cordón)`);
+    if(Rst > 0) add('placas', 'Compresión / tensión de las placas (eje fuerte)', 'F.2.10.10.8 (J10.8), φ = 0.90', Rst, 0.9 * ar.Fy * 2 * (bs - clip) * ts / 1000, 'kN', `0.9·Fy·2·(bs − despunte)·ts; faltante de las cargas concentradas ${r2(Rst)} kN`);
+  }
+  const capPl = usar ? 0.9 * ar.Fy * 2 * (bs - clip) * ts / 1000 : 0;
+
+  // Cargas concentradas de cada viga del eje fuerte
+  locales.forEach(({ v, N, F, Rly, Rcr, Rfb }) => {
+    pasos.push(`${v.c.nom}: N = tf de la viga = ${r1(N)} mm; J10-2 φRn = ${r2(Rly)}, J10-3 φRn = ${r2(Rcr)}${isFinite(Rfb) ? `, J10-1 φRn = ${r2(Rfb)}` : ''} kN${usar ? ` + placas ${r2(capPl)} kN` : ''}.`);
+    add('columna', `${v.c.nom}: fluencia local del alma`, `F.2.10.10.2 (J10-2${tope ? ', J10-3' : ''}), φ = 1.00`, F, Rly + capPl, 'kN', `Fy·tw·(${tope ? '2.5' : '5'}k + N)${usar ? ' + placas' : ''}`);
+    add('columna', `${v.c.nom}: aplastamiento del alma (crippling)`, `F.2.10.10.3 (J10-4${tope ? ', J10-5' : ''}), φ = 0.75`, F, Rcr + capPl, 'kN', usar ? 'con placas' : 'sin placas');
+    if(isFinite(Rfb)) add('columna', `${v.c.nom}: flexión local del ala`, 'F.2.10.10.1 (J10-1), φ = 0.90', F, Rfb + capPl, 'kN', `6.25·Fy·tf²${tope ? ' × 0.5' : ''}`);
+  });
+  if(isFinite(Rpb)){ pasos.push(`Dos vigas en las alas con momentos opuestos (gravedad): las alas en compresión aprietan el alma desde los dos lados → J10-8: φRn = 0.9·24·tw³·√(E·Fy)/h = ${r2(Rpb)} kN.`);
+    add('columna', 'Pandeo del alma por las dos alas', 'F.2.10.10.5 (J10-8), φ = 0.90', Math.min(F1, F2), Rpb + capPl, 'kN', `24·tw³·√(E·Fy)/h${usar ? ' + placas' : ''}`); }
+
+  // Zona de panel (eje fuerte)
+  if(hayFuerte){
+    const dosF = F1 > 0 && F2 > 0, Vbr = !dosF ? Math.max(F1, F2) : opuesto ? Math.abs(F1 - F2) : F1 + F2, Vp = Math.max(0, Vbr - Math.abs(+n.Vc || 0));
+    const Py = ac.Fy * Acol / 1000, Pr = Math.abs(+n.Pc || 0), base = 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000;
+    const Rv = Pr <= 0.4 * Py ? base : base * (1.4 - Pr / Py);
+    pasos.push(`Zona de panel: ${!dosF ? 'una viga a momento en las alas: Vu = F' : opuesto ? 'momentos opuestos (gravedad): Vu = |F₁ − F₂|' : 'momentos en el mismo sentido (sismo o viento): Vu = F₁ + F₂'} = ${r2(Vbr)} kN${+n.Vc ? ` − cortante de la columna ${r2(Math.abs(+n.Vc))} kN = ${r2(Vp)} kN` : ''}; Pr = ${r2(Pr)} kN, Py = ${r2(Py)} kN → ${Pr <= 0.4 * Py ? 'J10-11' : 'J10-12'}: φRv = ${r2(Rv)} kN.`);
+    add('panel', 'Zona de panel del eje fuerte (cortante del alma)', `F.2.10.10.6 (${Pr <= 0.4 * Py ? 'J10-11' : 'J10-12'}), φ = 0.90`, Vp, Rv, 'kN', !dosF ? 'F de la viga' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂');
+    if(Vp > Rv){ const tdq = Vp / (Rv / cl.tw) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (cl.d - 2 * cl.tf) / 90) - 1e-6) || 38.1;
+      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${n.aceroCol}) soldada al alma y a las alas, o use una columna con alma más gruesa.`); }
+    if(F1 > 0 && F2 > 0){ const d1 = momF('ala1')[0].vg.d, d2 = momF('ala2')[0].vg.d;
+      if(Math.abs(d1 - d2) > 1) av.push(`Las vigas de las dos alas tienen alturas distintas (${d1} y ${d2} mm): las alas no quedan alineadas; ponga placas de continuidad a cada nivel o iguale la altura con una cartela.`); }
+  }
+
+  // Eje débil: vigas a momento contra el alma
+  if(hayDebil){
+    vDeb.forEach(v => { const b = Math.min(v.vg.bf, cl.d - 2 * cl.tf);
+      req.push([`${v.c.nom}: el ala de la viga cabe entre las alas de la columna`, v.vg.bf <= cl.d - 2 * cl.tf, `bf ${v.vg.bf} ≤ d − 2tf = ${r1(cl.d - 2 * cl.tf)} mm`]);
+      add('placas', `${v.c.nom}: placa de continuidad a tensión`, 'F.2.4 (D2-1), φ = 0.90', v.F, 0.9 * ar.Fy * b * ts / 1000, 'kN', `0.9·Fy·b·ts, b = ${r1(b)} mm`); });
+    const dosW = W1 > 0 && W2 > 0, Vw = !dosW ? Math.max(W1, W2) : opW ? Math.abs(W1 - W2) : W1 + W2;
+    const Rvf = 0.9 * 0.6 * ac.Fy * 2 * cl.bf * cl.tf / 1000;
+    pasos.push(`Eje débil: las alas de la viga entregan F a las placas y estas a las alas de la columna; las dos alas trabajan a cortante en su plano: Vu = ${!dosW ? 'F' : opW ? '|F₁ − F₂|' : 'F₁ + F₂'} = ${r2(Vw)} kN; φVn = 0.9·0.6·Fy·2·bf·tf = ${r2(Rvf)} kN.`);
+    add('panel', 'Zona de panel del eje débil (cortante de las dos alas)', 'F.2.7.6 (G7), φ = 0.90', Vw, Rvf, 'kN', !dosW ? 'F de la viga' : opW ? '|F₁ − F₂|' : 'F₁ + F₂');
+    if(dosW && opW) av.push('Vigas a momento a los dos lados del alma con momentos opuestos: la parte que se equilibra pasa por el espesor del alma; suelde las placas al alma con penetración completa y revise el desgarre laminar del alma.');
+    av.push('Prolongue las placas de continuidad 50–75 mm fuera de las alas de la columna para recibir las alas de la viga del eje débil (soldadura de penetración completa).');
+    if(hayFuerte){ const dF = Math.max(...[...momF('ala1'), ...momF('ala2')].map(v => v.vg.d)), dW = Math.max(...vDeb.map(v => v.vg.d));
+      if(Math.abs(dF - dW) > 1) av.push(`Las vigas del eje fuerte (${dF} mm) y del eje débil (${dW} mm) tienen alturas distintas: se necesitan placas de continuidad a cada nivel.`); }
+  }
+  // Dos vigas a cortante a los dos lados del alma
+  const sCort = k => en(k).filter(v => !v.mom);
+  if(sCort('alma1').length && sCort('alma2').length) pasos.push('Vigas a cortante a los dos lados del alma: el alma recibe las dos reacciones en el mismo sitio; por eso cada conexión debe tener marcada «otra conexión al otro lado» (pernos que comparten el alma o soldaduras sobre el mismo espesor).');
+  av.push('El diseño de la columna como miembro (flexocompresión con los momentos de todas las vigas) va en el Anexo D del generador de memorias.');
+
+  // Resultado de cada conexión (para el resumen)
+  const cons = V.map(v => { const r = Conex.calc(v.c); return { nom:v.c.nom, cara:v.cara, tipo:v.c.tipo, ok:!r.error && r.ok, max:r.error ? null : r.max }; });
+  cons.filter(x => x.max != null && !x.ok).forEach(x => av.push(`La conexión ${x.nom} no cumple por sí sola (relación ${r2(x.max)}).`));
+  const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
+  return { ok:max <= 1 && !req.some(r => !r[1]) && cons.every(x => x.max == null || x.ok), max, ch, req, av, pasos,
+    geo:{ cl, V, usar, ts, ws, bs, clip, F1, F2, W1, W2 }, cons };
+}
+// «Ajustar las conexiones al nudo»: copia la columna, el soporte y la viga del otro lado a cada conexión
+function ajustarNudo(n, lista){
+  const cl = perfil(n.columna); if(!cl) return 0; let k = 0;
+  const r = calcNudo(n, lista), ts = r.geo?.ts || 0;
+  lista.forEach(({ c, cara }) => { const ala = cara.startsWith('ala'), set = (key, val) => { if(c[key] !== val){ c[key] = val; k++; } };
+    if(MOMENTO.includes(c.tipo) && ala){
+      if(c.tipo === 'soldada') set('soporte', 'col');
+      set('columna', n.columna); set('aceroCol', n.aceroCol); set('colTope', !!n.colTope);
+      if(c.tipo !== 'soldada'){ const otro = lista.find(o => o.cara === (cara === 'ala1' ? 'ala2' : 'ala1') && MOMENTO.includes(o.c.tipo));
+        if(otro){ set('dosLados', true); set('Mu2', Math.abs(+otro.c.Mu || 0)); set('sentido2', n.sentido); } else set('dosLados', false); }
+    }
+    if(c.tipo === 'soldada' && !ala && ts){ set('soporte', 'placa'); set('tSop', ts); set('aceroSop', n.aceroRigC); }
+    if(CORTANTE.includes(c.tipo)){
+      if('soporte' in c || c.tipo === 'angular' || c.tipo === 'aleta') set('soporte', ala ? 'ala' : 'alma');
+      set('tSop', ala ? cl.tf : cl.tw); set('aceroSop', n.aceroCol);
+      if(c.tipo !== 'asiento'){ const opu = !ala && lista.some(o => o.cara === (cara === 'alma1' ? 'alma2' : 'alma1') && CORTANTE.includes(o.c.tipo)); set('dosLados', opu); }
+    }
+  });
+  return k;
+}
 const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
 const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
     if(r.error || !EXTRA[c.tipo]) return r;
     EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
-  defaults: t => (DEF[t] || defaultsAleta)() };
+  defaults: t => (DEF[t] || defaultsAleta)(),
+  CARAS, nudo:calcNudo, defaultsNudo, ajustarNudo, vigaDe };
 G.Conex = Conex;
 if(typeof module !== 'undefined') module.exports = Conex;
 })(typeof window !== 'undefined' ? window : globalThis);

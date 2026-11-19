@@ -47,8 +47,8 @@ async function cargarBase(){
 window.addEventListener('hashchange', ruta);
 function ruta(){
   if(!S.user) return;
-  const m = location.hash.match(/^#\/p\/([^/]+)(?:\/c\/([^/]+))?/);
-  if(m) return abrirProyecto(m[1], m[2]);
+  const m = location.hash.match(/^#\/p\/([^/]+)(?:\/(c|n)\/([^/]+))?/);
+  if(m) return abrirProyecto(m[1], m[2] === 'n' ? 'N:' + m[3] : m[3]);
   renderLista();
 }
 
@@ -100,7 +100,8 @@ async function abrirProyecto(id, cid){
     if(error || !data){ toast('No se encontró el proyecto.'); return ir('#/'); }
     S.p = data; S.p.datos = S.p.datos || {}; S.p.datos.con = S.p.datos.con || []; S.p.ficha = S.p.ficha || {};
   }
-  S.sel = cid && S.p.datos.con.some(c => c.id === cid) ? cid : (S.p.datos.con[0]?.id || null);
+  S.p.datos.nudos = S.p.datos.nudos || [];
+  S.sel = cid && (S.p.datos.con.some(c => c.id === cid) || S.p.datos.nudos.some(n => 'N:' + n.id === cid)) ? cid : (S.p.datos.con[0]?.id || null);
   renderProyecto();
 }
 let tGuardar = null;
@@ -120,6 +121,7 @@ const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', 
 const resumenDatos = F => [F.proyecto, F.prop, [F.mun, F.depto].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos: toque para llenarlos (van a la portada)';
 function renderProyecto(){
   const p = S.p, F = p.ficha, ro = esIng() ? '' : 'disabled';
+  p.datos.nudos = p.datos.nudos || []; p.datos.nudos.forEach(recalcNudo);
   const inp = (k, l, ph = '') => `<div class="f"><label>${l}</label><input data-fk="${k}" value="${esc(F[k] || '')}" placeholder="${esc(ph)}" ${ro}/></div>`;
   $('#app').innerHTML = `<div class="ws-bar"><a class="btn sm" href="#/">← Proyectos</a><span class="code">${esc(p.consecutivo)}</span><span class="muted" id="gEst"></span>
       <span class="sp"></span>${esIng() ? `<select id="pEst" class="est-sel est-${p.estado === 'apr' ? 'apr' : 'wip'}"><option value="wip" ${p.estado !== 'apr' ? 'selected' : ''}>En proceso</option><option value="apr" ${p.estado === 'apr' ? 'selected' : ''}>Terminado</option></select>` : ''}
@@ -133,19 +135,25 @@ function renderProyecto(){
         <div class="f"><label>Membrete y pie de página</label><select id="pPerfil" ${ro}>${S.perfiles.map(x => `<option value="${x.id}" ${x.id === p.perfil_id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></div></div></details>
     <div class="d-grid"><div class="d-lista">
         ${p.datos.con.map(c => { const r = c.res; return `<button type="button" class="d-el ${c.id === S.sel ? 'on' : ''}" data-sel="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(NOMBRES[c.tipo].split(' (')[0])}<small>${esc(c.desc || '')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}
-        ${esIng() ? CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div><div class="gal">${L.map(t => `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('') : ''}
+        ${p.datos.nudos.length ? `<div class="gal-cat">Nudos de columna</div>${p.datos.nudos.map(n => { const r = n.res; return `<button type="button" class="d-el ${'N:' + n.id === S.sel ? 'on' : ''}" data-sel="N:${n.id}"><span><b>${esc(n.nom)}</b> Nudo · ${esc(n.columna)}<small>${esc(nudoCons(n).map(x => x.c.nom).join(', ') || 'sin conexiones')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}` : ''}
+        ${esIng() ? CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div><div class="gal">${L.map(t => `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('')
+          + `<div class="gal-cat">Varias vigas a una columna</div><div class="gal"><button type="button" class="gal-it" data-nnudo="1">${ICO_NUDO}<span>＋ Nudo de columna (agrupar conexiones)</span></button></div>` : ''}
       </div><div id="ed">${S.sel ? '' : '<div class="card empty">Agregue una conexión con los botones de la izquierda.</div>'}</div></div>`;
   $$('[data-fk]').forEach(el => el.oninput = () => { F[el.dataset.fk] = el.value; const r = $('#pdRes'); if(r) r.textContent = resumenDatos(F); guardar(); });
   if($('#pPerfil')) $('#pPerfil').onchange = e => { p.perfil_id = e.target.value; guardar(); };
   if($('#pEst')) $('#pEst').onchange = e => { p.estado = e.target.value; e.target.className = `est-sel est-${p.estado}`; guardar(); toast(p.estado === 'apr' ? 'Terminado: lo puede ver el personal de consulta.' : 'En proceso.'); };
-  $$('[data-sel]').forEach(b => b.onclick = () => { S.sel = b.dataset.sel; history.replaceState(null, '', `#/p/${p.id}/c/${S.sel}`); renderProyecto(); });
+  $$('[data-sel]').forEach(b => b.onclick = () => { S.sel = b.dataset.sel; history.replaceState(null, '', `#/p/${p.id}${hashSel()}`); renderProyecto(); });
+  $$('[data-nnudo]').forEach(b => b.onclick = () => { const n = Conex.defaultsNudo(); n.id = Math.random().toString(36).slice(2, 10); n.nom = `N-${p.datos.nudos.length + 1}`;
+    const ult = [...p.datos.con].reverse().find(c => c.columna); if(ult){ n.columna = ult.columna; n.aceroCol = ult.aceroCol; }
+    p.datos.nudos.push(n); S.sel = 'N:' + n.id; recalcNudo(n); guardar(); history.replaceState(null, '', `#/p/${p.id}${hashSel()}`); renderProyecto(); });
   $$('[data-nueva]').forEach(b => b.onclick = () => { const t = b.dataset.nueva, c = Conex.defaults(t);
     c.id = Math.random().toString(36).slice(2, 10); c.nom = `${PREF[t]}-${p.datos.con.filter(x => x.tipo === t).length + 1}`;
     p.datos.con.push(c); S.sel = c.id; recalcular(c); guardar(); history.replaceState(null, '', `#/p/${p.id}/c/${c.id}`); renderProyecto(); });
   $('#imp').onclick = imprimir;
   armarListaMovil();
-  if(S.sel) renderEditor();
+  if(S.sel) S.sel.startsWith('N:') ? renderNudo() : renderEditor();
 }
+const hashSel = () => !S.sel ? '' : S.sel.startsWith('N:') ? `/n/${S.sel.slice(2)}` : `/c/${S.sel}`;
 function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
 
 // ── Editor de una conexión ─────────────
@@ -346,7 +354,7 @@ function formHTML(c){
       <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
       <div class="sec-bd">${body}</div></section>`).join('');
 }
-const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna' };
+const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad' };
 function chequeosHTML(r){
   let h = '';
   const extra = [...new Set(r.ch.map(x => x.grupo))].filter(g => !GRUPOS[g]).map(g => [g, g]);   // grupos sin nombre: no se pierden
@@ -383,7 +391,7 @@ function renderEditor(){
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
     el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', fn); });
-  if($('#del')) $('#del').onclick = () => { if(!confirm(`¿Eliminar la conexión ${c.nom}?`)) return; S.p.datos.con = S.p.datos.con.filter(x => x.id !== c.id); S.sel = S.p.datos.con[0]?.id || null; guardar(); renderProyecto(); };
+  if($('#del')) $('#del').onclick = () => { if(!confirm(`¿Eliminar la conexión ${c.nom}?`)) return; S.p.datos.con = S.p.datos.con.filter(x => x.id !== c.id); (S.p.datos.nudos || []).forEach(n => { n.cons = n.cons.filter(x => x.cid !== c.id); }); S.sel = S.p.datos.con[0]?.id || null; guardar(); renderProyecto(); };
   if($('#dup')) $('#dup').onclick = () => { const n = JSON.parse(JSON.stringify(c)); n.id = Math.random().toString(36).slice(2, 10); n.nom = `${PREF[c.tipo]}-${S.p.datos.con.filter(x => x.tipo === c.tipo).length + 1}`;
     S.p.datos.con.splice(S.p.datos.con.indexOf(c) + 1, 0, n); S.sel = n.id; guardar(); renderProyecto(); };
 }
@@ -399,6 +407,125 @@ function resHTML(c, r){
     ${chequeosHTML(r)}
     <details style="margin-top:8px"><summary><b>Requisitos de geometría y detallado</b> (${r.req.filter(x => x[1]).length}/${r.req.length})</summary>${reqHTML(r)}</details>
     <details style="margin-top:6px"><summary><b>Ver cálculo detallado</b></summary><div class="calc">${r.pasos.map(esc).join('<br/>')}</div></details>`;
+}
+
+// ── Nudos: varias vigas que llegan a una columna (opción C de Amo, 19-nov) ─────────────
+// Las conexiones se diseñan una por una; el nudo las junta por cara de la columna y revisa lo que comparten.
+const TIPOS_NUDO = ['testa', 'ras', 'soldada', 'aleta', 'angular', 'testaV', 'asiento'];
+const nudoSel = () => (S.p.datos.nudos || []).find(n => 'N:' + n.id === S.sel);
+const nudoCons = n => (n.cons || []).map(x => ({ c:S.p.datos.con.find(c => c.id === x.cid), cara:x.cara })).filter(x => x.c);
+function recalcNudo(n){ const r = Conex.nudo(n, nudoCons(n)); n.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
+const ICO_NUDO = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="22" y="8" width="16" height="3" fill="#64748b"/><rect x="22" y="29" width="16" height="3" fill="#64748b"/><rect x="29" y="11" width="2" height="18" fill="#64748b"/><rect x="2" y="17" width="19" height="6" fill="#cbd5e1" stroke="#475569"/><rect x="39" y="17" width="19" height="6" fill="#cbd5e1" stroke="#475569"/><rect x="27" y="33" width="6" height="7" fill="#cbd5e1" stroke="#475569"/><rect x="27" y="0" width="6" height="7" fill="#cbd5e1" stroke="#475569"/></svg>';
+function nudoFormHTML(n){
+  const ro = esIng() ? '' : 'disabled', L = S.p.datos.con.filter(c => TIPOS_NUDO.includes(c.tipo));
+  const SELP = (k, l) => campo(n, k, l, { sel:(window.PERFILES_LAM || []).map(x => [x[0], x[0]]) });
+  const ck = (k, t) => `<div class="f"><label class="ck"><input type="checkbox" data-k="${k}" ${n[k] ? 'checked' : ''} ${ro}/> ${t}</label></div>`;
+  const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
+  const filas = n.cons.map((x, i) => { const c = S.p.datos.con.find(k => k.id === x.cid), v = c ? Conex.vigaDe(c) : null;
+    return `<tr><td><select data-ncara="${i}" ${ro}>${Object.entries(Conex.CARAS).map(([k, t]) => `<option value="${k}" ${x.cara === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td><select data-ncon="${i}" ${ro}>${c ? '' : '<option value="">— escoja —</option>'}${L.map(k => `<option value="${k.id}" ${k.id === x.cid ? 'selected' : ''}>${esc(k.nom)} · ${esc(NOMBRES[k.tipo].split(' (')[0])}</option>`).join('')}</select></td>
+      <td class="hint">${v ? `${esc(v.vg ? v.vg.nom : '?')} · ${v.mom ? `<b>M ${f2(v.M, 1)}</b> kN·m · ` : 'cortante · '}V ${f2(v.V, 1)} kN` : ''}</td>
+      <td>${esIng() ? `<button type="button" class="btn sm" data-nquita="${i}" title="Quitar del nudo">✕</button>` : ''}</td></tr>`; }).join('');
+  const sec = (i, t, res, body) => `<section class="sec on"><div class="sec-hd" style="cursor:default"><i>${i}</i><b>${t}</b><small>${esc(res)}</small></div><div class="sec-bd">${body}</div></section>`;
+  return sec(1, 'Columna', `${n.columna} · ${n.aceroCol}`, g3(SELP('columna', 'Perfil'), campo(n, 'aceroCol', 'Acero', { sel:SEL_ACERO }), '<div></div>',
+      campo(n, 'Pc', 'Axial de la columna Pu [kN]', { h:'Compresión mayorada; reduce la zona de panel si pasa de 0.4·Py' }), campo(n, 'Vc', 'Cortante de la columna Vc [kN]', { h:'Descuenta en la zona de panel; vacío = 0' }))
+      + ck('colTope', 'El nudo está en el extremo superior de la columna (menos de d de la punta)'))
+    + sec(2, 'Conexiones que llegan', `${n.cons.length} conexi${n.cons.length === 1 ? 'ón' : 'ones'}`,
+      `<div class="tw"><table class="t nd-t"><thead><tr><th>Cara de la columna</th><th>Conexión</th><th>Viga y cargas</th><th></th></tr></thead><tbody>${filas || '<tr><td colspan="4" class="hint">Todavía no hay conexiones en este nudo.</td></tr>'}</tbody></table></div>
+      ${esIng() ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button type="button" class="btn sm" id="nAdd" ${L.length ? '' : 'disabled'}>＋ Agregar conexión al nudo</button>
+        <button type="button" class="btn sm pri" id="nAjus" ${n.cons.length ? '' : 'disabled'}>⇄ Ajustar las conexiones al nudo</button></div>
+        <div class="hint">«Ajustar» copia a cada conexión la columna, el soporte (ala o alma), su espesor y acero, y la viga del otro lado. Solo cambia esos datos.</div>` : ''}
+      ${L.length ? '' : '<div class="note amber">Primero cree las conexiones de las vigas (chapa de testa, soldada, chapa de aleta, angulares…).</div>'}
+      ${g3(campo(n, 'sentido', 'Vigas de las dos alas', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }),
+        campo(n, 'sentidoW', 'Vigas a los dos lados del alma', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }))}`)
+    + sec(3, 'Placas de continuidad', { auto:'automático', si:'siempre', no:'sin placas' }[n.rigCol] + (n.tsC ? ` · ts ${n.tsC} mm` : ''),
+      g3(campo(n, 'rigCol', '¿Lleva placas?', { sel:[['auto', 'Automático (si hacen falta)'], ['si', 'Sí'], ['no', 'No']] }), campo(n, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(n, 'wsC', 'Filete a las alas [mm]', { h:'Vacío = automático' }),
+        campo(n, 'aceroRigC', 'Acero de las placas', { sel:SEL_ACERO }), campo(n, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })));
+}
+function resNudoHTML(n, r){
+  if(r.error) return `<div class="note">${esc(r.error)}</div>`;
+  const filas = r.cons.map(x => { const c = S.p.datos.con.find(k => k.nom === x.nom);
+    return `<tr><td><b>${esc(x.nom)}</b></td><td>${esc(Conex.CARAS[x.cara])}</td><td>${esc(NOMBRES[x.tipo])}</td><td class="n">${x.max == null ? '—' : f2(x.max, 3)}</td>
+      <td>${x.max == null ? '—' : `<span class="pill ${x.ok ? 'ok' : 'no'}">${x.ok ? 'Cumple' : 'No cumple'}</span>`}</td><td>${c ? `<button type="button" class="btn sm" data-sel="${c.id}">Abrir</button>` : ''}</td></tr>`; }).join('');
+  return `<div class="ct">Resultado del nudo <span class="pill ${r.ok ? 'ok' : 'no'}" style="margin-left:8px">${r.ok ? 'Cumple' : 'No cumple'}${r.ch.length ? ` · relación máx. ${f2(r.max, 3)}` : ''}</span></div>
+    <h4 class="nd-h">Cada conexión por sí sola</h4><div class="tw"><table class="t"><thead><tr><th>Conexión</th><th>Cara</th><th>Tipo</th><th>Relación</th><th></th><th></th></tr></thead><tbody>${filas}</tbody></table></div>
+    ${r.av.length ? `<div class="note amber">${r.av.map(esc).join('<br/>')}</div>` : ''}
+    <h4 class="nd-h">Lo que comparten en la columna</h4>${r.ch.length ? chequeosHTML(r) : '<p class="hint">Solo llegan vigas a cortante: la columna no recibe fuerzas en las alas; se revisa la coherencia de los datos.</p>'}
+    <details style="margin-top:8px" ${r.req.some(x => !x[1]) ? 'open' : ''}><summary><b>Coherencia y detallado</b> (${r.req.filter(x => x[1]).length}/${r.req.length})</summary>${reqHTML(r)}</details>
+    <details style="margin-top:6px"><summary><b>Ver cálculo detallado</b></summary><div class="calc">${r.pasos.map(esc).join('<br/>')}</div></details>`;
+}
+function renderNudo(){
+  const n = nudoSel(); if(!n) return;
+  const r = recalcNudo(n);
+  $('#ed').innerHTML = `<div class="card"><div class="ct">${esc(n.nom)} · Nudo de columna
+      ${esIng() ? `<span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" type="button" id="dup">⧉ Duplicar</button><button class="btn sm danger" type="button" id="del">Eliminar</button></span>` : ''}</div>
+    <div class="fg g2">${campo(n, 'nom', 'Nombre', { num:false })}${campo(n, 'desc', 'Descripción / ubicación', { num:false })}</div>
+    <div class="ed-grid"><div id="form">${nudoFormHTML(n)}</div><div><div class="dib" id="dib">${dibNudo(n, r)}</div></div></div></div>
+    <div class="card" id="res">${resNudoHTML(n, r)}</div>`;
+  const re = () => { const r2 = recalcNudo(n); $('#dib').innerHTML = dibNudo(n, r2); $('#res').innerHTML = resNudoHTML(n, r2); enlaza();
+    const it = $(`[data-sel="N:${n.id}"] .pill`); if(it && n.res){ it.className = `pill ${n.res.ok ? 'ok' : 'no'}`; it.textContent = f2(n.res.max); } guardar(); };
+  const enlaza = () => $$('#res [data-sel]').forEach(b => b.onclick = () => { S.sel = b.dataset.sel; history.replaceState(null, '', `#/p/${S.p.id}${hashSel()}`); renderProyecto(); });
+  enlaza();
+  $$('#ed [data-k]').forEach(el => { const k = el.dataset.k;
+    el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
+      if(el.type === 'checkbox') n[k] = el.checked; else if(el.dataset.num) n[k] = el.value === '' ? '' : Number(el.value.replace(',', '.')); else n[k] = el.value;
+      if(k === 'nom'){ const b = $(`[data-sel="N:${n.id}"] b`); if(b) b.textContent = n.nom; guardar(); return; }
+      if(k === 'desc'){ guardar(); return; }
+      if(el.tagName === 'SELECT' || el.type === 'checkbox'){ renderNudo(); guardar(); renderLista2(); return; }
+      re(); }); });
+  $$('#ed [data-ncara]').forEach(el => el.onchange = () => { n.cons[+el.dataset.ncara].cara = el.value; renderNudo(); guardar(); });
+  $$('#ed [data-ncon]').forEach(el => el.onchange = () => { n.cons[+el.dataset.ncon].cid = el.value; renderNudo(); guardar(); renderLista2(); });
+  $$('#ed [data-nquita]').forEach(el => el.onclick = () => { n.cons.splice(+el.dataset.nquita, 1); renderNudo(); guardar(); renderLista2(); });
+  if($('#nAdd')) $('#nAdd').onclick = () => { const L = S.p.datos.con.filter(c => TIPOS_NUDO.includes(c.tipo)), us = new Set(n.cons.map(x => x.cid));
+    const c = L.find(k => !us.has(k.id)) || L[0], libre = Object.keys(Conex.CARAS).find(k => !n.cons.some(x => x.cara === k)) || 'ala1';
+    n.cons.push({ cid:c ? c.id : '', cara:libre }); renderNudo(); guardar(); renderLista2(); };
+  if($('#nAjus')) $('#nAjus').onclick = () => { const k = Conex.ajustarNudo(n, nudoCons(n)); nudoCons(n).forEach(x => recalcular(x.c)); renderNudo(); guardar(); renderLista2();
+    toast(k ? `Listo: se ajustaron ${k} dato${k === 1 ? '' : 's'} de las conexiones.` : 'Las conexiones ya estaban de acuerdo con el nudo.'); };
+  if($('#del')) $('#del').onclick = () => { if(!confirm(`¿Eliminar el nudo ${n.nom}? Las conexiones no se borran.`)) return; S.p.datos.nudos = S.p.datos.nudos.filter(x => x !== n); S.sel = S.p.datos.con[0]?.id || null; guardar(); renderProyecto(); };
+  if($('#dup')) $('#dup').onclick = () => { const m = JSON.parse(JSON.stringify(n)); m.id = Math.random().toString(36).slice(2, 10); m.nom = `N-${S.p.datos.nudos.length + 1}`;
+    S.p.datos.nudos.push(m); S.sel = 'N:' + m.id; guardar(); renderProyecto(); };
+}
+// Repinta solo la lista (pastillas y nombres) sin perder lo que se está escribiendo
+function renderLista2(){
+  const n = nudoSel(); if(!n) return; const b = $(`[data-sel="N:${n.id}"]`); if(!b) return;
+  b.querySelector('small').textContent = nudoCons(n).map(x => x.c.nom).join(', ') || 'sin conexiones';
+  const pl = b.querySelector('.pill'); if(pl && n.res){ pl.className = `pill ${n.res.ok ? 'ok' : 'no'}`; pl.textContent = f2(n.res.max); }
+}
+// Dibujo en planta: la columna en el centro y cada viga en su cara; placas de continuidad en azul
+function dibNudo(n, r){
+  const cl = Conex.perfil(n.columna); if(!cl) return '<p class="hint">Escoja el perfil de la columna.</p>';
+  const W = 380, C = 190, s = 130 / Math.max(cl.d, cl.bf), d = cl.d * s, b = cl.bf * s, tf = Math.max(2, cl.tf * s), tw = Math.max(2, cl.tw * s), Lv = 105;
+  const g = r && !r.error ? r.geo : null, V = g ? g.V : nudoCons(n).map(x => ({ ...Conex.vigaDe(x.c), c:x.c, cara:x.cara }));
+  let h = '';
+  // placas de continuidad
+  if(g && g.usar){ const ext = k => V.some(v => v.cara === k && v.mom) ? 60 * s : 0;
+    h += `<rect class="pl" x="${C - d / 2 + tf}" y="${C - b / 2 - ext('alma1')}" width="${d - 2 * tf}" height="${b / 2 - tw / 2 + ext('alma1')}"/>
+      <rect class="pl" x="${C - d / 2 + tf}" y="${C + tw / 2}" width="${d - 2 * tf}" height="${b / 2 - tw / 2 + ext('alma2')}"/>`; }
+  // columna (eje fuerte horizontal: alas a la izquierda y derecha)
+  h += `<rect class="sop" x="${C - d / 2}" y="${C - b / 2}" width="${tf}" height="${b}"/><rect class="sop" x="${C + d / 2 - tf}" y="${C - b / 2}" width="${tf}" height="${b}"/>
+    <rect class="sop" x="${C - d / 2 + tf}" y="${C - tw / 2}" width="${d - 2 * tf}" height="${tw}"/>`;
+  const lbl = (x, y, t, a = 'middle', cls = 'lbl') => `<text class="${cls}" x="${x}" y="${y}" text-anchor="${a}">${t}</text>`;
+  const porCara = {}; V.forEach(v => (porCara[v.cara] = porCara[v.cara] || []).push(v));
+  Object.entries(porCara).forEach(([cara, L]) => L.forEach((v, i) => { if(!v.vg) return;
+    const bv = Math.max(8, v.vg.bf * s), cls = v.mom ? 'vg nd-m' : 'vg', o = i * 6, tx = `${esc(v.c.nom)}`, carga = v.mom ? `M ${f2(v.M, 0)} kN·m` : `V ${f2(v.V, 0)} kN`;
+    if(cara === 'ala1'){ const x2 = C - d / 2 - 3; h += `<rect class="${cls}" x="${x2 - Lv}" y="${C - bv / 2 + o}" width="${Lv}" height="${bv}"/><line class="vgl" x1="${x2 - Lv}" y1="${C + o}" x2="${x2}" y2="${C + o}"/>${lbl(x2 - Lv / 2, C - bv / 2 - 6 + o, tx)}${lbl(x2 - Lv / 2, C + bv / 2 + 13 + o, carga)}`; }
+    if(cara === 'ala2'){ const x1 = C + d / 2 + 3; h += `<rect class="${cls}" x="${x1}" y="${C - bv / 2 + o}" width="${Lv}" height="${bv}"/><line class="vgl" x1="${x1}" y1="${C + o}" x2="${x1 + Lv}" y2="${C + o}"/>${lbl(x1 + Lv / 2, C - bv / 2 - 6 + o, tx)}${lbl(x1 + Lv / 2, C + bv / 2 + 13 + o, carga)}`; }
+    if(cara === 'alma1'){ const y2 = C - tw / 2 - 3, y1 = C - b / 2 - Lv + 20; h += `<rect class="${cls}" x="${C - bv / 2 + o}" y="${y1}" width="${bv}" height="${y2 - y1}"/><line class="vgl" x1="${C + o}" y1="${y1}" x2="${C + o}" y2="${y2}"/>${lbl(C + bv / 2 + 5 + o, y1 + 12, tx, 'start')}${lbl(C + bv / 2 + 5 + o, y1 + 25, carga, 'start')}`; }
+    if(cara === 'alma2'){ const y1 = C + tw / 2 + 3, y2 = C + b / 2 + Lv - 20; h += `<rect class="${cls}" x="${C - bv / 2 + o}" y="${y1}" width="${bv}" height="${y2 - y1}"/><line class="vgl" x1="${C + o}" y1="${y1}" x2="${C + o}" y2="${y2}"/>${lbl(C + bv / 2 + 5 + o, y2 - 18, tx, 'start')}${lbl(C + bv / 2 + 5 + o, y2 - 5, carga, 'start')}`; }
+  }));
+  // nombres de las caras
+  h += lbl(C - d / 2 - 6, C - b / 2 + 10, 'Ala 1', 'end', 'lbl nd-c') + lbl(C + d / 2 + 6, C - b / 2 + 10, 'Ala 2', 'start', 'lbl nd-c')
+    + lbl(C + d / 2 + 6, C - b / 2 - 22, 'Alma, lado 1', 'start', 'lbl nd-c') + lbl(C + d / 2 + 6, C + b / 2 + 28, 'Alma, lado 2', 'start', 'lbl nd-c')
+    + lbl(C - d / 2 - 6, C + b / 2 + 16, esc(cl.nom), 'end', 'lbl nd-cn');
+  const nota = g && g.usar ? `Placas de continuidad (azul): ts = ${g.ts} mm, filete ${g.ws} mm` : 'Sin placas de continuidad';
+  return svgW(W, W, h, `Planta del nudo ${n.nom}`, `Planta a la altura de las alas superiores · vigas a momento en amarillo · ${nota}`);
+}
+function datosNudoPrint(n, r){
+  const t = (l, v) => `<tr><th>${l}</th><td>${v}</td></tr>`;
+  return `<table class="t kv">${t('Columna', `${esc(n.columna)} · ${esc(n.aceroCol)}${n.colTope ? ' · nudo en el extremo superior' : ''}${+n.Pc ? ` · Pu = ${n.Pc} kN` : ''}${+n.Vc ? ` · Vc = ${n.Vc} kN` : ''}`)}
+    ${Object.keys(Conex.CARAS).map(k => { const L = nudoCons(n).filter(x => x.cara === k); return L.length ? t(Conex.CARAS[k], L.map(x => { const v = Conex.vigaDe(x.c); return `${esc(x.c.nom)} (${esc(NOMBRES[x.c.tipo].split(' (')[0].toLowerCase())}) · ${esc(v.vg ? v.vg.nom : '')} · ${v.mom ? `M = ${f2(v.M, 1)} kN·m · ` : ''}V = ${f2(v.V, 1)} kN`; }).join('<br/>')) : ''; }).join('')}
+    ${t('Sentido de los momentos', `alas: ${n.sentido === 'mismo' ? 'mismo sentido (sismo o viento)' : 'opuestos (gravedad)'} · alma: ${n.sentidoW === 'mismo' ? 'mismo sentido' : 'opuestos'}`)}
+    ${t('Placas de continuidad', r.geo.usar ? `${r.geo.ts} mm ${esc(n.aceroRigC)}, filetes ${r.geo.ws} mm ${esc(n.electrodo)}, ancho por lado ${f2(r.geo.bs, 1)} mm` : 'no lleva')}</table>`;
 }
 
 // ── Dibujos (SVG a escala, con cotas) ─────────────
@@ -650,12 +777,22 @@ async function imprimir(){
     <div class="pie">${esc([pf.dir, pf.ciudad, pf.correo, pf.tel].filter(Boolean).join(' · '))}</div></section>`;
   h += `<section><h2>1. Generalidades</h2><p>Se revisan las conexiones metálicas del proyecto con el Reglamento NSR-10, Título F.2, capítulo F.2.10 (conexiones), con el método de diseño por factores de carga y resistencia. Los grupos de pernos con excentricidad se revisan con el método del centro instantáneo de rotación. Las chapas de testa extendidas se diseñan como placa gruesa (sin efecto palanca en los pernos) con el método de líneas de fluencia de las Guías de diseño AISC 4 y 16. Unidades: kN, mm, MPa.</p>
     <table class="t"><thead><tr><th>Conexión</th><th>Tipo</th><th>Descripción</th><th>Relación máx.</th><th>Estado</th></tr></thead><tbody>
-    ${p.datos.con.map(c => { const r = Conex.calc(c); return `<tr><td>${esc(c.nom)}</td><td>${esc(NOMBRES[c.tipo])}</td><td>${esc(c.desc || '')}</td><td class="n">${r.error ? '—' : f2(r.max, 3)}</td><td>${r.error ? '—' : r.ok ? 'Cumple' : 'No cumple'}</td></tr>`; }).join('')}</tbody></table></section>`;
+    ${p.datos.con.map(c => { const r = Conex.calc(c); return `<tr><td>${esc(c.nom)}</td><td>${esc(NOMBRES[c.tipo])}</td><td>${esc(c.desc || '')}</td><td class="n">${r.error ? '—' : f2(r.max, 3)}</td><td>${r.error ? '—' : r.ok ? 'Cumple' : 'No cumple'}</td></tr>`; }).join('')}${(p.datos.nudos || []).map(n => { const r = Conex.nudo(n, nudoCons(n)); return `<tr><td>${esc(n.nom)}</td><td>Nudo de columna ${esc(n.columna)}</td><td>${esc(nudoCons(n).map(x => x.c.nom).join(', '))}${n.desc ? ' · ' + esc(n.desc) : ''}</td><td class="n">${r.error || !r.ch.length ? '—' : f2(r.max, 3)}</td><td>${r.error ? '—' : r.ok ? 'Cumple' : 'No cumple'}</td></tr>`; }).join('')}</tbody></table></section>`;
   p.datos.con.forEach((c, i) => { const r = Conex.calc(c); if(r.error) return;
     h += `<section class="cx"><h2>${i + 2}. ${esc(c.nom)} — ${esc(NOMBRES[c.tipo])}</h2>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}
       <div class="cx-row"><div class="dib">${dibujo(c, r)}</div><div>${datosPrint(c)}</div></div>
       <h3>Chequeos</h3>${chequeosHTML(r)}${r.av.length ? `<p><b>Observaciones:</b> ${r.av.map(esc).join(' ')}</p>` : ''}<h3>Requisitos de geometría y detallado</h3>${reqHTML(r)}<h3>Cálculo</h3><div class="calc">${r.pasos.map(esc).join('<br/>')}</div>
       <p><b>Conclusión:</b> ${r.ok ? `la conexión cumple; relación demanda/capacidad máxima ${f2(r.max, 3)}.` : `la conexión NO cumple (relación máxima ${f2(r.max, 3)}${r.req.some(x => !x[1]) ? ' o hay requisitos de detallado sin cumplir' : ''}).`}</p></section>`; });
+  // Nudos de columna (opción C de Amo, 19-nov)
+  let sec = p.datos.con.filter(c => !Conex.calc(c).error).length + 2;
+  (p.datos.nudos || []).forEach(n => { const r = Conex.nudo(n, nudoCons(n)); if(r.error) return;
+    h += `<section class="cx"><h2>${sec++}. Nudo ${esc(n.nom)} — columna ${esc(n.columna)}</h2>${n.desc ? `<p>${esc(n.desc)}</p>` : ''}
+      <p>Conexiones que llegan a la misma columna. Cada una se diseña en su sección; aquí se revisa lo que comparten: cargas concentradas de las alas de las vigas en la columna, zona de panel, pandeo del alma por las dos alas, placas de continuidad y coherencia de los datos.</p>
+      <div class="cx-row"><div class="dib">${dibNudo(n, r)}</div><div>${datosNudoPrint(n, r)}</div></div>
+      <h3>Cada conexión por sí sola</h3><table class="t"><thead><tr><th>Conexión</th><th>Cara</th><th>Relación</th><th>Estado</th></tr></thead><tbody>${r.cons.map(x => `<tr><td>${esc(x.nom)}</td><td>${esc(Conex.CARAS[x.cara])}</td><td class="n">${x.max == null ? '—' : f2(x.max, 3)}</td><td>${x.max == null ? '—' : x.ok ? 'Cumple' : 'No cumple'}</td></tr>`).join('')}</tbody></table>
+      ${r.ch.length ? `<h3>Chequeos en la columna</h3>${chequeosHTML(r)}` : ''}${r.av.length ? `<p><b>Observaciones:</b> ${r.av.map(esc).join(' ')}</p>` : ''}
+      <h3>Coherencia y detallado</h3>${reqHTML(r)}<h3>Cálculo</h3><div class="calc">${r.pasos.map(esc).join('<br/>')}</div>
+      <p><b>Conclusión:</b> ${r.ok ? `el nudo cumple${r.ch.length ? `; relación máxima ${f2(r.max, 3)}` : ''}.` : 'el nudo NO cumple: revise los chequeos, las conexiones o los datos marcados.'}</p></section>`; });
   const css = `@page{size:letter;margin:.8in .7in .9in;@top-left{content:"${esc(p.consecutivo)}";font:9pt sans-serif;color:#555}@top-right{content:"${esc((F.proyecto || '').replace(/"/g, ''))}";font:9pt sans-serif;color:#555}@bottom-right{content:counter(page) " / " counter(pages);font:9pt sans-serif;color:#555}}
     @page portada{margin:.6in;@top-left{content:none}@top-right{content:none}@bottom-right{content:none}}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);

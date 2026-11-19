@@ -113,3 +113,11 @@ details.pd[open] .pd-ico{transform:rotate(90deg)}
 details.pd .ce,details.pd[open] .ab{display:none}details.pd[open] .ce{display:inline}
 details.pd[open]>summary.pd-hd{border-bottom:1px solid #eef2f6;margin-bottom:0}
 details.pd>.fg{padding:16px 18px 6px}
+
+/* Nudos de columna (opción C de Amo, 19-nov) */
+.dsvg .nd-m{fill:#fef3c7;stroke:#b45309;stroke-width:1.4}
+.dsvg .nd-c{font-size:9.5px;fill:#64748b;font-style:italic}
+.dsvg .nd-cn{font-size:10px;fill:#0f2d5e;font-weight:700}
+.nd-t select{min-width:0;width:100%}
+.nd-t td{vertical-align:middle}
+h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
