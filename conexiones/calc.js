@@ -517,9 +517,14 @@ function calcAsiento(c){
   add('viga', 'Fluencia local del alma (extremo de la viga)', 'F.2.10.10.2 (J10-3)', V, Ry, 'kN', `Fy·tw·(2.5k + N)`);
   const rN = N / vg.d, cr = rN <= 0.2 ? 0.4 * vg.tw ** 2 * (1 + 3 * rN * (vg.tw / vg.tf) ** 1.5) : 0.4 * vg.tw ** 2 * (1 + (4 * rN - 0.2) * (vg.tw / vg.tf) ** 1.5);
   add('viga', 'Aplastamiento del alma (extremo de la viga)', `F.2.10.10.3 (J10-5${rN <= 0.2 ? 'a' : 'b'})`, V, 0.75 * cr * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000, 'kN', `N/d = ${r3(rN)}`);
-  const Nreq = Math.max(V * 1000 / (ac.Fy * vg.tw) - 2.5 * kv, kv);
+  // Apoyo requerido: el mayor entre fluencia local (J10-3) y aplastamiento del alma (J10-5), y al menos k (Manual AISC parte 10)
+  const Ny = V * 1000 / (ac.Fy * vg.tw) - 2.5 * kv, q = (vg.tw / vg.tf) ** 1.5, R0 = 0.75 * 0.4 * vg.tw ** 2 * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000;
+  let Nc = vg.d / (3 * q) * (V / R0 - 1); if(Nc > 0.2 * vg.d) Nc = vg.d / 4 * ((V / R0 - 1) / q + 0.2);
+  const Nreq = Math.max(Ny, Nc, kv);
+  pasos.push(`Apoyo requerido por fluencia local ${r1(Math.max(Ny, 0))} mm, por aplastamiento del alma ${r1(Math.max(Nc, 0))} mm, mínimo k = ${r1(kv)} mm`);
+  req.push(['Longitud de apoyo N ≥ Nreq', N >= Nreq - 1e-6, `${r1(N)} ≥ ${r1(Nreq)} mm`]);
   const ka = t + 9.5, ef = Math.max(0, hol + Nreq / 2 - ka), Mu = V * ef / 1000;
-  pasos.push(`Apoyo requerido Nreq = Vu/(Fy·tw) − 2.5k ≥ k → ${r1(Nreq)} mm; excentricidad a la sección crítica del angular ef = holgura + Nreq/2 − (t + 9.5) = ${r1(ef)} mm; Mu = ${r3(Mu)} kN·m`);
+  pasos.push(`Apoyo requerido Nreq = el mayor de los anteriores = ${r1(Nreq)} mm; excentricidad a la sección crítica del angular ef = holgura + Nreq/2 − (t + 9.5) = ${r1(ef)} mm; Mu = ${r3(Mu)} kN·m`);
   add('angular', 'Flexión del ala horizontal del asiento', 'Manual AISC parte 10 · φb = 0.90', Mu, 0.9 * an.Fy * La * t * t / 4 / 1e6, 'kN·m', `φMn = 0.9·Fy·La·t²/4, La = ${La} mm`);
   add('angular', 'Cortante del ala horizontal', 'F.2.10.4.2 (J4-3)', V, 0.6 * an.Fy * La * t / 1000, 'kN', '0.6·Fy·La·t');
   const nb = 2 * nf, rv = fv(c, d), dh = agujero(d), bA = 0.75 * 2.4 * d * t * an.Fu / 1000, bS = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000;
