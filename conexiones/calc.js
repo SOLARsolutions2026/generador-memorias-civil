@@ -504,36 +504,107 @@ function calcTestaV(c){
 function defaultsAsiento(){
   return { tipo:'asiento', nom:'', desc:'', Vu:60, viga:'IPE 300', aceroViga:'A572 Gr 50', holgura:13,
     tSop:10.7, aceroSop:'A572 Gr 50', bv:152, bh:102, t:12.7, La:150, aceroAng:'A36', filas:1, g:90, ev:64,
-    d:19.1, grado:'A325', rosca:'N' };
+    d:19.1, grado:'A325', rosca:'N',
+    unSop:'pernos', wS:8, electrodo:'E70XX',                                   // unión al soporte (pedido de Amo 19-nov)
+    rig:false, ts:12.7, W:102, hs:152, aceroRig:'A36', wR:6 };                  // platina triangular de rigidez (pie de amigo)
 }
-function calcAsiento(c){
+// Asiento sin rigidizar o rigidizado con una platina triangular — Manual AISC parte 10 (seated / stiffened seated)
+function calcAsiento(c, sinSug){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch);
   const V = Math.abs(+c.Vu || 0), d = +c.d, t = +c.t, La = +c.La, bh = +c.bh, bv = +c.bv, hol = +c.holgura || 0, nf = Math.max(1, Math.round(+c.filas)), g = +c.g;
   const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
-  const an = ACEROS[c.aceroAng], ac = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop];
-  const kv = vg.tf + vg.r, N = bh - hol, E = 200000;
-  pasos.push(`Viga ${vg.nom}: d ${vg.d}, tw ${vg.tw}, tf ${vg.tf}, k = tf + r = ${r1(kv)} mm; longitud de apoyo N = bh − holgura = ${r1(N)} mm`);
+  const an = ACEROS[c.aceroAng], ac = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop], FEXX = ELECTRODOS[c.electrodo] || 483;
+  const sold = c.unSop === 'sold', rig = !!c.rig, ts = +c.ts || 0, W = rig ? (+c.W || bh) : bh, hs = +c.hs || bv, rg = ACEROS[c.aceroRig] || an, clip = 20;
+  const kv = vg.tf + vg.r, N = W - hol, E = 200000;
+  pasos.push(`Viga ${vg.nom}: d ${vg.d}, tw ${vg.tw}, tf ${vg.tf}, k = tf + r = ${r1(kv)} mm; longitud de apoyo N = ${rig ? 'W' : 'bh'} − holgura = ${r1(N)} mm`);
+  if(rig) pasos.push(`Asiento rigidizado: platina triangular ${ts} mm (${c.aceroRig}), ancho W = ${W} mm y alto ${hs} mm, soldada bajo el ala horizontal${sold ? ' y al soporte' : ' y al ala vertical del angular'}`);
   const Ry = 1.0 * ac.Fy * vg.tw * (2.5 * kv + N) / 1000;
   add('viga', 'Fluencia local del alma (extremo de la viga)', 'F.2.10.10.2 (J10-3)', V, Ry, 'kN', `Fy·tw·(2.5k + N)`);
-  const rN = N / vg.d, cr = rN <= 0.2 ? 0.4 * vg.tw ** 2 * (1 + 3 * rN * (vg.tw / vg.tf) ** 1.5) : 0.4 * vg.tw ** 2 * (1 + (4 * rN - 0.2) * (vg.tw / vg.tf) ** 1.5);
+  const rN = N / vg.d, q = (vg.tw / vg.tf) ** 1.5, cr = rN <= 0.2 ? 0.4 * vg.tw ** 2 * (1 + 3 * rN * q) : 0.4 * vg.tw ** 2 * (1 + (4 * rN - 0.2) * q);
   add('viga', 'Aplastamiento del alma (extremo de la viga)', `F.2.10.10.3 (J10-5${rN <= 0.2 ? 'a' : 'b'})`, V, 0.75 * cr * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000, 'kN', `N/d = ${r3(rN)}`);
   // Apoyo requerido: el mayor entre fluencia local (J10-3) y aplastamiento del alma (J10-5), y al menos k (Manual AISC parte 10)
-  const Ny = V * 1000 / (ac.Fy * vg.tw) - 2.5 * kv, q = (vg.tw / vg.tf) ** 1.5, R0 = 0.75 * 0.4 * vg.tw ** 2 * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000;
+  const Ny = V * 1000 / (ac.Fy * vg.tw) - 2.5 * kv, R0 = 0.75 * 0.4 * vg.tw ** 2 * Math.sqrt(E * ac.Fy * vg.tf / vg.tw) / 1000;
   let Nc = vg.d / (3 * q) * (V / R0 - 1); if(Nc > 0.2 * vg.d) Nc = vg.d / 4 * ((V / R0 - 1) / q + 0.2);
   const Nreq = Math.max(Ny, Nc, kv);
   pasos.push(`Apoyo requerido por fluencia local ${r1(Math.max(Ny, 0))} mm, por aplastamiento del alma ${r1(Math.max(Nc, 0))} mm, mínimo k = ${r1(kv)} mm`);
   req.push(['Longitud de apoyo N ≥ Nreq', N >= Nreq - 1e-6, `${r1(N)} ≥ ${r1(Nreq)} mm`]);
   const ka = t + 9.5, ef = Math.max(0, hol + Nreq / 2 - ka), Mu = V * ef / 1000;
-  pasos.push(`Apoyo requerido Nreq = el mayor de los anteriores = ${r1(Nreq)} mm; excentricidad a la sección crítica del angular ef = holgura + Nreq/2 − (t + 9.5) = ${r1(ef)} mm; Mu = ${r3(Mu)} kN·m`);
-  add('angular', 'Flexión del ala horizontal del asiento', 'Manual AISC parte 10 · φb = 0.90', Mu, 0.9 * an.Fy * La * t * t / 4 / 1e6, 'kN·m', `φMn = 0.9·Fy·La·t²/4, La = ${La} mm`);
-  add('angular', 'Cortante del ala horizontal', 'F.2.10.4.2 (J4-3)', V, 0.6 * an.Fy * La * t / 1000, 'kN', '0.6·Fy·La·t');
-  const nb = 2 * nf, rv = fv(c, d), dh = agujero(d), bA = 0.75 * 2.4 * d * t * an.Fu / 1000, bS = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000;
-  add('pernos', `Pernos al soporte (${nb}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10', V, nb * Math.min(rv, bA, bS), 'kN', `corte ${r2(rv)}, aplast. angular ${r2(bA)} (hacia el talón, sin borde libre), soporte ${r2(bS)} kN`);
+  const eS = rig ? 0.8 * W : hol + Nreq / 2;                       // excentricidad de la carga respecto a la cara del soporte
+  const fwl = w => 0.75 * 0.6 * FEXX * 0.707 * w / 1000;           // kN/mm
+  const wMin = tt => tt <= 6 ? 3 : tt <= 13 ? 5 : tt <= 19 ? 6 : 8;
+  if(!rig){
+    pasos.push(`Apoyo requerido Nreq = el mayor de los anteriores = ${r1(Nreq)} mm; excentricidad a la sección crítica del angular ef = holgura + Nreq/2 − (t + 9.5) = ${r1(ef)} mm; Mu = ${r3(Mu)} kN·m`);
+    add('angular', 'Flexión del ala horizontal del asiento', 'Manual AISC parte 10 · φb = 0.90', Mu, 0.9 * an.Fy * La * t * t / 4 / 1e6, 'kN·m', `φMn = 0.9·Fy·La·t²/4, La = ${La} mm`);
+    add('angular', 'Cortante del ala horizontal', 'F.2.10.4.2 (J4-3)', V, 0.6 * an.Fy * La * t / 1000, 'kN', '0.6·Fy·La·t');
+  } else {
+    // Platina de rigidez (Manual AISC parte 10, asiento rigidizado): aplastamiento en el borde superior, esbeltez y espesor
+    const Apb = ts * (W - clip);
+    add('rigidizador', 'Aplastamiento del borde superior de la platina', 'F.2.10.7 (J7-1) · φ = 0.75', V, 0.75 * 1.8 * rg.Fy * Apb / 1000, 'kN', `1.8·Fy·Apb, Apb = ts·(W − ${clip} de chaflán) = ${r1(Apb)} mm²`);
+    req.push(['Esbeltez de la platina W/ts ≤ 0.56·√(E/Fy)', W / ts <= 0.56 * Math.sqrt(E / rg.Fy) + 1e-6, `${r1(W / ts)} ≤ ${r1(0.56 * Math.sqrt(E / rg.Fy))}`]);
+    req.push(['Espesor de la platina ts ≥ tw·Fy,viga/Fy,platina', ts >= vg.tw * ac.Fy / rg.Fy - 1e-6, `${ts} ≥ ${r1(vg.tw * ac.Fy / rg.Fy)} mm`]);
+    req.push(['Alto de la platina ≥ ancho (pie de amigo con ángulo ≥ 45°)', hs >= W - 1e-6, `${hs} ≥ ${W} mm`]);
+    // Platina en flexión y cortante en la cara del soporte (sección ts × hs) con la carga a 0.8W
+    const Mr = V * eS / 1000, Sr = ts * hs * hs / 6, fb = Mr * 1e6 / Sr, fvR = V * 1000 / (ts * hs);
+    add('rigidizador', 'Platina en la cara del soporte: flexión + cortante', 'F.2.10.4 · φ = 0.90 / 1.0', Math.hypot(fb / (0.9 * rg.Fy), fvR / (0.6 * rg.Fy)), 1, '', `M = Vu·0.8W = ${r3(Mr)} kN·m, fb = ${r1(fb)} MPa, fv = ${r1(fvR)} MPa (combinados √(a² + b²))`);
+    // Soldadura platina–ala horizontal (dos filetes)
+    const wR = +c.wR || 0;
+    add('soldadura', 'Filetes platina–ala horizontal (2)', 'F.2.10.2.4 (J2-4)', V, 2 * fwl(wR) * (W - clip), 'kN', `w = ${wR} mm, L = W − ${clip} = ${W - clip} mm por cara`);
+    // Soldadura de la platina a la cara vertical (soporte o ala vertical del angular): Manual AISC parte 10, e = 0.8W
+    const fr = V / (2 * hs * hs) * Math.sqrt(hs * hs + 20.25 * eS * eS);
+    add('soldadura', `Filetes de la platina ${sold ? 'al soporte' : 'al ala vertical del angular'} (2, con retorno 0.2L)`, 'F.2.10.2.4 · Manual AISC parte 10 (asiento rigidizado)', fr, fwl(wR), 'kN/mm', `f = Vu/(2L²)·√(L² + 20.25·e²), L = ${hs} mm, e = 0.8W = ${r1(eS)} mm`);
+    add('rigidizador', 'Metal base de la platina junto a los filetes', 'F.2.10.2.4 (J2-2) · J4-4', 2 * fr, 0.75 * 0.6 * rg.Fu * ts / 1000, 'kN/mm', 'los dos filetes cargan el mismo espesor');
+    req.push(['Filete de la platina ≥ mín. Tabla J2.4', wR >= wMin(Math.min(ts, sold ? +c.tSop : t)), `${wR} ≥ ${wMin(Math.min(ts, sold ? +c.tSop : t))} mm`]);
+  }
+  if(!sold){
+    // Pernos al soporte. Sin rigidizador: cortante simple (Manual AISC). Con rigidizador: cortante + tensión por el momento Vu·e (método elástico)
+    const nb = 2 * nf, rv = fv(c, d), dh = agujero(d), bA = 0.75 * 2.4 * d * t * an.Fu / 1000, bS = 0.75 * 2.4 * d * +c.tSop * sp.Fu / 1000, rC = Math.min(rv, bA, bS);
+    if(!rig) add('pernos', `Pernos al soporte (${nb}, cortante simple)`, 'F.2.10.3.6 y F.2.10.3.10', V, nb * rC, 'kN', `corte ${r2(rv)}, aplast. angular ${r2(bA)} (hacia el talón, sin borde libre), soporte ${r2(bS)} kN`);
+    else {
+      const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < nf; i++) pts.push({ u:sg * g / 2, v:-i * 70 });
+      const b = pernos3D(pts, { Fu:0, Fv:V, Mn:0, N:0, Mu:V * eS / 1000, Mv:0 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+      add('pernos', `Pernos al soporte (${nb}): cortante y tensión por Vu·e (J3-3a)`, 'F.2.10.3.7 · método elástico', b.rat, 1, '', `e = 0.8W = ${r1(eS)} mm; cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN (φRn ${r2(b.capT)})${b.nota || ''}`);
+      if(nf < 2) req.push(['Con rigidizador atornillado: al menos 2 filas de pernos (para tomar el momento)', false, `${nf} fila`]);
+      av.push('Asiento rigidizado atornillado: el ala vertical del angular trabaja con efecto palanca bajo la tensión de los pernos; revise su espesor o use una T o un angular grueso.');
+    }
+    req.push(['Gramil g cabe en el ancho: (La − g)/2 ≥ borde mín.', (La - g) / 2 >= bordeMin(d), `${r1((La - g) / 2)} ≥ ${bordeMin(d)} mm`]);
+    const abajo = bv - +c.ev - (nf - 1) * 70;
+    req.push(['Las filas caben en el ala vertical: bv − ev − (filas − 1)·70 ≥ borde mín.', abajo >= bordeMin(d) - 1e-6, `${r1(abajo)} ≥ ${bordeMin(d)} mm`]);
+    if(rig) req.push(['Platina de rigidez dentro del ala vertical del angular (hs ≤ bv)', hs <= bv + 1e-6, `${hs} ≤ ${bv} mm`]);
+  } else if(!rig){
+    // Asiento soldado sin rigidizar: dos filetes verticales en los bordes del ala vertical (Manual AISC parte 10), retorno 2w arriba
+    const w = +c.wS || 0, L = bv, fr = V / (2 * L * L) * Math.sqrt(L * L + 20.25 * eS * eS);
+    pasos.push(`Asiento soldado: filetes de ${w} mm en los dos bordes verticales del angular (L = bv = ${L} mm), e = holgura + Nreq/2 = ${r1(eS)} mm`);
+    add('soldadura', 'Filetes del angular al soporte (2, con la excentricidad)', 'F.2.10.2.4 · Manual AISC parte 10 (asiento soldado)', fr, fwl(w), 'kN/mm', `f = Vu/(2L²)·√(L² + 20.25·e²), L = ${L} mm, e = ${r1(eS)} mm`);
+    add('angular', 'Metal base del angular junto al filete', 'F.2.10.2.4 (J2-2) · J4-4', fr, 0.75 * 0.6 * an.Fu * t / 1000, 'kN/mm', '0.75·0.6·Fu·t');
+    add('soporte', 'Metal base del soporte junto al filete', 'F.2.10.2.4 (J2-2) · J4-4', fr, 0.75 * 0.6 * sp.Fu * +c.tSop / 1000, 'kN/mm', '0.75·0.6·Fu·t');
+    req.push(['Filete mínimo Tabla J2.4 (parte más delgada)', w >= wMin(Math.min(t, +c.tSop)), `${w} ≥ ${wMin(Math.min(t, +c.tSop))} mm`]);
+    req.push(['Filete máximo en el borde del angular (t − 1.6 mm)', w <= (t < 6 ? t : t - 1.6) + 1e-6, `${w} ≤ ${r1(t < 6 ? t : t - 1.6)} mm`]);
+    req.push(['Retorno del filete en la parte superior = 2w', true, `${r1(2 * w)} mm (indicar en planos)`]);
+  } else pasos.push('Asiento rigidizado soldado: la platina y el ala horizontal se sueldan directamente al soporte.');
   req.push(['Longitud de apoyo N ≥ k de la viga', N >= kv, `${r1(N)} ≥ ${r1(kv)} mm`]);
-  req.push(['Ancho del asiento La ≥ bf de la viga', La >= vg.bf - 1e-6, `${La} ≥ ${vg.bf} mm`]);
-  req.push(['Gramil g cabe en el ancho: (La − g)/2 ≥ borde mín.', (La - g) / 2 >= bordeMin(d), `${r1((La - g) / 2)} ≥ ${bordeMin(d)} mm`]);
+  if(La < vg.bf) av.push(`Recomendación: el largo del asiento (${La} mm) suele igualar o pasar el ancho del ala de la viga (${vg.bf} mm); el Manual AISC no lo exige.`);
   req.push(['Angular superior o lateral para estabilidad (Manual AISC)', true, 'indicar en planos']);
-  return fin(ch, req, av, pasos, { vg, N, dh, ka });
+  const R = fin(ch, req, av, pasos, { vg, N, dh:agujero(d), ka, rig, sold, W, hs, ts, eS });
+  // Si el angular sin rigidizar no resiste, se prueba con una platina triangular (pedido de Amo 19-nov)
+  if(!rig && !sinSug){ const fl = ch.filter(x => x.grupo === 'angular' && x.ratio > 1);
+    if(fl.length){
+      // se prueban espesores, altos y filetes; gana la platina más liviana que cumple (si ninguna cumple, la de menor relación)
+      let best = null;
+      // soldado: la platina va al soporte (alto libre); atornillado: la platina va dentro del ala vertical, que puede alargarse (L de 152, 203 o 254 mm) con 2 a 4 filas
+      const opc = sold ? [{ bvR:bv, filas:nf }] : [bv, 152, 203, 254].filter((x, i, A) => x >= bv && A.indexOf(x) === i).flatMap(bvR => [2, 3, 4].filter(f => bvR - +c.ev - (f - 1) * 70 >= bordeMin(d)).map(f => ({ bvR, filas:f })));
+      // el ancho W de la platina = ala horizontal del asiento; se prueba también un ala más ancha (más apoyo para la viga)
+      const Ws = [bh, 127, 152, 178, 203].filter((x, i, A) => x >= bh && A.indexOf(x) === i);
+      for(const o of opc) for(const WR of Ws) for(const tsR of [9.5, 12.7, 15.9, 19.1, 22.2, 25.4]) for(let k = 1; k <= 3.01; k += 0.25) for(const wR of [6, 8, 10, 12]){
+        const hsR = Math.round(WR * k); if(!sold && hsR > o.bvR) continue;
+        const Rp = calcAsiento({ ...c, rig:true, ts:tsR, W:WR, bh:WR, hs:hsR, aceroRig:c.aceroAng, wR, filas:o.filas, bv:o.bvR }, true);
+        if(Rp.error) continue; const peso = tsR * WR * hsR / 2 + ((o.bvR - bv) + (WR - bh)) * La * t + (o.filas - nf) * 5000, cand = { ts:tsR, W:WR, bh:WR, hs:hsR, wR, filas:o.filas, bv:o.bvR, max:Rp.max, ok:Rp.ok, peso };
+        if(!best || (cand.ok && (!best.ok || cand.peso < best.peso - 1e-6 || (Math.abs(cand.peso - best.peso) < 1e-6 && cand.wR < best.wR))) || (!cand.ok && !best.ok && cand.max < best.max)) best = cand; }
+      R.sug = best;
+      const txt = best ? `platina triangular de ${best.ts} mm, ancho ${best.W} mm y alto ${best.hs} mm, filetes de ${best.wR} mm${best.bh > bh ? `, ala horizontal del asiento de ${best.bh} mm` : ''}${!sold && best.bv > bv ? `, angular con ala vertical de ${best.bv} mm` : ''}${!sold && best.filas !== nf ? `, ${best.filas} filas de pernos` : ''}` : '';
+      R.av.push(`El angular solo no resiste (${fl.map(x => `${x.nombre.toLowerCase()} ${r2(x.ratio)}`).join(', ')}). ` + (best && best.ok
+        ? `Con un pie de amigo (${txt}) la conexión CUMPLE con relación máxima ${r2(best.max)}. Toque «Aplicar platina de rigidez».`
+        : `Ni con un pie de amigo de hasta 25.4 mm cumple (la mejor: ${txt}, relación ${r2(best ? best.max : NaN)}); revise la viga, los pernos o use un asiento más grande.`)); } }
+  return R;
 }
 
 // ── Empalme de viga atornillado: cubrejuntas en las alas y el alma ─────────────
@@ -737,8 +808,10 @@ const EXTRA = {
     const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
     const lcA = Math.min((+c.La - g) / 2, +c.bv - +c.ev - (nf - 1) * 70) - agujero(d) / 2, rC = Math.min(fv(c, d), aplast(lcA, +c.t, d, an.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
     const pts = []; for(const sg of [-1, 1]) for(let i = 0; i < nf; i++) pts.push({ u:sg * g / 2, v:i * 3 * d });
-    const b = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
-    add('pernos', 'Pernos al soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN, tensión ${r2(b.t)} kN`);
+    if(c.unSop === 'sold'){ const w = soldLinea('2', +c.La, c.rig ? +c.hs : +c.bv, c.rig ? +c.wR : +c.wS, c.electrodo, Math.min(+c.t, +c.tSop), { H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
+      if(w) add('soldadura', 'Filetes al soporte con las 6 fuerzas (método de la línea)', 'F.2.10.2.4', w.ratio, 1, '', `f máx. ${r1(w.f)} N/mm`); }
+    else { const b = pernos3D(pts, { Fu:V3, Fv:V2, Mn:T, N:P, Mu:M3, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
+    add('pernos', 'Pernos al soporte con las 6 fuerzas (J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN, tensión ${r2(b.t)} kN`); }
     av.push('El asiento solo apoya la viga: la tensión, los momentos y la torsión deben tomarse con un angular superior o lateral, que aquí no se diseña.'); },
   testa(c, r, add, av){ if(!hayExtra(c, ['P', 'V3', 'T', 'M2'])) return;
     const d = +c.d, g = +c.g, Ab = Math.PI * d * d / 4, B = PERNOS[c.grado], Fnv = B[c.rosca === 'X' ? 'X' : 'N'], vg = r.geo.vg, nT = r.geo.nTot;

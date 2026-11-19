@@ -212,13 +212,20 @@ function seccionesDe(c){
     ['pern', 'Pernos', () => `2 × ${c.n} de ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · g ${c.g}`,
       g3(...pernosTipo) + g3(campo(c, 'n', 'Pernos por columna n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'g', 'Gramil g [mm]'))],
     ['sold', 'Soldadura alma–placa', () => `filete ${c.w} mm ${c.electrodo} por ambas caras`, g3(campo(c, 'w', 'Pierna del filete w [mm]'), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))] ];
-  if(c.tipo === 'asiento') return [
+  if(c.tipo === 'asiento'){ const sold = c.unSop === 'sold', rig = !!c.rig;
+    return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'holgura', 'Holgura viga–soporte [mm]'))],
-    ['sop', 'Soporte', () => `t ${c.tSop} mm · ${c.aceroSop}`, g3(campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }))],
+    ['sop', 'Soporte', () => `t ${c.tSop} mm · ${c.aceroSop} · ${sold ? `soldado, filete ${c.wS} mm` : 'atornillado'}`,
+      g3(campo(c, 'unSop', 'Asiento al soporte', { sel:[['pernos', 'Atornillado'], ['sold', 'Soldado']] }), campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }),
+        ...(sold ? [...(rig ? [] : [campo(c, 'wS', 'Filete w [mm]', { h:'En los dos bordes verticales del angular, con retorno de 2w arriba' })]), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })] : []))],
     ['ang', 'Angular de asiento', () => `L ${c.bv}×${c.bh}×${c.t} mm · largo ${c.La} mm · ${c.aceroAng}`,
-      g3(campo(c, 'bv', 'Ala vertical bv [mm]'), campo(c, 'bh', 'Ala horizontal bh [mm]', { h:'Donde se apoya la viga' }), campo(c, 't', 'Espesor t [mm]'), campo(c, 'La', 'Largo del angular La [mm]', { h:'≥ ancho del ala de la viga' }), campo(c, 'aceroAng', 'Acero', { sel:SEL_ACERO }))],
-    ['pern', 'Pernos al soporte', () => `${2 * c.filas} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g}`,
-      g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas (2 pernos por fila)'), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'ev', 'Del talón a la fila superior [mm]'))] ];
+      g3(campo(c, 'bv', 'Ala vertical bv [mm]'), campo(c, 'bh', 'Ala horizontal bh [mm]', { h:'Donde se apoya la viga' }), campo(c, 't', 'Espesor t [mm]'), campo(c, 'La', 'Largo del angular La [mm]', { h:'Recomendado ≥ ancho del ala de la viga' }), campo(c, 'aceroAng', 'Acero', { sel:SEL_ACERO }))],
+    ['rig', 'Platina de rigidez (pie de amigo)', () => rig ? `PL triangular ${c.ts} mm · W ${c.W} × alto ${c.hs} mm · filete ${c.wR} mm` : 'sin platina',
+      `<div class="f"><label class="ck"><input type="checkbox" data-k="rig" ${rig ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Asiento rigidizado con una platina triangular bajo el ala horizontal</label><div class="hint">Cuando el angular solo no resiste la flexión. La carga se toma a 0.8W de la cara del soporte (Manual AISC parte 10).</div></div>`
+      + (rig ? g3(campo(c, 'ts', 'Espesor ts [mm]'), campo(c, 'W', 'Ancho W [mm]', { h:'Horizontal, bajo el ala del asiento' }), campo(c, 'hs', 'Alto [mm]', { h:sold ? 'Vertical, soldado al soporte' : 'Vertical, dentro del ala del angular' }), campo(c, 'aceroRig', 'Acero', { sel:SEL_ACERO }), campo(c, 'wR', 'Filetes de la platina w [mm]'),
+        ...(sold ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })])) : '')],
+    ...(sold ? [] : [['pern', 'Pernos al soporte', () => `${2 * c.filas} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g}${c.cizalla ? ' · cizalla' : ''}`,
+      g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas (2 pernos por fila)'), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'ev', 'Del talón a la fila superior [mm]'))]]) ]; }
   if(c.tipo === 'empalme') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga} · separación ${c.gap} mm`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'gap', 'Separación entre tramos [mm]'))],
     ['alas', 'Cubrejuntas de las alas', () => `PL ${c.bpf} × ${c.tpf} mm · ${2 * c.nf} pernos por lado · s ${c.sf} · g ${c.gf}`,
@@ -329,7 +336,7 @@ function formHTML(c){
       <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
       <div class="sec-bd">${body}</div></section>`).join('');
 }
-const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna' };
+const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna' };
 function chequeosHTML(r){
   let h = '';
   const extra = [...new Set(r.ch.map(x => x.grupo))].filter(g => !GRUPOS[g]).map(g => [g, g]);   // grupos sin nombre: no se pierden
@@ -360,7 +367,8 @@ function renderEditor(){
     const fn = () => { if(el.type === 'checkbox') c[k] = el.checked; else if(el.dataset.num) c[k] = el.value === '' ? '' : Number(el.value.replace(',', '.')); else c[k] = el.value;
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
+      if(['cizalla', 'd', 'rig'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -369,10 +377,15 @@ function renderEditor(){
   if($('#dup')) $('#dup').onclick = () => { const n = JSON.parse(JSON.stringify(c)); n.id = Math.random().toString(36).slice(2, 10); n.nom = `${PREF[c.tipo]}-${S.p.datos.con.filter(x => x.tipo === c.tipo).length + 1}`;
     S.p.datos.con.splice(S.p.datos.con.indexOf(c) + 1, 0, n); S.sel = n.id; guardar(); renderProyecto(); };
 }
+// «Aplicar platina de rigidez» del asiento (sugerencia del cálculo)
+document.addEventListener('click', e => { const b = e.target.closest('[data-apsug]'); if(!b || !S.p) return;
+  const c = S.p.datos.con.find(x => x.id === S.sel); if(!c) return; const r = Conex.calc(c); if(!r.sug) return;
+  const { max, ok, peso, ...v } = r.sug; Object.assign(c, v, { rig:true, aceroRig:c.aceroRig || c.aceroAng, electrodo:c.electrodo || 'E70XX' }); renderEditor(); guardar(); toast('Platina de rigidez aplicada'); });
 function resHTML(c, r){
   if(r.error) return `<div class="note">${esc(r.error)}</div>`;
   return `<div class="ct">Resultado <span class="pill ${r.ok ? 'ok' : 'no'}" style="margin-left:8px">${r.ok ? 'Cumple' : 'No cumple'} · relación máx. ${f2(r.max, 3)}</span></div>
     ${r.av.length ? `<div class="note amber">${r.av.map(esc).join('<br/>')}</div>` : ''}
+    ${r.sug && r.sug.ok && esIng() ? `<div style="margin:-4px 0 10px"><button type="button" class="btn sm pri" data-apsug="1">💡 Aplicar platina de rigidez</button></div>` : ''}
     ${chequeosHTML(r)}
     <details style="margin-top:8px"><summary><b>Requisitos de geometría y detallado</b> (${r.req.filter(x => x[1]).length}/${r.req.length})</summary>${reqHTML(r)}</details>
     <details style="margin-top:6px"><summary><b>Ver cálculo detallado</b></summary><div class="calc">${r.pasos.map(esc).join('<br/>')}</div></details>`;
@@ -445,16 +458,20 @@ function dibTestaV(c, r){
 }
 function dibAsiento(c, r){
   const vg = r.geo.vg, bv = +c.bv, bh = +c.bh, t = +c.t, hol = +c.holgura || 0, ts = +c.tSop || 10;
-  const k = 420 / (vg.d + bv + 40), X = v => 70 + v * k, Y = v => 34 + v * k;
+  const k = 420 / (vg.d + Math.max(bv, r.geo.rig ? r.geo.hs : 0) + 40), X = v => 70 + v * k, Y = v => 34 + v * k;
   let h = `<rect x="${X(-ts)}" y="${Y(-20)}" width="${ts * k}" height="${(vg.d + bv + 40) * k}" class="sop"/>
     <path d="M${X(0)} ${Y(vg.d)} h${bh * k} v${t * k} h${-(bh - t) * k} v${(bv - t) * k} h${-t * k} z" class="pl"/>
     <rect x="${X(hol)}" y="${Y(0)}" width="${380 * k}" height="${vg.d * k}" class="vg"/><line x1="${X(hol)}" y1="${Y(vg.tf)}" x2="${X(hol + 380)}" y2="${Y(vg.tf)}" class="vgl"/><line x1="${X(hol)}" y1="${Y(vg.d - vg.tf)}" x2="${X(hol + 380)}" y2="${Y(vg.d - vg.tf)}" class="vgl"/>`;
-  for(let i = 0; i < +c.filas; i++){ const y = vg.d + +c.ev + i * 70; h += `<line x1="${X(-ts - 6)}" y1="${Y(y)}" x2="${X(t + 6)}" y2="${Y(y)}" class="bl"/>`; }
+  const g = r.geo;
+  if(g.rig){ const W = g.W, hs = g.hs; h += `<path d="M${X(t)} ${Y(vg.d + t)} L${X(W)} ${Y(vg.d + t)} L${X(W)} ${Y(vg.d + t + 12)} L${X(t)} ${Y(vg.d + hs)} Z" fill="#bfdbfe" stroke="#1e3a8a"/>`
+    + cotaV(X(W) + 12, Y(vg.d + t), Y(vg.d + hs), `alto ${hs}`, 1) + `<text x="${X(W / 2)}" y="${Y(vg.d + t + 30)}" class="lbl" text-anchor="middle">PL ${esc(String(c.ts))}</text>`; }
+  if(g.sold) h += `<line x1="${X(0) - 2}" y1="${Y(vg.d)}" x2="${X(0) - 2}" y2="${Y(vg.d + (g.rig ? Math.max(bv, g.hs) : bv))}" stroke="#ea580c" stroke-width="4"/>`;
+  else for(let i = 0; i < +c.filas; i++){ const y = vg.d + +c.ev + i * 70; h += `<line x1="${X(-ts - 6)}" y1="${Y(y)}" x2="${X(t + 6)}" y2="${Y(y)}" class="bl"/>`; }
   const xN = hol + r.geo.N / 2;
   h += `<g class="carga"><line x1="${X(xN)}" y1="${Y(-45)}" x2="${X(xN)}" y2="${Y(-8)}"/><path d="M${X(xN) - 5} ${Y(-14)} L${X(xN)} ${Y(-4)} L${X(xN) + 5} ${Y(-14)} Z"/></g>
     ${cotaH(Y(vg.d + bv) + 14, X(0), X(bh), `bh = ${bh}`)}${cotaV(X(-ts) - 10, Y(vg.d), Y(vg.d + bv), `bv ${bv}`)}${cotaH(Y(vg.d) - 10, X(hol), X(bh), `N = ${f2(r.geo.N, 0)}`, -1)}
     <text x="${X(hol + 190)}" y="${Y(vg.d / 2)}" class="lbl" text-anchor="middle">${esc(vg.nom)}</text>`;
-  return svgW(X(hol + 380) + 20, Y(vg.d + bv) + 34, h, 'Asiento con angular', `Elevación · la flecha marca Vu = ${f2(+c.Vu, 1)} kN`);
+  return svgW(X(hol + 380) + 20, Y(vg.d + Math.max(bv, g.rig ? g.hs : 0)) + 34, h, 'Asiento con angular', `Elevación · la flecha marca Vu = ${f2(+c.Vu, 1)} kN${g.sold ? ' · soldadura en naranja' : ''}${g.rig ? ' · platina de rigidez en azul' : ''}`);
 }
 function dibEmpalme(c, r){
   const vg = r.geo.vg, gap = +c.gap || 0, nf = +c.nf, sf = +c.sf, Lef = +c.Lef, tpf = +c.tpf, nw = +c.nw, sw = +c.sw, hpw = +c.hpw, Lew = +c.Lew, Lehw = +c.Lehw;
