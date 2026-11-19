@@ -492,8 +492,11 @@ function calcTestaV(c){
   add('chapa', 'Bloque de cortante (×2)', 'F.2.10.4.3 (J4-5), Ubs = 1.0', V, 2 * bloqueRn(pl.Fy, pl.Fu, agv, anv, ant), 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm²`);
   const Lw = Lp - 2 * w;
   add('soldadura', 'Filetes alma–placa (ambas caras)', 'F.2.10.2.4 (J2-4)', V, 2 * fw(FEXX, w) * Lw, 'kN', `w = ${w} mm, L = Lp − 2w = ${r1(Lw)} mm`);
-  add('viga', 'Cortante del alma junto a la soldadura', 'F.2.10.4.2 (J4-3)', V, 0.6 * ac.Fy * vg.tw * Lp / 1000, 'kN', `0.6·Fy·tw·Lp`);
-  req.push(['Filete ≥ mín. Tabla J2.4', w >= (Math.min(tp, vg.tw) > 12.7 ? 6 : Math.min(tp, vg.tw) > 6.4 ? 5 : 3), `${w} mm`]);
+  add('viga', 'Fluencia por cortante del alma junto a la soldadura', 'F.2.10.4.2 (J4-3), φ = 1.0', V, 0.6 * ac.Fy * vg.tw * Lp / 1000, 'kN', `0.6·Fy·tw·Lp`);
+  // Rotura del alma a lo largo de los dos filetes (metal base, J4-4): controla cuando 2 filetes cargan un alma delgada
+  add('viga', 'Rotura por cortante del alma junto a los filetes', 'F.2.10.2.4 (J2-2) · F.2.10.4.2 (J4-4), φ = 0.75', V, 0.75 * 0.6 * ac.Fu * vg.tw * Lw / 1000, 'kN', `0.75·0.6·Fu·tw·L, L = ${r1(Lw)} mm`);
+  const tmin = Math.min(tp, vg.tw), wmin = tmin <= 6 ? 3 : tmin <= 13 ? 5 : tmin <= 19 ? 6 : 8;
+  req.push(['Filete ≥ mín. Tabla J2.4 (parte más delgada)', w >= wmin, `${w} ≥ ${wmin} mm`]);
   return fin(ch, req, av, pasos, { vg, Lp, dh });
 }
 
