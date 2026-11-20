@@ -1046,56 +1046,182 @@ EXTRA.ras = EXTRA.testa;
 function defaultsSoldada(){
   return { tipo:'soldada', nom:'', desc:'', P:0, Vu:60, V3:0, T:0, M2:0, Mu:40,
     miembro:'I', viga:'IPE 300', aceroViga:'A572 Gr 50', H:150, B:100, tt:6,
-    union:'filete', w:8, electrodo:'E70XX', soporte:'col', columna:'HEB 300', aceroCol:'A572 Gr 50', colTope:false, tSop:25, aceroSop:'A36' };
+    union:'filete', w:8, electrodo:'E70XX', soporte:'col', columna:'HEB 300', aceroCol:'A572 Gr 50', colTope:false, tSop:25, aceroSop:'A36',
+    // Revisión con Amo (20-nov):
+    wAlma:'', kds:false,                                         // filete del alma (vacío = igual al de las alas) · aumento por dirección J2-5
+    dosLados:false, Mu2:40, sentido2:'opuesto',                  // viga al otro lado de la columna
+    rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36',              // placas de continuidad de la columna
+    sismo:'no', Lh:6, Vg:30 };                                   // WUF-W (AISC 358 cap. 8)
+}
+// Cordón en todo el perímetro por el método elástico con la garganta de cada tramo (alas y alma pueden tener filetes distintos).
+// Cada punto: σ = P/A + M3·y/Ix + M2·x/Iy; V2 lo toman los cordones del alma (lados verticales del tubo), V3 los de las alas; torsión T·r/J.
+// Con kds (J2-5) cada punto usa 1 + 0.5·sen^1.5θ, θ = ángulo entre la resultante y el eje del cordón (aproximación elástica).
+function soldPerim(m, o){
+  const tF = 0.707 * o.wF, tW = 0.707 * o.wW, segs = [];
+  const S = (x1, y1, x2, y2, te, tipo, cara) => segs.push({ x1, y1, x2, y2, te, tipo, cara });
+  const h = m.d / 2, b = m.bf / 2;
+  if(m.tub){ S(-b, h, b, h, tF, 'F', 'sup'); S(-b, -h, b, -h, tF, 'F', 'inf'); S(-b, -h, -b, h, tW, 'W', 'izq'); S(b, -h, b, h, tW, 'W', 'der'); }
+  else { const hi = h - m.tf, r = m.r || 0, xi = m.tw / 2 + r, yw = hi - r;
+    S(-b, h, b, h, tF, 'F', 'ext'); S(-b, -h, b, -h, tF, 'F', 'ext');
+    S(-b, hi, -xi, hi, tF, 'F', 'int'); S(xi, hi, b, hi, tF, 'F', 'int'); S(-b, -hi, -xi, -hi, tF, 'F', 'int'); S(xi, -hi, b, -hi, tF, 'F', 'int');
+    S(-m.tw / 2, -yw, -m.tw / 2, yw, tW, 'W', 'izq'); S(m.tw / 2, -yw, m.tw / 2, yw, tW, 'W', 'der'); }
+  const pts = []; let A = 0, AF = 0, AW = 0, Ix = 0, Iy = 0, LF = 0, LW = 0;
+  segs.forEach(s => { const L = Math.hypot(s.x2 - s.x1, s.y2 - s.y1), n = 24; s.L = L; if(s.tipo === 'F') LF += L; else LW += L;
+    for(let i = 0; i < n; i++){ const t = (i + 0.5) / n, x = s.x1 + (s.x2 - s.x1) * t, y = s.y1 + (s.y2 - s.y1) * t, a = s.te * L / n;
+      A += a; if(s.tipo === 'F') AF += a; else AW += a; Ix += a * y * y; Iy += a * x * x; }
+    for(let i = 0; i <= 8; i++){ const t = i / 8; pts.push({ x:s.x1 + (s.x2 - s.x1) * t, y:s.y1 + (s.y2 - s.y1) * t, s }); } });
+  const J = Ix + Iy, k = 1000, P = o.P * k, V2 = o.V2 * k, V3 = o.V3 * k, T = o.T * 1e6, M2 = o.M2 * 1e6, M3 = o.M3 * 1e6;
+  const fd = 0.75 * 0.6 * o.FEXX;
+  const peor = { F:null, W:null }, qmax = {};
+  pts.forEach(p => { const F = p.s.tipo === 'F';
+    const sz = P / A + M3 * p.y / Ix + M2 * p.x / Iy, tx = (F ? V3 / AF : 0) - T * p.y / J, ty = (F ? 0 : V2 / AW) + T * p.x / J;
+    const f = Math.hypot(sz, tx, ty), lon = Math.abs(F ? tx : ty), sen = f > 0 ? Math.sqrt(Math.max(0, 1 - (lon / f) ** 2)) : 0;
+    const kds = o.kds ? 1 + 0.5 * sen ** 1.5 : 1, cap = fd * kds, r = f / cap, q = f * p.s.te;
+    const g = p.s.tipo; if(!peor[g] || r > peor[g].r) peor[g] = { f, cap, kds, r, x:p.x, y:p.y, sen };
+    const kq = p.s.tipo + ':' + p.s.cara; qmax[kq] = Math.max(qmax[kq] || 0, q); });
+  return { A, AF, AW, Ix, Iy, J, LF, LW, peor, qmax, fd };
 }
 function calcSoldada(c){
-  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
-  const P = nz(c.P), V2 = nz(c.Vu), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.Mu);
-  const am = ACEROS[c.aceroViga], AEac = k => k === 'A992' ? 'A572 Gr 50' : k;
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch), E = 200000;
+  const P = nz(c.P), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2);
+  let V2 = nz(c.Vu), M3 = nz(c.Mu);
+  const am = ACEROS[c.aceroViga], FEXX = ELECTRODOS[c.electrodo] || 483;
   let m;                                                                           // propiedades del miembro [mm]
   if(c.miembro === 'tubo'){ const H = +c.H, B = +c.B, t = +c.tt, Hi = H - 2 * t, Bi = B - 2 * t;
     m = { nom:`Tubo ${H}×${B}×${t}`, d:H, bf:B, tf:t, tw:t, A:H * B - Hi * Bi, Zx:(B * H * H - Bi * Hi * Hi) / 4, Zy:(H * B * B - Hi * Bi * Bi) / 4, Aw2:2 * H * t, Aw3:2 * B * t, tub:true }; }
   else { const pf = (G.PERFILES_LAM || []).find(x => x[0] === c.viga); if(!pf) return { error:'Escoja el perfil.' };
-    m = { nom:pf[0], d:pf[2], bf:pf[3], tw:pf[4], tf:pf[5], r:pf[6], A:pf[7], Zx:pf[10], Zy:pf[13], Aw2:pf[2] * pf[4], Aw3:2 * pf[3] * pf[5] }; }
-  const tMin = Math.min(m.tf, m.tw, c.soporte === 'placa' ? +c.tSop : (perfil(c.columna)?.tf || 99));
+    m = { nom:pf[0], d:pf[2], bf:pf[3], tw:pf[4], tf:pf[5], r:pf[6], A:pf[7], Zx:pf[10], Zy:pf[13], kg:pf[16], Aw2:pf[2] * pf[4], Aw3:2 * pf[3] * pf[5] }; }
+  const plSop = c.soporte === 'placa', cl = plSop ? null : perfil(c.columna);
+  const tS = plSop ? +c.tSop : (cl ? cl.tf : 0), acS = plSop ? ACEROS[c.aceroSop] : (cl ? ACEROS[c.aceroCol] : null);
+  const wMinT = t => t <= 6 ? 3 : t <= 13 ? 5 : t <= 19 ? 6 : 8;
   pasos.push(`Miembro ${m.nom} (${c.aceroViga}): d = ${m.d}, b = ${m.bf}, tf = ${m.tf}, tw = ${m.tw} mm · P = ${r2(P)}, V2 = ${r2(V2)}, V3 = ${r2(V3)} kN · T = ${r2(T)}, M2 = ${r2(M2)}, M3 = ${r2(M3)} kN·m`);
+
+  // ── Sismo: WUF-W (AISC 358 cap. 8): rótula en la cara de la columna, Mf = Mpr ──
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '';
+  let Mcol = Math.abs(M3);
+  if(sis){
+    const Fy = am.Fy, Fu = am.Fu, Ry = RY(c.aceroViga), Cpr = Math.min(1.2, (Fy + Fu) / (2 * Fy)), Mpr = Cpr * Ry * Fy * m.Zx / 1e6;
+    const Lh = Math.max(+c.Lh || 0, 0.1) * 1000, Vh = 2 * Mpr * 1000 / Lh + Math.abs(+c.Vg || 0);
+    pasos.push(`Sismo ${sis} — conexión WUF-W (AISC 358 cap. 8, NSR-10 F.3): Cpr = ${r3(Cpr)}, Ry = ${Ry} → Mpr = Cpr·Ry·Fy·Zx = ${r2(Mpr)} kN·m; la rótula está en la cara (Sh = 0) → Mf = Mpr; Vu = 2Mpr/L + Vg = ${r2(Vh)} kN (L = ${r2(Lh / 1000)} m)`);
+    Mcol = Math.max(Mcol, Mpr); if(Vh > Math.abs(V2)) V2 = Vh;
+    av.push(`Con sismo ${sis} la columna y el cortante se revisan con el momento probable de la viga Mf = ${r2(Mpr)} kN·m, no con el del modelo.`);
+    if(m.tub) req.push(['WUF-W solo está precalificada para vigas de perfil I', false, 'use un perfil I']);
+    req.push(['Sismo: alas y alma con soldadura de penetración completa (WUF-W, AISC 358 §8.7)', c.union === 'cjp', c.union === 'cjp' ? 'CJP' : 'el filete en todo el perímetro no está precalificado']);
+    if(!m.tub){ const L = sis === 'DES' ? 7 : 5;
+      req.push(['Precalificación WUF-W: altura de la viga ≤ 914 mm (W36)', m.d <= 914.5, `${m.d} mm`]);
+      req.push(['Precalificación WUF-W: espesor del ala ≤ 25.4 mm', m.tf <= 25.5, `${m.tf} mm`]);
+      req.push(['Precalificación WUF-W: peso ≤ 223 kg/m (150 lb/ft)', !m.kg || m.kg <= 223.5, m.kg ? `${m.kg} kg/m` : '—']);
+      req.push([`Precalificación WUF-W: luz libre / altura ≥ ${L} (${sis})`, Lh / m.d >= L - 1e-6, `${r1(Lh / m.d)}`]); }
+    req.push(['Huecos de acceso con la forma de AWS D1.8, soldaduras de demanda crítica, quitar respaldo del ala inferior', true, 'indicar en planos']);
+    if(sis === 'DES') av.push('Pórtico DES: revise también columna fuerte–viga débil (ΣM*pc/ΣM*pb > 1) con NSR-10 F.3.5 (AISC 341 E3).');
+  }
+
+  // ── Soldadura ──
+  let sug = null;
   if(c.union === 'cjp'){
     pasos.push('Penetración completa en todo el perímetro: la soldadura tiene la resistencia del metal base (Tabla F.2.10.2-5); se revisa la sección del miembro en la cara del soporte.');
-    const Pc = 0.9 * am.Fy * m.A / 1000, Mcx = 0.9 * am.Fy * m.Zx / 1e6, Mcy = 0.9 * am.Fy * m.Zy / 1e6, pr = Math.abs(P) / Pc;
-    const inter = pr >= 0.2 ? pr + 8 / 9 * (Math.abs(M3) / Mcx + Math.abs(M2) / Mcy) : pr / 2 + Math.abs(M3) / Mcx + Math.abs(M2) / Mcy;
-    add('soldadura', 'Sección en la cara: axial + flexión en ambos ejes', 'F.2.8.1 (H1-1a/b), φ = 0.90', inter, 1, '', `φPn ${r2(Pc)} kN, φMn3 ${r2(Mcx)}, φMn2 ${r2(Mcy)} kN·m`);
+    const Pc = 0.9 * am.Fy * m.A / 1000, Mcx = 0.9 * am.Fy * m.Zx / 1e6, Mcy = 0.9 * am.Fy * m.Zy / 1e6, pr = Math.abs(P) / Pc, M3m = Math.abs(nz(c.Mu));
+    const inter = pr >= 0.2 ? pr + 8 / 9 * (M3m / Mcx + Math.abs(M2) / Mcy) : pr / 2 + M3m / Mcx + Math.abs(M2) / Mcy;
+    add('soldadura', 'Sección en la cara: axial + flexión en ambos ejes', 'F.2.8.1 (H1-1a/b), φ = 0.90', inter, 1, '', `φPn ${r2(Pc)} kN, φMn3 ${r2(Mcx)}, φMn2 ${r2(Mcy)} kN·m${sis ? ' · con las cargas del modelo (la rótula sísmica se forma aquí por diseño)' : ''}`);
     const tors = m.tub ? Math.abs(T) * 1e6 / (2 * (m.d - m.tf) * (m.bf - m.tw) * m.tf) : Math.abs(T) * 1e6 * Math.max(m.tf, m.tw) / ((2 * m.bf * m.tf ** 3 + m.d * m.tw ** 3) / 3);
-    add('soldadura', 'Cortante V2 con torsión', 'F.2.7 (G2-1) · esfuerzo', Math.abs(V2) * 1000 / m.Aw2 + tors, 0.6 * am.Fy, 'MPa', `V2/Aw + τ torsión (${r1(tors)} MPa)`);
+    add('soldadura', 'Cortante V2 con torsión', 'F.2.7 (G2-1) · esfuerzo', Math.abs(V2) * 1000 / m.Aw2 + tors, 0.6 * am.Fy, 'MPa', `V2/Aw + τ torsión (${r1(tors)} MPa)${sis ? '; V2 = 2Mpr/L + Vg' : ''}`);
     add('soldadura', 'Cortante V3 con torsión', 'F.2.7 (G6) · esfuerzo', Math.abs(V3) * 1000 / m.Aw3 + tors, 0.9 * 0.6 * am.Fy, 'MPa', `V3/Af + τ torsión`);
   } else {
-    const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null);
-    const R = AE.soldadura({ forma:m.tub ? 'O' : 'I', b:m.bf, d:m.d, w:+c.w, electrodo:c.electrodo, t:tMin, acero:AEac(c.aceroViga), H:V3, V:V2, N:P, T, Mx:M3, My:M2 });
-    pasos.push(`Filete de ${c.w} mm en todo el contorno (${m.tub ? 'perímetro rectangular' : 'alas por ambas caras y alma'}): método de la línea; f máx. = ${r1(R.peor.f)} N/mm; w requerido = ${r1(R.wReq)} mm`);
-    R.checks.slice(0, 3).forEach(x => ch.push({ grupo:'soldadura', nombre:x.n, ref:x.ref, dem:x.soloOk ? x.dem : x.dem, cap:x.cap, ud:x.u, ratio:x.r, extra:'' }));
+    const wF = +c.w || 0, wW = nz(c.wAlma) > 0 ? nz(c.wAlma) : wF, kds = !!c.kds;
+    const FuS = acS ? acS.Fu : Infinity;
+    const evalW = (wf, ww) => { const R = soldPerim(m, { wF:wf, wW:ww, kds, FEXX, P, V2, V3, T, M2, M3 });
+      const q = R.qmax, bF = m.tub ? q['F:sup'] || 0 : (q['F:ext'] || 0) + (q['F:int'] || 0), bW = m.tub ? Math.max(q['W:izq'] || 0, q['W:der'] || 0) : (q['W:izq'] || 0) + (q['W:der'] || 0);
+      const capF = 0.45 * am.Fu * m.tf, capW = 0.45 * am.Fu * m.tw, qS = Math.max(...Object.values(q)), capS = 0.45 * FuS * tS;
+      const rmax = Math.max(R.peor.F.r, R.peor.W.r, bF / capF, bW / capW, acS ? qS / capS : 0);
+      return { R, bF, bW, capF, capW, qS, capS, rmax }; };
+    const X = evalW(wF, wW), R = X.R, nomF = m.tub ? 'caras horizontales (b)' : 'alas', nomW = m.tub ? 'caras verticales (d)' : 'alma', delW = m.tub ? 'de las' : 'del';
+    pasos.push(`Filete en todo el contorno (${m.tub ? 'perímetro rectangular' : 'alas por ambas caras y alma por ambas caras'}): ${nomF} w = ${wF} mm, ${nomW} w = ${wW} mm${nz(c.wAlma) > 0 ? '' : ' (igual)'}; método elástico con la garganta de cada tramo: A = ${Math.round(R.A)} mm², Ix = ${(R.Ix / 1e6).toFixed(3)}·10⁶, Iy = ${(R.Iy / 1e6).toFixed(3)}·10⁶ mm⁴; V2 en el ${nomW}, V3 en las ${nomF}`);
+    pasos.push(`Resistencia del cordón φ·0.60·FEXX = ${r1(R.fd)} MPa sobre la garganta${kds ? ' × (1 + 0.5·sen^1.5θ) en cada punto (J2-5)' : ' (sin aumento por dirección)'}`);
+    const pf_ = R.peor.F, pw_ = R.peor.W;
+    add('soldadura', `Cordón de las ${nomF}`, `F.2.10.2.4 (J2-4${kds ? ', J2-5' : ''}), φ = 0.75`, pf_.f, pf_.cap, 'MPa', `w = ${wF} mm; punto (${r1(pf_.x)}, ${r1(pf_.y)})${kds ? `, kds = ${r3(pf_.kds)}` : ''}`);
+    add('soldadura', `Cordón ${delW} ${nomW}`, `F.2.10.2.4 (J2-4${kds ? ', J2-5' : ''}), φ = 0.75`, pw_.f, pw_.cap, 'MPa', `w = ${wW} mm; punto (${r1(pw_.x)}, ${r1(pw_.y)})${kds ? `, kds = ${r3(pw_.kds)}` : ''}`);
+    add('soldadura', `Metal base del miembro: ${nomF}`, 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', X.bF, X.capF, 'N/mm', m.tub ? `pared t = ${m.tf} mm` : `cordones exterior + interior sobre tf = ${m.tf} mm`);
+    add('soldadura', `Metal base del miembro: ${nomW}`, 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', X.bW, X.capW, 'N/mm', m.tub ? `pared t = ${m.tw} mm` : `cordones de las dos caras sobre tw = ${m.tw} mm`);
+    if(acS) add(plSop ? 'soporte' : 'columna', `Metal base del ${plSop ? 'soporte (placa)' : 'ala de la columna'} junto al cordón`, 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', X.qS, X.capS, 'N/mm', `cordón más cargado sobre t = ${tS} mm`);
+    const tmF = Math.min(m.tf, tS || 99), tmW = Math.min(m.tw, tS || 99);
+    req.push([`Filete de las ${nomF} ≥ mínimo Tabla J2.4`, wF >= wMinT(tmF), `${wF} ≥ ${wMinT(tmF)} mm (parte más delgada ${tmF} mm)`]);
+    req.push([`Filete ${delW} ${nomW} ≥ mínimo Tabla J2.4`, wW >= wMinT(tmW), `${wW} ≥ ${wMinT(tmW)} mm (parte más delgada ${tmW} mm)`]);
+    if(kds) av.push('Aumento por dirección (J2-5) aplicado punto por punto con el método elástico: es una aproximación; la norma lo permite en grupos de filetes del mismo tamaño cargados en su plano.');
     av.push('Unión en T: no aplica el tamaño máximo del filete en el borde (F.2.10.2.2 es para bordes de platinas).');
+    // 💡 Sugerencia: filetes más pequeños que cumplen (menor volumen de soldadura); si ninguno alcanza, penetración completa
+    const W = [3, 5, 6, 8, 10, 12, 14, 16]; let best = null;
+    W.filter(a => a >= wMinT(tmF)).forEach(a => W.filter(b2 => b2 >= wMinT(tmW)).forEach(b2 => { const Y = evalW(a, b2); if(Y.rmax > 1) return;
+      const vol = a * a * R.LF + b2 * b2 * R.LW; if(!best || vol < best.vol - 1e-6) best = { w:a, wAlma:b2, vol, max:Y.rmax }; }));
+    if(sis) sug = { tipo:'sold', ok:true, union:'cjp', txt:'💡 Cambiar a penetración completa (exigida por el sismo)' };
+    else if(best && (best.w !== wF || best.wAlma !== wW)) sug = { tipo:'sold', ok:true, w:best.w, wAlma:best.wAlma === best.w ? '' : best.wAlma, max:best.max,
+      txt:`💡 Usar filete de ${best.w} mm en las ${nomF} y ${best.wAlma} mm en ${m.tub ? 'las' : 'el'} ${nomW} (relación ${best.max.toFixed(2)})` };
+    else if(!best){ sug = { tipo:'sold', ok:true, union:'cjp', txt:'💡 Ningún filete hasta 16 mm alcanza: cambiar a penetración completa' };
+      av.push('Ningún filete hasta 16 mm alcanza: use soldadura de penetración completa o un miembro con paredes más gruesas.'); }
   }
-  // Soporte
-  const Ffu = Math.abs(M3) * 1000 / (m.d - m.tf) + Math.abs(P) / 2;
+
+  // ── Soporte ──
+  const Ffu = Mcol * 1000 / (m.d - m.tf) + Math.abs(P) / 2;
   const N = m.tf + 2 * (c.union === 'cjp' ? 0 : +c.w);
-  pasos.push(`Fuerza en cada ala Ffu = M3/(d − tf) + |P|/2 = ${r2(Ffu)} kN; longitud de apoyo N = tf + 2w = ${r1(N)} mm`);
-  if(c.soporte === 'placa'){ const ps = ACEROS[c.aceroSop], tp = +c.tSop;
+  pasos.push(`Fuerza en cada ala Ffu = ${sis ? 'Mf' : 'M3'}/(d − tf) + |P|/2 = ${r2(Ffu)} kN; longitud de apoyo N = tf + 2w = ${r1(N)} mm`);
+  let rig = null;
+  if(plSop){ const ps = ACEROS[c.aceroSop], tp = +c.tSop;
     add('soporte', 'Placa de apoyo: flexión local bajo el ala en tensión', 'F.2.10.10.1 (J10-1) aplicado a la placa', Ffu, 0.9 * 6.25 * ps.Fy * tp * tp / 1000, 'kN', `t = ${tp} mm`);
     if(Math.abs(M2) > 0 || Math.abs(T) > 0) av.push('M2 y T llegan a la placa fuera de su plano; revise la placa y lo que la sostiene (pernos o soldadura).'); }
-  else { const cl = perfil(c.columna);
-    if(cl){ const ac = ACEROS[c.aceroCol], kc = cl.tf + cl.r, E = 200000;
-      add('columna', 'Flexión local del ala de la columna', 'F.2.10.10.1 (J10-1)', Ffu, 0.9 * 6.25 * ac.Fy * cl.tf ** 2 / 1000 * (c.colTope ? 0.5 : 1), 'kN', `6.25·Fy·tf²${c.colTope ? ' × 0.5 (en el tope)' : ''}`);
-      const ly = (c.colTope ? 2.5 : 5) * kc + N;
-      add('columna', 'Fluencia local del alma', `F.2.10.10.2 (J10-${c.colTope ? 3 : 2})`, Ffu, 1.0 * ac.Fy * cl.tw * ly / 1000, 'kN', `L = ${c.colTope ? '2.5' : '5'}k + N = ${r1(ly)} mm`);
-      const rN = N / cl.d, f = c.colTope ? 0.4 : 0.8;
-      const cr = (c.colTope && rN > 0.2) ? 0.4 * cl.tw ** 2 * (1 + (4 * rN - 0.2) * (cl.tw / cl.tf) ** 1.5) : f * cl.tw ** 2 * (1 + 3 * rN * (cl.tw / cl.tf) ** 1.5);
-      add('columna', 'Aplastamiento del alma', 'F.2.10.10.3 (J10-4/5)', Ffu, 0.75 * cr * Math.sqrt(E * ac.Fy * cl.tf / cl.tw) / 1000, 'kN', `N/d = ${r3(rN)}`);
-      add('columna', 'Zona de panel', 'F.2.10.10.6 (J10-9), φ = 0.90', Ffu, 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000, 'kN', '0.6·Fy·dc·tw (sin cortante de la columna)');
-      req.push(['El miembro cabe en el ala de la columna: b ≤ bf de la columna', m.bf <= cl.bf + 1e-6, `${m.bf} ≤ ${cl.bf} mm`]);
-      if(Math.abs(M2) > 0) av.push('M2 se transmite al ala de la columna como flexión fuera de su plano; si es importante, use rigidizadores o una placa.'); }
-    else av.push('No se revisó la columna: escoja su perfil.'); }
+  else if(cl){
+    const ac = ACEROS[c.aceroCol], kc = cl.tf + cl.r, hcw = cl.d - 2 * kc, tope = !!c.colTope, ar = ACEROS[c.aceroRigC] || ACEROS.A36;
+    const dos = !!c.dosLados, Mu2 = dos ? Math.abs(+c.Mu2 || 0) : 0, F2 = dos ? Mu2 * 1000 / (m.d - m.tf) : 0, op = dos && c.sentido2 !== 'mismo';
+    if(dos) pasos.push(`Viga al otro lado: M₂ = ${r2(Mu2)} kN·m → F₂ = ${r2(F2)} kN (misma altura); momentos ${op ? 'opuestos (gravedad)' : 'del mismo sentido (sismo/viento)'}`);
+    const Fc = Math.max(Ffu, F2);
+    const Rfb = 0.9 * 6.25 * ac.Fy * cl.tf ** 2 / 1000 * (tope ? 0.5 : 1);
+    const ly = (tope ? 2.5 : 5) * kc + N, Rly = 1.0 * ac.Fy * cl.tw * ly / 1000;
+    const rN = N / cl.d, cr = (tope && rN > 0.2) ? 0.4 * cl.tw ** 2 * (1 + (4 * rN - 0.2) * (cl.tw / cl.tf) ** 1.5) : (tope ? 0.4 : 0.8) * cl.tw ** 2 * (1 + 3 * rN * (cl.tw / cl.tf) ** 1.5);
+    const Rcr = 0.75 * cr * Math.sqrt(E * ac.Fy * cl.tf / cl.tw) / 1000;
+    const Rpb = op ? 0.9 * 24 * cl.tw ** 3 * Math.sqrt(E * ac.Fy) / hcw / 1000 * (tope ? 0.5 : 1) : Infinity;
+    const Rst = Math.max(0, Fc - Rfb, Fc - Rly, Fc - Rcr, op ? Math.min(Ffu, F2) - Rpb : 0);
+    // Placas de continuidad exigidas por sismo (AISC 341 E3.6f)
+    let sisPide = false;
+    if(sis){ const Ryb = RY(c.aceroViga), Ryc = RY(c.aceroCol), tcfMin = Math.max(0.4 * Math.sqrt(1.8 * m.bf * m.tf * Ryb * am.Fy / (Ryc * ac.Fy)), m.bf / 6);
+      sisPide = cl.tf < tcfMin; pasos.push(`Sismo: placas de continuidad si tcf < máx(0.4√(1.8·bf·tf·Ryb·Fyb/(Ryc·Fyc)); bf/6) = ${r1(tcfMin)} mm → ${sisPide ? 'se requieren' : 'no se requieren'} (tcf = ${cl.tf} mm)`); }
+    const usar = c.rigCol === 'si' || (c.rigCol === 'auto' && (Rst > 0 || sisPide));
+    if(c.rigCol === 'no' && (Rst > 0 || sisPide)) req.push(['Placas de continuidad de la columna', false, sisPide ? 'el sismo las exige (AISC 341)' : `faltan ${r2(Rst)} kN en el ala o el alma`]);
+    let capPl = 0;
+    if(usar){
+      const clip = Math.max(cl.r, 15), bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lwc = cl.d - 2 * cl.tf - 2 * clip;
+      const tMinP = (dos || sis) ? m.tf : m.tf / 2;
+      const Fst = Math.max(Rst, sisPide ? Ffu : 0);
+      const tReq = Math.max(tMinP, bs / (0.56 * Math.sqrt(E / ar.Fy)), Fst > 0 ? Fst * 1000 / (0.9 * ar.Fy * 2 * Lf) : 0);
+      const ts = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1);
+      const capFl = w => 1.5 * fw2(FEXX, w) * 2 * 2 * Lf, capWb = w => fw2(FEXX, w) * 2 * 2 * Lwc;
+      const ws = +c.wsC > 0 ? +c.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMinT(Math.min(ts, cl.tf)) && capFl(w) >= Fst && capWb(w) >= Fst) || 16);
+      capPl = 0.9 * ar.Fy * 2 * Lf * ts / 1000;
+      rig = { ts, ws, bs, clip };
+      pasos.push(`Placas de continuidad (2 por ala de la viga): bs = (bf − tw)/2 = ${r1(bs)} mm, despunte ${r1(clip)} mm, ts = ${ts} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'}; fuerza que toman ${r2(Fst)} kN`);
+      req.push([`Placas: ts ≥ ${dos || sis ? 'tf' : 'tf/2'} de la viga (J10.8${sis ? ', AISC 341' : ''})`, ts >= tMinP - 1e-6, `${ts} ≥ ${r1(tMinP)} mm`]);
+      req.push(['Placas: bs + tw/2 ≥ bf de la viga/3 (J10.8)', bs + cl.tw / 2 >= m.bf / 3 - 1e-6, `${r1(bs + cl.tw / 2)} ≥ ${r1(m.bf / 3)} mm`]);
+      req.push(['Placas: bs/ts ≤ 0.56√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy) + 1e-6, `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
+      req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMinT(Math.min(ts, cl.tf)), `${ws} ≥ ${wMinT(Math.min(ts, cl.tf))} mm`]);
+      if(Fst > 0){
+        add('placas', 'Placas de continuidad: fluencia (tensión / compresión corta)', 'F.2.10.10.8 (J10.8), φ = 0.90', Fst, capPl, 'kN', `0.9·Fy·2·(bs − despunte)·ts`);
+        add('placas', 'Filetes de las placas al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 ×1.5)', Fst, capFl(ws), 'kN', `2 placas × 2 caras × ${r1(Lf)} mm · ${ws} mm`);
+        add('placas', 'Filetes de las placas al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, capWb(ws), 'kN', `2 placas × 2 caras × ${r1(Lwc)} mm · ${ws} mm`); }
+      if(sis) req.push(['Sismo: placas de continuidad soldadas a las alas de la columna con penetración completa (AISC 341 E3.6f)', true, 'indicar en planos']);
+    }
+    const mp = usar ? ' + placas' : '';
+    add('columna', 'Flexión local del ala de la columna', 'F.2.10.10.1 (J10-1)', Fc, Rfb + capPl, 'kN', `6.25·Fy·tf²${tope ? ' × 0.5 (en el tope)' : ''}${mp}`);
+    add('columna', 'Fluencia local del alma', `F.2.10.10.2 (J10-${tope ? 3 : 2})`, Fc, Rly + capPl, 'kN', `L = ${tope ? '2.5' : '5'}k + N = ${r1(ly)} mm${mp}`);
+    add('columna', 'Aplastamiento del alma', 'F.2.10.10.3 (J10-4/5)', Fc, Rcr + capPl, 'kN', `N/d = ${r3(rN)}${mp}`);
+    if(op) add('columna', 'Pandeo del alma por las dos alas (vigas a los dos lados)', 'F.2.10.10.5 (J10-8), φ = 0.90', Math.min(Ffu, F2), Rpb + capPl, 'kN', `24·tw³·√(E·Fy)/h${mp}`);
+    const Vp = !dos ? Ffu : op ? Math.abs(Ffu - F2) : Ffu + F2, Rv = 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000;
+    add('columna', 'Zona de panel', 'F.2.10.10.6 (J10-9), φ = 0.90', Vp, Rv, 'kN', `${!dos ? 'Ffu' : op ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`);
+    if(Vp > Rv){ const tdq = Vp / (Rv / cl.tw) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (cl.d - 2 * cl.tf) / 90) - 1e-6) || 38.1;
+      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${c.aceroCol}) soldada al alma y a las alas, o use una columna de alma más gruesa.`); }
+    req.push(['El miembro cabe en el ala de la columna: b ≤ bf de la columna', m.bf <= cl.bf + 1e-6, `${m.bf} ≤ ${cl.bf} mm`]);
+    if(Math.abs(M2) > 0) av.push('M2 se transmite al ala de la columna como flexión fuera de su plano; si es importante, use rigidizadores o una placa.');
+  } else av.push('No se revisó la columna: escoja su perfil.');
   req.push(['Acceso para soldar todo el contorno (también por dentro de las alas)', true, 'verificar en obra']);
-  if(c.union !== 'cjp') req.push(['Filete ≥ mínimo de la Tabla F.2.10.2-4', +c.w >= (tMin > 19 ? 8 : tMin > 12.7 ? 6 : tMin > 6.4 ? 5 : 3), `${c.w} mm (parte más delgada ${tMin} mm)`]);
-  return fin(ch, req, av, pasos, { m, Ffu });
+  const r = fin(ch, req, av, pasos, { m, Ffu, rig });
+  if(sug) r.sug = sug;
+  return r;
 }
 
 // ── Empalme de viga en Z soldado (pedido de Amo 12-nov) ─────────────

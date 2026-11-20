@@ -195,17 +195,28 @@ function seccionesDe(c){
     ['sold', 'Soldadura', () => c.union === 'pjp' ? `penetración parcial · E alas ${c.Ef || '—'} · alma ${c.Ew || '—'} mm · ${c.electrodo}` : 'penetración completa en alas y alma',
       g3(campo(c, 'union', 'Tipo', { sel:[['cjp', 'Penetración completa'], ['pjp', 'Penetración parcial']] }),
         ...(c.union === 'pjp' ? [campo(c, 'Ef', 'Garganta efectiva en alas E [mm]', { h:'Vacío = tf/2' }), campo(c, 'Ew', 'Garganta efectiva en el alma E [mm]', { h:'Vacío = tw/2' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })] : []))] ];
+  const RIGS = { auto:'Automático (las diseña si hacen falta)', si:'Sí, siempre', no:'No poner' }, tub = c.miembro === 'tubo';
   if(c.tipo === 'soldada') return [
     ['miem', 'Miembro soldado', () => c.miembro === 'tubo' ? `Tubo ${c.H}×${c.B}×${c.tt} mm · ${c.aceroViga}` : `${c.viga} · ${c.aceroViga}`,
       g3(campo(c, 'miembro', 'Tipo', { sel:[['I', 'Perfil I'], ['tubo', 'Tubo rectangular']] }), c.miembro === 'tubo' ? '' : SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))
       + (c.miembro === 'tubo' ? g3(campo(c, 'H', 'Alto H [mm]', { h:'En la dirección 2' }), campo(c, 'B', 'Ancho B [mm]'), campo(c, 'tt', 'Espesor t [mm]')) : '')],
-    ['sold', 'Soldadura en todo el perímetro', () => c.union === 'cjp' ? 'penetración completa' : `filete ${c.w} mm · ${c.electrodo}`,
-      g3(campo(c, 'union', 'Tipo de soldadura', { sel:[['filete', 'Filete en todo el contorno'], ['cjp', 'Penetración completa']] }), c.union === 'cjp' ? '' : campo(c, 'w', 'Pierna del filete w [mm]'), c.union === 'cjp' ? '' : campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))],
-    ['sop', 'Soporte', () => c.soporte === 'placa' ? `Placa t ${c.tSop} mm · ${c.aceroSop}` : c.columna ? `Ala de ${c.columna} · ${c.aceroCol}` : 'columna sin revisar',
+    ['sold', 'Soldadura en todo el perímetro', () => c.union === 'cjp' ? 'penetración completa' : `filete ${tub ? 'b' : 'alas'} ${c.w} mm · ${tub ? 'd' : 'alma'} ${nz(c.wAlma) > 0 ? c.wAlma : c.w} mm · ${c.electrodo}${c.kds ? ' · con aumento por dirección' : ''}`,
+      g3(campo(c, 'union', 'Tipo de soldadura', { sel:[['filete', 'Filete en todo el contorno'], ['cjp', 'Penetración completa']] }),
+        ...(c.union === 'cjp' ? [] : [campo(c, 'w', tub ? 'Filete caras horizontales (b) [mm]' : 'Filete de las alas w [mm]'), campo(c, 'wAlma', tub ? 'Filete caras verticales (d) [mm]' : 'Filete del alma [mm]', { h:'Vacío = igual al anterior' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
+      + (c.union === 'cjp' ? '' : ck('kds', 'Aplicar el aumento por dirección del filete (1 + 0.5·sen^1.5θ, J2-5): más resistencia donde la fuerza va de frente al cordón'))],
+    ['sop', 'Soporte', () => c.soporte === 'placa' ? `Placa t ${c.tSop} mm · ${c.aceroSop}` : c.columna ? `Ala de ${c.columna} · ${c.aceroCol}${c.dosLados ? ` · viga al otro lado M₂ ${c.Mu2}` : ''} · placas: ${(RIGS[c.rigCol || 'auto'] || '').split(' (')[0].toLowerCase()}` : 'columna sin revisar',
       g3(campo(c, 'soporte', 'Se suelda a', { sel:[['col', 'Ala de una columna'], ['placa', 'Una placa']] }),
         ...(c.soporte === 'placa' ? [campo(c, 'tSop', 'Espesor de la placa [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })]
           : [SELP('columna', 'Perfil de la columna', '— No revisar la columna —'), campo(c, 'aceroCol', 'Acero', { sel:SEL_ACERO })]))
-      + (c.soporte === 'placa' ? '' : ck('colTope', 'La unión está en el extremo superior de la columna'))] ];
+      + (c.soporte === 'placa' || !c.columna ? '' : ck('colTope', 'La unión está en el extremo superior de la columna')
+        + ck('dosLados', 'Llega otra viga a momento al otro lado de la columna')
+        + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
+        + `<h4 class="sub">Placas de continuidad de la columna</h4>`
+        + g3(campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])))],
+    ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
+        ...(c.sismo === 'DMO' || c.sismo === 'DES' ? [campo(c, 'Lh', 'Luz libre de la viga L [m]', { h:'Entre caras de columnas (la rótula queda en la cara)' }), campo(c, 'Vg', 'Vg: cortante de gravedad [kN]', { h:'1.2D + 0.5L (o la del modelo)' })] : []))
+      + (c.sismo === 'DMO' || c.sismo === 'DES' ? `<div class="note${c.union === 'cjp' && !tub ? '' : ' red'}">Conexión precalificada WUF-W (AISC 358 cap. 8): alas y alma de penetración completa, diseño con el momento probable de la viga Mpr. ${c.union === 'cjp' && !tub ? '' : 'Con filete o con tubo NO está precalificada: la conexión sale «No cumple».'}</div>` : '')] ];
   if(c.tipo === 'ras') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))], colSec(),
     ['placa', 'Placa de testa', () => `PL ${c.tp} × ${c.bp} mm ${c.aceroPl} · ${c.placaTipo === 'delgada' ? 'delgada con palanca' : 'gruesa sin palanca'}`,
@@ -392,7 +403,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -404,12 +415,13 @@ function renderEditor(){
 // «Aplicar platina de rigidez» del asiento (sugerencia del cálculo)
 document.addEventListener('click', e => { const b = e.target.closest('[data-apsug]'); if(!b || !S.p) return;
   const c = S.p.datos.con.find(x => x.id === S.sel); if(!c) return; const r = Conex.calc(c); if(!r.sug) return;
+  if(r.sug.tipo === 'sold'){ const { tipo, ok, max, txt, ...v } = r.sug; Object.assign(c, v); renderEditor(); guardar(); toast(v.union === 'cjp' ? 'Cambiado a penetración completa' : 'Soldadura sugerida aplicada'); return; }
   const { max, ok, peso, ...v } = r.sug; Object.assign(c, v, { rig:true, aceroRig:c.aceroRig || c.aceroAng, electrodo:c.electrodo || 'E70XX' }); renderEditor(); guardar(); toast('Platina de rigidez aplicada'); });
 function resHTML(c, r){
   if(r.error) return `<div class="note">${esc(r.error)}</div>`;
   return `<div class="ct">Resultado <span class="pill ${r.ok ? 'ok' : 'no'}" style="margin-left:8px">${r.ok ? 'Cumple' : 'No cumple'} · relación máx. ${f2(r.max, 3)}</span></div>
     ${r.av.length ? `<div class="note amber">${r.av.map(esc).join('<br/>')}</div>` : ''}
-    ${r.sug && r.sug.ok && esIng() ? `<div style="margin:-4px 0 10px"><button type="button" class="btn sm pri" data-apsug="1">💡 Aplicar platina de rigidez</button></div>` : ''}
+    ${r.sug && r.sug.ok && esIng() ? `<div style="margin:-4px 0 10px"><button type="button" class="btn sm pri" data-apsug="1">${esc(r.sug.txt || '💡 Aplicar platina de rigidez')}</button></div>` : ''}
     ${chequeosHTML(r)}
     <details style="margin-top:8px"><summary><b>Requisitos de geometría y detallado</b> (${r.req.filter(x => x[1]).length}/${r.req.length})</summary>${reqHTML(r)}</details>
     <details style="margin-top:6px"><summary><b>Ver cálculo detallado</b></summary><div class="calc">${r.pasos.map(esc).join('<br/>')}</div></details>`;
