@@ -1107,27 +1107,60 @@ function calcCartela(c){
 function defaultsBase(){
   return { tipo:'base', nom:'', desc:'', P:150, Mx:20, My:0, Vx:15, Vy:0, columna:'HEB 200',
     N:400, B:350, tp:25.4, aceroPlaca:'A36', Lp:650, Wp:600, ha:1000, fc:21,
-    perno:'3/4"', anclaje:'F1554 Gr 36', nB:2, S1:300, S2:250, hef:300, arandela:50, cabeza:'tuerca', fisurado:true, mortero:true, w:8, electrodo:'E70XX' };
+    perno:'3/4"', anclaje:'F1554 Gr 36', nB:2, S1:300, S2:250, hef:300, arandela:50, cabeza:'tuerca', fisurado:true, mortero:true, w:8, electrodo:'E70XX',
+    // Revisión con Amo (20-nov, puntos 1–8 menos el 6)
+    colTipo:'I', Ht:200, Bt:200, tt:8, cortante:'anclajes', lugB:150, lugH:100, lugT:19, lugW:8, aceroLug:'A36', grout:25,
+    sismo:'no', refT:false, refNT:4, refDT:12.7, refV:false, refNV:2, refDV:12.7, fyR:420, arandSold:true };
 }
 function calcBase(c){
   const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null);
   if(!AE) return { error:'No se cargó el cálculo de la placa base.' };
-  const cl = perfil(c.columna); if(!cl) return { error:'Escoja el perfil de la columna.' };
+  const tubo = c.colTipo === 'tubo', tD = 0.93 * (+c.tt || 0);
+  const cl = tubo ? { nom:`Tubo ${c.Ht}×${c.Bt}×${c.tt}`, d:+c.Ht, bf:+c.Bt, tw:tD, tf:tD, r:0, tub:true } : perfil(c.columna); if(!cl) return { error:'Escoja el perfil de la columna.' };
   const R = AE.placaBase({ ...c, bf:cl.bf, d:cl.d, tw:cl.tw, tf:cl.tf }, [{ P:+c.P, Mn:+c.Mx, Mb:+c.My, Vn:+c.Vx, Vb:+c.Vy }]);
   if(!R.ok) return { error:R.error };
-  const ch = [], GR = { apl:'concreto', geo:'placa', tp:'placa', ten:'anclajes', cono:'concreto', pull:'anclajes', vs:'anclajes', vb:'concreto', vcp:'concreto', int:'anclajes', sb:'concreto', sold:'soldadura' };
+  const ch = [], GR = { apl:'concreto', geo:'placa', tp:'placa', ten:'anclajes', cono:'concreto', pull:'anclajes', vs:'anclajes', vb:'concreto', vcp:'concreto', int:'anclajes', sb:'concreto', sold:'soldadura',
+    fric:'cortante', lugApl:'cortante', lugFlex:'cortante', lugSold:'cortante', lugCon:'cortante', duc:'anclajes' };
   for(const [k, x] of Object.entries(R.checks)){
     const N = x.u === 'N', soloR = !x.u || x.soloOk;
     ch.push({ grupo:GR[k] || 'placa', nombre:x.n, ref:x.ref, dem: soloR ? x.r : N ? x.dem / 1000 : x.dem, cap: soloR ? 1 : N ? x.cap / 1000 : x.cap, ud: soloR ? '' : N ? 'kN' : x.u, ratio:x.r,
       extra: k === 'tp' ? `t requerido = ${r1(x.req)} mm` : '' });
   }
+  // N·mm → kN·m y N/mm → kN/mm (chequeos nuevos de la llave)
+  ch.forEach(x => { if(x.ud === 'N·mm'){ x.dem /= 1e6; x.cap /= 1e6; x.ud = 'kN·m'; } else if(x.ud === 'N/mm'){ x.dem /= 1000; x.cap /= 1000; x.ud = 'kN/mm'; } });
+  const req = [];
+  req.push(['Distancia de los pernos al borde del pedestal ≥ 6·da (C-D.8.2)', Math.min(R.caN, R.caB) >= 6 * R.da - 1e-6, `${r1(Math.min(R.caN, R.caB))} ≥ ${r1(6 * R.da)} mm`]);
+  req.push(['Separación entre pernos ≥ 4·da (C-D.8.1)', Math.min(R.S1, R.S2 / Math.max(R.nB - 1, 1)) >= 4 * R.da - 1e-6, `${r1(Math.min(R.S1, R.S2 / Math.max(R.nB - 1, 1)))} ≥ ${r1(4 * R.da)} mm`]);
+  req.push(['Empotramiento cabe en el pedestal: hef ≤ altura − 50 mm', R.hef <= R.ha - 50 + 1e-6, `${R.hef} ≤ ${R.ha - 50} mm`]);
+  req.push(['Borde de la placa a los pernos ≥ 1.5·da', Math.min(R.a, R.aB) >= 1.5 * R.da - 1e-6, `${r1(Math.min(R.a, R.aB))} ≥ ${r1(1.5 * R.da)} mm`]);
+  if(R.modoV === 'llave') req.push(['Llave: alto bajo el mortero ≥ 50 mm y espesor ≥ 13 mm (práctica de la Guía 1)', (+c.lugH - (c.mortero ? +c.grout : 0)) >= 50 && +c.lugT >= 12.7, `${+c.lugH - (c.mortero ? +c.grout : 0)} mm · t ${c.lugT} mm`]);
+  if(R.sis) req.push(['Sismo: anclajes de acero dúctil (F1554 Gr 36/55 o A36) con tuerca y arandela; soldaduras con electrodo de tenacidad', !/105/.test(c.anclaje), c.anclaje]);
   const f = R.peor, pasos = [
     `Columna ${cl.nom} sobre placa N × B × tp = ${R.N} × ${R.B} × ${R.tp} mm; pedestal ${R.Lp} × ${R.Wp} mm, f'c = ${R.fc} MPa`,
     `Aplastamiento máximo fp,máx = 0.65·0.85·f'c·√(A2/A1) ≤ 2 → ${r2(R.fpMax)} MPa; voladizos m = ${r1(R.m)}, n = ${r1(R.nv)}, λn' = ${r1(R.lnp)} mm`,
     `Sentido X (N): ${f.rN.caso}; e = ${isFinite(f.rN.e) ? r1(f.rN.e) : '∞'} mm, e crít = ${r1(f.rN.ecrit)} mm, Y = ${r1(f.rN.Y)} mm, Tu = ${r2(f.rN.Tu / 1000)} kN`,
     `Sentido Y (B): ${f.rB.caso}; Tu = ${r2(f.rB.Tu / 1000)} kN · espesor requerido ${r1(f.tReq)} mm`,
     `Anclajes ${R.n} × ${c.perno} ${c.anclaje}: φNsa = ${r2(R.phiNsa / 1000)} kN, φVsa = ${r2(R.phiVsa / 1000)} kN por perno; hef = ${R.hef} mm` ];
-  return fin(ch, [], [...R.avisos], pasos, { R, cl });
+  pasos.push(`Cortante: ${R.modoV === 'friccion' ? 'por fricción (μ = 0.55 con la compresión)' : R.modoV === 'llave' ? `llave de cortante ${c.lugB} × ${c.lugH} × ${c.lugT} mm (${c.aceroLug}) con filete ${c.lugW} mm` : `en los anclajes (${R.nV} de ${R.n} toman cortante)`}${R.sis ? ` · sismo ${c.sismo}: resistencias del concreto ×0.75 (C-D.3.3)` : ''}${R.refT ? ` · refuerzo de anclaje a tensión φNn = ${r2(R.refT / 1000)} kN` : ''}${R.refV ? ` · a cortante φVn = ${r2(R.refV / 1000)} kN` : ''}`);
+  const out = fin(ch, req, [...R.avisos], pasos, { R, cl });
+  // 💡 mínimo que sirve (pedido de Amo 20-nov): espesor, tamaño de la placa, hef, pernos por fila y diámetro
+  if(!c._sinSug && !out.ok){
+    const PER = ['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'], ip = Math.max(0, PER.indexOf(c.perno)), esp = ESP_PL.concat([44.5, 50.8]).filter(t => t >= +c.tp - 1e-6);
+    const hefs = [+c.hef, ...[300, 400, 500, 600, 700, 800, 900].filter(h => h > +c.hef && h <= +c.ha - 50)];
+    let best = null;
+    busca: for(const pe of PER.slice(ip)) for(const nB of [2, 3, 4].filter(x => x >= +c.nB)) for(const hef of hefs) for(let k = 0; k <= 200; k += 25) for(const tp of esp){
+      const o = { perno:pe, nB, hef, N:+c.N + k, B:+c.B + k, tp };
+      if(o.N > +c.Lp - 50 || o.B > +c.Wp - 50) continue;
+      const t = calcBase({ ...c, ...o, _sinSug:true }); if(t.error) continue;
+      if(t.ok){ best = o; break busca; }
+      // si solo falla la soldadura columna–placa, se prueba un filete más grande
+      if(t.ch.every(x => x.ratio <= 1 || /Soldadura columna/.test(x.nombre)) && !t.req.some(q => !q[1]))
+        for(const w of [5, 6, 8, 10, 12, 14, 16].filter(x => x > +c.w)){ if(calcBase({ ...c, ...o, w, _sinSug:true }).ok){ best = { ...o, w }; break busca; } } }
+    if(best){ const cam = [best.tp !== +c.tp ? `placa de ${best.tp} mm` : '', best.N !== +c.N ? `${best.N} × ${best.B} mm` : '', best.hef !== +c.hef ? `hef ${best.hef} mm` : '', best.nB !== +c.nB ? `${best.nB} pernos por fila` : '', best.perno !== c.perno ? `pernos de ${best.perno}` : '', best.w ? `filete columna–placa de ${best.w} mm` : ''].filter(Boolean);
+      out.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar ${cam.join(', ')}` }; }
+    else out.av.push('No se encontró una placa que cumpla con este pedestal (hasta pernos de 1-1/4", 4 por fila, la placa 200 mm más grande y hef hasta la altura del pedestal): agrande el pedestal, agregue refuerzo de anclaje o use una llave de cortante.');
+  }
+  return out;
 }
 
 

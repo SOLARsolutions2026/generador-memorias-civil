@@ -122,6 +122,9 @@ function soldadura(s){
 function placaBase(c, filas){
   const bf = num(c.bf, 200), d = num(c.d, 190), tw = num(c.tw, 6.5), tf = num(c.tf, 10);
   const N = num(c.N, 290), B = num(c.B, 250), tp = num(c.tp, 9.5), Fyp = (ACEROS[c.aceroPlaca] || ACEROS.A36)[0];
+  // Revisión con Amo (20-nov): columna de tubo (Guía 1: 0.95 en los dos sentidos), forma de pasar el cortante, sismo, refuerzo de anclaje, agujeros y arandelas
+  const tub = c.colTipo === 'tubo' || c.tipo === 'HSS', sis = ['DMO', 'DES'].includes(c.sismo), fS = sis ? 0.75 : 1;   // C-D.3.3: concreto ×0.75 con sismo
+  const modoV = ['friccion', 'llave'].includes(c.cortante) ? c.cortante : 'anclajes';
   const Lp = num(c.Lp, 400), Wp = num(c.Wp, 400), ha = num(c.ha, 1180), fc = num(c.fc, 21);
   const [da, Ab, Ase] = perno(c.perno), [fya, futa0] = ANCLAJES[c.anclaje] || ANCLAJES.A36, futa = Math.min(futa0, 1.9*fya, 860);
   const nB = Math.max(2, Math.round(num(c.nB, 2))), n = 2*nB, S1 = num(c.S1, 240), S2 = num(c.S2, 106), hef0 = num(c.hef, 500);
@@ -132,7 +135,7 @@ function placaBase(c, filas){
   // P1 — aplastamiento máximo del concreto
   const A1 = N*B, A2 = Lp*Wp, fpMax = 0.65*0.85*fc*Math.min(Math.sqrt(A2/A1), 2);
   // Voladizos (P3)
-  const m = (N - 0.95*d)/2, nv = (B - 0.8*bf)/2, lnp = Math.sqrt(d*bf)/4, l = Math.max(m, nv, lnp);
+  const m = (N - 0.95*d)/2, nv = (B - (tub ? 0.95 : 0.8)*bf)/2, lnp = Math.sqrt(d*bf)/4, l = Math.max(m, nv, lnp);
   // Revisión de una dirección: dimensión D en el sentido del momento, ancho W, distancia del eje a la fila de pernos f
   const dir = (P, M, D, W, Sx, aE, dcol, tfc) => {
     const e = P > 0 ? M/P : Infinity, q = fpMax*W, ecrit = P > 0 ? D/2 - P/(2*q) : -Infinity;    // P2 (con D = N)
@@ -143,7 +146,7 @@ function placaBase(c, filas){
     else { caso = 'momento grande'; a1 = (f + D/2)**2; a2 = 2*P*(e + f)/q; okY = a1 >= a2;
       Y = okY ? (f + D/2) - Math.sqrt(a1 - a2) : D; Tu = Math.max(0, q*Y - P); fp = fpMax; }                // P4
     // Espesor requerido (fase de compresión y de tensión)
-    const lc = D === N ? Math.max(m, nv, lnp) : Math.max((B - 0.95*d)/2, (N - 0.8*bf)/2, lnp);
+    const lc = D === N || tub ? Math.max(m, nv, lnp) : Math.max((B - 0.95*d)/2, (N - 0.8*bf)/2, lnp);
     const lm = D === N ? m : (W - 0.8*bf)/2 > 0 ? (D - 0.8*bf)/2 : m;
     let tReqC = 0;
     if(fp > 0) tReqC = Y >= lc ? 1.5*lc*Math.sqrt(fp/Fyp) : 2.11*Math.sqrt(fp*Y*(lc - Y/2)/Fyp);
@@ -161,12 +164,12 @@ function placaBase(c, filas){
     const caMin = Math.min(caN, caB), psiEd = Math.min(1, 0.7 + 0.3*caMin/(1.5*hef)), psiEc = 1;        // tensión simétrica en el grupo
     const Nb = hef >= 280 && hef <= 635 ? Math.min(10*Math.sqrt(fc)*hef**1.5, 3.9*Math.sqrt(fc)*hef**(5/3)) : 10*Math.sqrt(fc)*hef**1.5;
     const Ncbg = Math.min(ANc/ANco, nt)*psiEc*psiEd*psiC*Nb;
-    return { hef, ANc, ANco, nt, psiEd, psiEc, psiC, Nb, Ncbg, phiN:0.70*Ncbg };
+    return { hef, ANc, ANco, nt, psiEd, psiEc, psiC, Nb, Ncbg, phiN:0.70*fS*Ncbg };
   };
   // Extracción del perno (P7)
   const Abrg = Math.max(num(c.arandela, 50)**2 - Ab, 0);
   const Np = c.cabeza === 'gancho' ? 0.9*fc*num(c.eh, 4.5*da)*da : 8*Abrg*fc;
-  const phiNpn = 0.70*psiCP*Np;
+  const phiNpn = 0.70*fS*psiCP*Np;
   // Acero (P8): tensión y cortante
   const phiNsa = 0.75*Ase*futa, phiVsa = 0.65*0.6*Ase*futa*(c.mortero ? 0.8 : 1);
   // Cortante: arrancamiento del borde (P9) y desprendimiento (P10), en cada sentido
@@ -175,10 +178,15 @@ function placaBase(c, filas){
     const Avc = (Math.min(1.5*ca1, ca2) + sAc + Math.min(1.5*ca1, ca2))*Math.min(1.5*ca1, ha), Avco = 4.5*ca1*ca1;
     const psiEdV = ca2 >= 1.5*ca1 ? 1 : 0.7 + 0.3*ca2/(1.5*ca1), psiHV = Math.max(1, Math.sqrt(1.5*ca1/ha));
     const Vcbg = Math.min(Avc/Avco, nfila)*psiEdV*psiCV*psiHV*Vb;
-    return { ca1, ca2, le, Vb, Avc, Avco, psiEdV, psiHV, Vcbg, phiV:0.70*Vcbg };
+    return { ca1, ca2, le, Vb, Avc, Avco, psiEdV, psiHV, Vcbg, phiV:0.70*fS*Vcbg };
   };
   const vN = cortBorde(caN, caB, S2, nB), vB = cortBorde(caB, caN, S1, 2);    // cortante en el sentido de N (hacia el borde del lado N) y de B
-  const bTodos = breakout(true), kcp = hef0 < 65 ? 1 : 2, phiVcp = 0.70*kcp*bTodos.Ncbg;
+  const bTodos = breakout(true), kcp = hef0 < 65 ? 1 : 2, phiVcp = 0.70*fS*kcp*bTodos.Ncbg;
+  // Refuerzo de anclaje (C-D.5.2.9 y C-D.6.2.9): barras que toman la tensión o el cortante en vez del concreto, φ = 0.75
+  const fyR = num(c.fyR, 420), Abar = db => Math.PI*db*db/4;
+  const refT = c.refT ? 0.75*fS*num(c.refNT, 4)*Abar(num(c.refDT, 12.7))*fyR : 0, refV = c.refV ? 0.75*fS*num(c.refNV, 2)*Abar(num(c.refDV, 12.7))*fyR : 0;
+  // Pernos que toman cortante: con agujeros agrandados sin arandela soldada, solo la mitad (Guía 1, 2.ª ed. §2.10)
+  const nV = c.arandSold === false ? n/2 : n;
   // Revisión de cada combinación
   let peor = null;
   const res = [];
@@ -191,24 +199,51 @@ function placaBase(c, filas){
     const bo = breakout(todos);
     const tReq = Math.max(rN.tReq, rB.tReq);
     const Vu = Math.hypot(Vn, Vb);
-    const phiVn = Math.min(n*phiVsa, phiVcp, Vn >= Vb ? vN.phiV : vB.phiV);
+    const phiVn = Math.min(nV*phiVsa, phiVcp, Vn >= Vb ? vN.phiV : vB.phiV);
     const bN = Vn/vN.phiV >= Vb/vB.phiV;   // el borde que controla: cada sentido con su propia capacidad
-    const phiNn = Math.min(ntPernos*phiNsa, bo.phiN, ntPernos*phiNpn);
+    const phiCono = refT > 0 ? Math.max(bo.phiN, refT) : bo.phiN, phiBN = refV > 0 ? Math.max(vN.phiV, refV) : vN.phiV, phiBB = refV > 0 ? Math.max(vB.phiV, refV) : vB.phiV;
+    const phiNn = Math.min(ntPernos*phiNsa, phiCono, ntPernos*phiNpn);
     // P11 — interacción (C-D.7): si una relación ≤ 0.2 no hay interacción; si no, N/φNn + V/φVn ≤ 1.2
-    const rT = TuGrupo/phiNn, rV = Math.max(Vu/Math.min(n*phiVsa, phiVcp), Vn/vN.phiV, Vb/vB.phiV), inter = rT <= 0.2 ? rV : rV <= 0.2 ? rT : (rT + rV)/1.2;
+    // con fricción o llave de cortante los anclajes no toman cortante
+    const vAnc = modoV === 'anclajes';
+    const rT = TuGrupo/phiNn, rV = vAnc ? Math.max(Vu/Math.min(nV*phiVsa, phiVcp), Vn/phiBN, Vb/phiBB) : 0, inter = rT <= 0.2 ? rV : rV <= 0.2 ? rT : (rT + rV)/1.2;
     const fpU = Math.max(rN.fp, rB.fp);
     const cks = {
       apl: chk('Aplastamiento del concreto bajo la placa', 'F.2.10.8 / C.10.14', fpU, fpMax, 'MPa'),
       geo: chk('Longitud de apoyo (momento grande: a₁ ≥ a₂)', 'Guía de diseño 1', rN.okY && rB.okY ? 0 : 2, 1, '', { soloOk:true }),
       tp: chk(`Espesor de la placa (colocada ${tp} mm)`, 'Guía de diseño 1', (tReq/tp)**2, 1, '', { req:tReq }),
       ten: chk('Tensión en el acero del perno', 'C-D.5.1', Tr, phiNsa, 'N'),
-      cono: chk('Arrancamiento del concreto a tensión (cono)', 'C-D.5.2', TuGrupo, bo.phiN, 'N'),
-      pull: chk('Extracción del perno (pullout)', 'C-D.5.3', Tr, phiNpn, 'N'),
-      vs: chk('Cortante en el acero de los pernos', 'C-D.6.1', Vu, n*phiVsa, 'N'),
-      vb: chk(`Cortante: arrancamiento del borde del concreto (sentido ${bN ? 'N' : 'B'})`, 'C-D.6.2', bN ? Vn : Vb, bN ? vN.phiV : vB.phiV, 'N'),
-      vcp: chk('Cortante: desprendimiento por palanca (pryout)', 'C-D.6.3', Vu, phiVcp, 'N'),
+      cono: refT > 0 && refT >= bo.phiN ? chk('Refuerzo de anclaje a tensión (en vez del cono)', 'C-D.5.2.9, φ = 0.75', TuGrupo, refT, 'N')
+        : chk(`Arrancamiento del concreto a tensión (cono)${sis ? ' · ×0.75 sismo' : ''}`, 'C-D.5.2', TuGrupo, bo.phiN, 'N'),
+      pull: chk(`Extracción del perno (pullout)${sis ? ' · ×0.75 sismo' : ''}`, 'C-D.5.3', Tr, phiNpn, 'N'),
       int: chk('Interacción tensión – cortante', 'C-D.7', inter, 1, ''),
     };
+    if(vAnc){
+      cks.vs = chk(`Cortante en el acero de los pernos${nV < n ? ` (solo ${nV}: agujeros agrandados sin arandela soldada)` : ''}`, 'C-D.6.1', Vu, nV*phiVsa, 'N');
+      cks.vb = refV > 0 && refV >= (bN ? vN.phiV : vB.phiV) ? chk('Refuerzo de anclaje a cortante (en vez del borde)', 'C-D.6.2.9, φ = 0.75', bN ? Vn : Vb, refV, 'N')
+        : chk(`Cortante: arrancamiento del borde del concreto (sentido ${bN ? 'N' : 'B'})${sis ? ' · ×0.75 sismo' : ''}`, 'C-D.6.2', bN ? Vn : Vb, bN ? vN.phiV : vB.phiV, 'N');
+      cks.vcp = chk(`Cortante: desprendimiento por palanca (pryout)${sis ? ' · ×0.75 sismo' : ''}`, 'C-D.6.3', Vu, phiVcp, 'N');
+    } else if(modoV === 'friccion'){
+      // Guía 1 (2.ª ed.) §3.5: fricción acero–mortero μ = 0.55, φ = 0.75; solo con compresión
+      cks.fric = chk('Cortante por fricción (μ = 0.55 con la compresión)', 'Guía de diseño 1 §3.5.1, φ = 0.75', Vu, 0.75*0.55*Math.max(P, 0), 'N');
+    } else {
+      // Llave de cortante (platina soldada bajo la placa): Guía 1 §3.5.2
+      const lb = num(c.lugB, 150), lH = num(c.lugH, 100), lt = num(c.lugT, 19), G = c.mortero ? num(c.grout, 25) : 0, Fyl = (ACEROS[c.aceroLug] || ACEROS.A36)[0];
+      const He = Math.max(lH - G, 0), Abrg = lb*He, Mlug = Vu*(G + He/2), wl = num(c.lugW, 8);
+      cks.lugApl = chk('Llave: aplastamiento del concreto frente a la llave', 'Guía 1 §3.5.2: φ·0.85·f\'c·Abrg, φ = 0.60', Vu, 0.60*0.85*fc*Abrg, 'N');
+      cks.lugFlex = chk('Llave: flexión en la unión con la placa', 'F.2.6 · φ = 0.90, Z = b·t²/4', Mlug, 0.9*Fyl*lb*lt*lt/4, 'N·mm');
+      const fwl = 0.75*0.6*(ELECTRODOS[c.electrodo] || ELECTRODOS.E70XX)*0.707*wl;                  // N/mm por cordón
+      const fv = Vu/(2*lb), fm = Mlug/(lb*(lt + wl*0.7)), fres = Math.hypot(fv, fm);
+      cks.lugSold = chk('Llave: filetes a la placa (ambas caras)', 'F.2.10.2.4 (J2-4)', fres, fwl, 'N/mm');
+      // cortante del concreto delante de la llave (ACI 349 RD.11 / Guía 1): 4√f'c psi = 0.33√f'c MPa sobre el área proyectada sin la llave
+      const caF = Math.max(Math.min(Lp, Wp)/2 - lt/2, 0), Av = Math.max(Math.min(Lp, Wp)*(caF + He) - lb*He, 0);
+      cks.lugCon = chk(`Llave: cortante del concreto delante de la llave${sis ? ' · ×0.75 sismo' : ''}`, 'Guía 1 §3.5.2 (ACI 349), φ = 0.75', Vu, 0.75*fS*0.33*Math.sqrt(fc)*Av, 'N');
+    }
+    if(sis){
+      // C-D.3.3.4: anclaje dúctil = el acero de los pernos (nominal) falla antes que el concreto (con ×0.75)
+      const Nsa = ntPernos*Ase*futa, conc = Math.min(phiCono, ntPernos*phiNpn);
+      cks.duc = chk('Sismo: anclaje dúctil (acero del perno antes que el concreto)', 'C-D.3.3.4', TuGrupo > 0 ? Nsa : 0, TuGrupo > 0 ? conc : 1, 'N');
+    }
     const rmax = Math.max(...Object.values(cks).map(x => x.r));
     const fila = { fl, P, Mn, Mb, Vn, Vb, rN, rB, TuGrupo, Tr, todos, ntPernos, bo, tReq, Vu, phiVn, phiNn, rT, rV, inter, cks, rmax };
     res.push(fila); if(!peor || rmax > peor.rmax) peor = fila;
@@ -222,6 +257,13 @@ function placaBase(c, filas){
   if(Math.min(a, aB) < 1.5*da) avisos.push(`Distancia del perno al borde de la placa ${Math.min(a, aB).toFixed(0)} mm < 1.5·d = ${(1.5*da).toFixed(0)} mm.`);
   if(Math.min(S1, S2) < 4*da) avisos.push(`Separación entre pernos ${Math.min(S1, S2).toFixed(0)} mm < 4·da = ${(4*da).toFixed(0)} mm (C-D.8.1).`);
   if(hef0 > ha - 50) avisos.push(`La longitud de anclaje hef = ${hef0} mm no cabe en el pedestal (altura ${ha} mm).`);
+  // Agujeros agrandados de la placa y arandelas (Guía 1, Tabla 2.3)
+  const AGU = { '1/2"':[24, 51, 6], '5/8"':[27, 51, 6], '3/4"':[33, 51, 6], '7/8"':[40, 64, 8], '1"':[46, 76, 10], '1-1/8"':[52, 76, 13], '1-1/4"':[52, 76, 13] }, ag = AGU[c.perno] || AGU['3/4"'];
+  avisos.push(`Agujeros de la placa para pernos de ${c.perno}: ${ag[0]} mm (agrandados, Guía 1 Tabla 2.3) con arandela de placa de ${ag[1]} × ${ag[1]} × ${ag[2]} mm${c.arandSold === false ? '; las arandelas no se sueldan: el cortante lo toma la mitad de los pernos' : '; las arandelas se sueldan a la placa para que todos los pernos tomen cortante'}.`);
+  if(modoV === 'friccion' && res.some(f => f.P <= 0)) avisos.push('Fricción: en alguna combinación la columna no comprime la placa (levantamiento): la fricción no sirve; use la llave de cortante o los anclajes.');
+  if(modoV === 'llave') avisos.push(`Llave de cortante: deje un agujero en la placa para inyectar el mortero y verlo salir; el mortero debe llenar bien el frente de la llave (espesor ${c.mortero ? num(c.grout, 25) : 0} mm).`);
+  if(sis && /105/.test(c.anclaje)) avisos.push('Sismo: el F1554 Gr 105 no siempre cumple la ductilidad (alargamiento); prefiera Gr 36 o Gr 55, o diseñe con Ω₀.');
+  if(sis && checks.duc && checks.duc.r > 1) avisos.push('Sismo: el concreto falla antes que el acero de los pernos (no es un anclaje dúctil): agregue refuerzo de anclaje, aumente hef o diseñe con las fuerzas amplificadas por Ω₀ (C-D.3.3.4).');
   if(peor.bo.hef < hef0 - 1) avisos.push(`Por la cercanía a los bordes, el cono se calcula con h'ef = ${peor.bo.hef.toFixed(0)} mm en vez de ${hef0} mm (C-D.5.2.3).`);
   // Reventón lateral (si ca < 0.4 hef)
   const caMin = Math.min(caN, caB);
@@ -233,14 +275,16 @@ function placaBase(c, filas){
   if(num(c.w) > 0){
     let pw = null;
     for(const f of res){
-      const sw = soldadura({ forma:'I', seg:contornoI(bf, d, tw, tf), w:c.w, electrodo:c.electrodo, t:Math.min(tp, tf), acero:c.aceroPlaca,
+      const sw = soldadura({ forma:tub ? 'O' : 'I', ...(tub ? { b:bf, d } : { seg:contornoI(bf, d, tw, tf) }), w:c.w, electrodo:c.electrodo, t:Math.min(tp, tf), acero:c.aceroPlaca,
         N:-f.P/1000, Mx:f.Mn/1e6, My:f.Mb/1e6, V:f.Vn/1000, H:f.Vb/1000 });
+      // unión en T (columna sobre la placa): no aplica el tamaño máximo del filete en el borde (F.2.10.2.2 es para bordes de platinas)
+      if(sw.checks){ sw.checks = sw.checks.filter(x => !/máximo del filete en el borde/.test(x.n)); sw.ratio = Math.max(...sw.checks.map(x => x.r)); sw.cumple = sw.ratio <= 1 + 1e-9; }
       if(!sold || sw.ratio > sold.ratio){ sold = sw; pw = f; }
     }
-    checks.sold = chk('Soldadura columna – placa (contorno del perfil)', 'F.2.10.2.4', sold.ratio, 1, '', { fila:pw });
+    checks.sold = chk(`Soldadura columna – placa (contorno del ${tub ? 'tubo' : 'perfil'})`, 'F.2.10.2.4', sold.ratio, 1, '', { fila:pw });
   }
   const ratio = Math.max(...Object.values(checks).map(x => x.r));
-  return { ok:true, tipo:'placa', bf, d, tw, tf, N, B, tp, Fyp, Lp, Wp, ha, fc, da, Ab, Ase, futa, fya, nB, n, S1, S2, hef:hef0, caN, caB, a, aB,
+  return { ok:true, tipo:'placa', tub, sis, modoV, nV, refT, refV, bf, d, tw, tf, N, B, tp, Fyp, Lp, Wp, ha, fc, da, Ab, Ase, futa, fya, nB, n, S1, S2, hef:hef0, caN, caB, a, aB,
     A1, A2, fpMax, m, nv, lnp, l, Abrg, Np, phiNpn, phiNsa, phiVsa, vN, vB, kcp, phiVcp, bTodos, psiC, fis, res, peor, checks, avisos, sold, ratio, cumple:ratio <= 1 + 1e-9 };
 }
 

@@ -432,16 +432,30 @@ function seccionesDe(c){
     ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · tensión Ry·Fy·Ag${nz(c.Pnd) ? ` · compresión 1.1·Ry·Pn (Pn ${c.Pnd} kN)` : ''}` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico arriostrado concéntrico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (ordinario/moderado)'], ['DES', 'DES (especial)']] }),
         ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'Pnd', 'Pn de la diagonal a compresión [kN]', { h:'Resistencia nominal (sin φ), del Anexo D' })] : []))] ]; }
-  if(c.tipo === 'base') return [
-    ['col', 'Columna', () => c.columna, g3(SELP('columna', 'Perfil'))],
+  if(c.tipo === 'base'){ const tb = c.colTipo === 'tubo', sisB = ['DMO', 'DES'].includes(c.sismo), cv = c.cortante || 'anclajes'; return [
+    ['col', 'Columna', () => tb ? `Tubo ${c.Ht}×${c.Bt}×${c.tt} mm` : c.columna,
+      g3(campo(c, 'colTipo', 'Tipo', { sel:[['I', 'Perfil I'], ['tubo', 'Tubo cuadrado o rectangular']] }),
+        ...(tb ? [campo(c, 'Ht', 'Lado H [mm]', { h:'En el sentido N' }), campo(c, 'Bt', 'Lado B [mm]'), campo(c, 'tt', 'Espesor t [mm]', { h:'Se usa 0.93t' })] : [SELP('columna', 'Perfil')]))],
     ['placa', 'Placa base', () => `${c.N} × ${c.B} × ${c.tp} mm · ${c.aceroPlaca} · filete ${c.w} mm`,
       g3(campo(c, 'N', 'N [mm] (en el sentido del peralte)'), campo(c, 'B', 'B [mm]'), campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'aceroPlaca', 'Acero', { sel:SEL_ACERO }), campo(c, 'w', 'Soldadura columna–placa w [mm]', { h:'0 = no revisar' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))],
     ['ped', 'Pedestal', () => `${c.Lp} × ${c.Wp} mm · alto ${c.ha} mm · f'c ${c.fc} MPa${c.fisurado ? ' · fisurado' : ''}`,
-      g3(campo(c, 'Lp', 'Lado en el sentido N [mm]'), campo(c, 'Wp', 'Lado en el sentido B [mm]'), campo(c, 'ha', 'Altura [mm]'), campo(c, 'fc', "f'c [MPa]")) + ck('fisurado', 'Concreto fisurado (del lado seguro)') + ck('mortero', 'Hay mortero de nivelación bajo la placa')],
+      g3(campo(c, 'Lp', 'Lado en el sentido N [mm]'), campo(c, 'Wp', 'Lado en el sentido B [mm]'), campo(c, 'ha', 'Altura [mm]'), campo(c, 'fc', "f'c [MPa]")) + ck('fisurado', 'Concreto fisurado (del lado seguro)') + ck('mortero', 'Hay mortero de nivelación bajo la placa') + (c.mortero ? g3(campo(c, 'grout', 'Espesor del mortero [mm]')) : '')],
     ['anc', 'Pernos de anclaje', () => `${2 * c.nB} × ${c.perno} ${c.anclaje} · S1 ${c.S1} · S2 ${c.S2} · hef ${c.hef}`,
       g3(campo(c, 'perno', 'Diámetro', { sel:['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'] }), campo(c, 'anclaje', 'Acero', { sel:['A36', 'F1554 Gr 36', 'F1554 Gr 55', 'F1554 Gr 105'] }), campo(c, 'nB', 'Pernos por fila', { sel:['2', '3', '4'] }),
         campo(c, 'S1', 'S1: entre filas (sentido N) [mm]'), campo(c, 'S2', 'S2: extremos de la fila (sentido B) [mm]'), campo(c, 'hef', 'Empotramiento hef [mm]'),
-        campo(c, 'cabeza', 'Anclaje', { sel:[['tuerca', 'Tuerca y arandela'], ['gancho', 'Gancho']] }), campo(c, 'arandela', 'Lado de la arandela [mm]'))] ];
+        campo(c, 'cabeza', 'Anclaje', { sel:[['tuerca', 'Tuerca y arandela'], ['gancho', 'Gancho']] }), campo(c, 'arandela', 'Lado de la arandela [mm]'))
+      + `<div class="f"><label class="ck"><input type="checkbox" data-k="arandSold" ${c.arandSold !== false ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Arandelas de placa soldadas a la placa base (agujeros agrandados: si no se sueldan, el cortante lo toma la mitad de los pernos)</label></div>`],
+    ['cort', 'Transmisión del cortante', () => cv === 'friccion' ? 'fricción (μ = 0.55)' : cv === 'llave' ? `llave ${c.lugB} × ${c.lugH} × ${c.lugT} mm · filete ${c.lugW} mm` : 'por los anclajes',
+      g3(campo(c, 'cortante', 'El cortante lo toma', { sel:[['anclajes', 'Los pernos de anclaje'], ['friccion', 'Fricción placa–mortero (solo con compresión)'], ['llave', 'Llave de cortante bajo la placa']] }),
+        ...(cv === 'llave' ? [campo(c, 'lugB', 'Ancho de la llave [mm]', { h:'Perpendicular al cortante' }), campo(c, 'lugH', 'Alto de la llave [mm]', { h:'Desde la placa; incluye el mortero' }), campo(c, 'lugT', 'Espesor de la llave [mm]'),
+          campo(c, 'lugW', 'Filete llave–placa [mm]', { h:'Por ambas caras' }), campo(c, 'aceroLug', 'Acero', { sel:SEL_ACERO })] : []))],
+    ['ref', 'Refuerzo de anclaje', () => !c.refT && !c.refV ? 'sin refuerzo (toma el concreto)' : [c.refT ? `tensión ${c.refNT} barras Ø${c.refDT}` : '', c.refV ? `cortante ${c.refNV} barras Ø${c.refDV}` : ''].filter(Boolean).join(' · '),
+      ck('refT', 'Barras alrededor de los pernos que toman la tensión en vez del cono de concreto (C-D.5.2.9)')
+      + (c.refT ? g3(campo(c, 'refNT', 'Ramas efectivas', { h:'Dentro de 0.5·hef del perno' }), campo(c, 'refDT', 'Diámetro de la barra [mm]'), campo(c, 'fyR', 'fy [MPa]')) : '')
+      + ck('refV', 'Barras (estribos) que toman el cortante en vez del borde del concreto (C-D.6.2.9)')
+      + (c.refV ? g3(campo(c, 'refNV', 'Ramas efectivas', { h:'Que cruzan la grieta del borde' }), campo(c, 'refDV', 'Diámetro de la barra [mm]'), c.refT ? '' : campo(c, 'fyR', 'fy [MPa]')) : '')],
+    ['sis', 'Sismo', () => sisB ? `${c.sismo} · concreto ×0.75 · anclaje dúctil` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO'], ['DES', 'DES']] }))] ]; }
   if(c.tipo === 'angular'){ const sold = c.unSop === 'sold', des = c.destaje || 'no';
     return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`,
@@ -538,7 +552,7 @@ function formHTML(c){
       <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
       <div class="sec-bd">${body}</div></section>`).join('');
 }
-const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad' };
+const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad', cortante:'Transmisión del cortante' };
 function chequeosHTML(r){
   let h = '';
   const extra = [...new Set(r.ch.map(x => x.grupo))].filter(g => !GRUPOS[g]).map(g => [g, g]);   // grupos sin nombre: no se pierden
@@ -570,7 +584,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw', 'diag'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw', 'diag', 'colTipo', 'cortante', 'refT', 'refV', 'mortero'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -840,14 +854,38 @@ function dibCartela(c, r){
   return svgW(X(xMax) + 10, Y(0) + 44, h, 'Diagonal a cartela', `θ = ${c.theta}° · Pu = ${f2(+c.Pu, 1)} kN · línea morada = sección de Whitmore (30° desde ${tub ? 'el final de la soldadura' : 'el perno más lejano'})${tub ? ' · en naranja los cordones tubo–cartela; punteado la ranura' : ''}`);
 }
 function dibBase(c, r){
-  const cl = r.geo.cl, N = +c.N, B = +c.B, Lp = +c.Lp, Wp = +c.Wp, S1 = +c.S1, S2 = +c.S2, nB = +c.nB;
+  const cl = r.geo.cl, N = +c.N, B = +c.B, Lp = +c.Lp, Wp = +c.Wp, S1 = +c.S1, S2 = +c.S2, nB = +c.nB, R = r.geo.R || {};
   const k = 300 / Math.max(Lp, Wp), X = v => 30 + (v + Lp / 2) * k, Y = v => 44 + (v + Wp / 2) * k;
-  let h = `<rect x="${X(-Lp / 2)}" y="${Y(-Wp / 2)}" width="${Lp * k}" height="${Wp * k}" fill="#e5e7eb" stroke="#94a3b8"/><rect x="${X(-N / 2)}" y="${Y(-B / 2)}" width="${N * k}" height="${B * k}" class="pl"/>
-    <path d="M${X(-cl.d / 2)} ${Y(-cl.bf / 2)} h${cl.tf * k} v${(cl.bf - cl.tw) / 2 * k} h${(cl.d - 2 * cl.tf) * k} v${-(cl.bf - cl.tw) / 2 * k} h${cl.tf * k} v${cl.bf * k} h${-cl.tf * k} v${-(cl.bf - cl.tw) / 2 * k} h${-(cl.d - 2 * cl.tf) * k} v${(cl.bf - cl.tw) / 2 * k} h${-cl.tf * k} z" fill="#f1f5f9" stroke="#475569"/>`;
+  // Planta: pedestal, placa, columna (I o tubo), pernos y llave de cortante
+  let h = `<rect x="${X(-Lp / 2)}" y="${Y(-Wp / 2)}" width="${Lp * k}" height="${Wp * k}" fill="#e5e7eb" stroke="#94a3b8"/><rect x="${X(-N / 2)}" y="${Y(-B / 2)}" width="${N * k}" height="${B * k}" class="pl"/>`;
+  h += cl.tub ? `<rect x="${X(-cl.d / 2)}" y="${Y(-cl.bf / 2)}" width="${cl.d * k}" height="${cl.bf * k}" rx="${Math.min(6, 2 * cl.tf * k)}" fill="#f1f5f9" stroke="#475569" stroke-width="${Math.max(2, cl.tf * k)}"/>`
+    : `<path d="M${X(-cl.d / 2)} ${Y(-cl.bf / 2)} h${cl.tf * k} v${(cl.bf - cl.tw) / 2 * k} h${(cl.d - 2 * cl.tf) * k} v${-(cl.bf - cl.tw) / 2 * k} h${cl.tf * k} v${cl.bf * k} h${-cl.tf * k} v${-(cl.bf - cl.tw) / 2 * k} h${-(cl.d - 2 * cl.tf) * k} v${(cl.bf - cl.tw) / 2 * k} h${-cl.tf * k} z" fill="#f1f5f9" stroke="#475569"/>`;
+  if(c.cortante === 'llave'){ const lb = +c.lugB, lt = +c.lugT; h += `<rect x="${X(-lt / 2)}" y="${Y(-lb / 2)}" width="${Math.max(3, lt * k)}" height="${lb * k}" fill="#fcd34d" fill-opacity=".55" stroke="#b45309" stroke-dasharray="3 2"/>`; }
   for(const sx of [-1, 1]) for(let j = 0; j < nB; j++){ const y = nB > 1 ? -S2 / 2 + j * S2 / (nB - 1) : 0; h += `<circle cx="${X(sx * S1 / 2)}" cy="${Y(y)}" r="${Math.max(3, 12 * k)}" class="bolt"/>`; }
   h += cotaH(Y(Wp / 2) + 14, X(-N / 2), X(N / 2), `N = ${N}`) + cotaV(X(Lp / 2) + 12, Y(-B / 2), Y(B / 2), `B = ${B}`, 1) + cotaH(Y(-Wp / 2) - 10, X(-S1 / 2), X(S1 / 2), `S1 = ${S1}`, -1)
     + `<text x="${X(-Lp / 2) + 4}" y="${Y(-Wp / 2) + 12}" class="lbl">pedestal ${Lp} × ${Wp}</text>`;
-  return svgW(X(Lp / 2) + 70, Y(Wp / 2) + 36, h, 'Placa base: planta', `Planta · columna ${esc(cl.nom)} · el sentido N es el del peralte`);
+  const planta = svgW(X(Lp / 2) + 70, Y(Wp / 2) + 36, h, 'Placa base: planta', `Planta · columna ${esc(cl.nom)} · el sentido N es el del peralte${c.cortante === 'llave' ? ' · llave de cortante en punteado' : ''}`);
+  // Corte en elevación (pedido de Amo 20-nov): pedestal, mortero, placa, pernos con hef y arandela, llave de cortante
+  const ha = +c.ha, hef = +c.hef, G = c.mortero ? +c.grout || 25 : 0, tp = +c.tp, Hc = 160, lug = c.cortante === 'llave', lH = lug ? +c.lugH : 0;
+  const vis = Math.min(ha, hef + 120), kz = 300 / Math.max(Lp, 1), kv = Math.min(kz, 260 / (vis + G + tp + Hc));
+  const XE = v => 40 + (v + Lp / 2) * kz, YE = z => 30 + (Hc + tp + G - z) * kv;            // z = 0 en la cara del pedestal, positivo hacia arriba
+  let e = `<rect x="${XE(-Lp / 2)}" y="${YE(0)}" width="${Lp * kz}" height="${vis * kv}" fill="#e5e7eb" stroke="#94a3b8"/>
+    ${G ? `<rect x="${XE(-N / 2 - 10)}" y="${YE(G)}" width="${(N + 20) * kz}" height="${G * kv}" fill="#d6d3d1" stroke="#a8a29e"/>` : ''}
+    <rect x="${XE(-N / 2)}" y="${YE(G + tp)}" width="${N * kz}" height="${tp * kv}" class="pl"/>
+    <rect x="${XE(-cl.d / 2)}" y="${YE(G + tp + Hc)}" width="${cl.d * kz}" height="${Hc * kv}" fill="#f1f5f9" stroke="#475569"/>
+    ${cl.tub ? `<line x1="${XE(-cl.d / 2 + cl.tf)}" y1="${YE(G + tp + Hc)}" x2="${XE(-cl.d / 2 + cl.tf)}" y2="${YE(G + tp)}" stroke="#94a3b8" stroke-dasharray="3 2"/><line x1="${XE(cl.d / 2 - cl.tf)}" y1="${YE(G + tp + Hc)}" x2="${XE(cl.d / 2 - cl.tf)}" y2="${YE(G + tp)}" stroke="#94a3b8" stroke-dasharray="3 2"/>`
+      : `<rect x="${XE(-cl.d / 2)}" y="${YE(G + tp + Hc)}" width="${cl.tf * kz}" height="${Hc * kv}" fill="#cbd5e1"/><rect x="${XE(cl.d / 2 - cl.tf)}" y="${YE(G + tp + Hc)}" width="${cl.tf * kz}" height="${Hc * kv}" fill="#cbd5e1"/>`}`;
+  if(lug) e += `<rect x="${XE(-(+c.lugT) / 2)}" y="${YE(G)}" width="${Math.max(2, +c.lugT * kz)}" height="${lH * kv}" fill="#fcd34d" stroke="#b45309"/><text x="${XE(+c.lugT / 2) + 4}" y="${YE(G - lH / 2)}" class="lbl" style="fill:#b45309">llave ${c.lugH}</text>`;
+  const da = { '1/2"':12.7, '5/8"':15.9, '3/4"':19.1, '7/8"':22.2, '1"':25.4, '1-1/8"':28.6, '1-1/4"':31.8 }[c.perno] || 19.1, ar = +c.arandela || 50;
+  for(const sx of [-1, 1]){ const x = sx * S1 / 2;
+    e += `<line x1="${XE(x)}" y1="${YE(G + tp + 30)}" x2="${XE(x)}" y2="${YE(-hef)}" stroke="#334155" stroke-width="${Math.max(2, da * kz)}"/>
+      <rect x="${XE(x) - 7}" y="${YE(G + tp + 12)}" width="14" height="${Math.max(4, 12 * kv)}" fill="#475569"/>
+      ${c.cabeza === 'gancho' ? `<path d="M${XE(x)} ${YE(-hef)} q0 8 ${-sx * 14} 8" fill="none" stroke="#334155" stroke-width="${Math.max(2, da * kz)}"/>` : `<rect x="${XE(x) - ar * kz / 2}" y="${YE(-hef) - 3}" width="${ar * kz}" height="6" fill="#475569"/>`}`; }
+  e += cotaV(XE(S1 / 2) + 16, YE(0), YE(-hef), `hef ${hef}`, 1) + (G ? `<text x="${XE(N / 2) + 6}" y="${YE(G / 2) + 4}" class="lbl">mortero ${G}</text>` : '')
+    + `<text x="${XE(N / 2) + 6}" y="${YE(G + tp / 2) + 4}" class="lbl">placa ${tp}</text><text x="${XE(-Lp / 2) + 4}" y="${YE(-vis) - 6}" class="lbl">pedestal (f'c ${c.fc} MPa)</text>`;
+  if(c.refT || c.refV) e += `<path d="M${XE(-Lp / 2 + 40)} ${YE(-30)} V${YE(-Math.min(vis - 20, hef + 60))} H${XE(Lp / 2 - 40)} V${YE(-30)}" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="6 3"/><text x="${XE(-Lp / 2 + 44)}" y="${YE(-Math.min(vis - 20, hef + 60)) - 4}" class="lbl" style="fill:#16a34a">refuerzo de anclaje</text>`;
+  const corte = svgW(XE(Lp / 2) + 80, YE(-vis) + 14, e, 'Placa base: corte', `Corte en el sentido N · pernos con ${c.cabeza === 'gancho' ? 'gancho' : `arandela de ${ar} mm`} · ${R.sis ? 'sismo: concreto ×0.75' : ''}`);
+  return `<div class="fig-par"><div><div class="fig-tit">Planta</div>${planta}</div><div><div class="fig-tit">Corte</div>${corte}</div></div>`;
 }
 function dibSoldada(c, r){
   if(c.soporte === 'alma'){ const g = r.geo; return `<div class="fig-par"><div><div class="fig-tit">Planta</div>${svgPlantaDebil(c.dosLados, opDebil(c), c.miembro === 'tubo')}</div><div><div class="fig-tit">Corte por el eje de la viga</div>${svgCorteDebil(opDebil(c), { ts:g.rig?.ts, Lt:c.Lt, wT:c.wT, w:c.union === 'cjp' ? '' : c.w, viga:g.m.nom, tub:c.miembro === 'tubo' })}</div></div>`
