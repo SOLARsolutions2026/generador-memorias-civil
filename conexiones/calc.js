@@ -240,7 +240,8 @@ function defaultsTesta(){
     rigCol:'auto', tsC:'', bsC:'', wsC:'', aceroRigC:'A36', // rigidizadores (placas de continuidad) de la columna
     sismo:'no', Lh:6, Vg:30 };                             // F.3 (AISC 358): DMO = pórtico intermedio, DES = especial
 }
-const RY = ac => /A36/.test(ac) ? 1.5 : 1.1;                // NSR-10 F.3 / AISC 341 Tabla A3.1
+const RY = ac => /A36/.test(ac) ? 1.5 : /A500 Gr B/.test(ac) ? 1.4 : /A500/.test(ac) ? 1.3 : 1.1;   // NSR-10 F.3 / AISC 341 Tabla A3.1
+const RT = ac => /A36/.test(ac) ? 1.2 : /A500 Gr B/.test(ac) ? 1.3 : /A500/.test(ac) ? 1.2 : 1.1;   // Rt (Fu esperado)
 const ESP_PL = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4, 28.6, 31.8, 38.1];
 function calcTesta(c){
   const ch = [], av = [], pasos = [], req = [];
@@ -913,9 +914,11 @@ function defaultsCartela(){
   return { tipo:'cartela', nom:'', desc:'', Pu:150, nL:2, bL:76, tL:6.4, aceroL:'A36', n:3, s:65, Le:38, ga:45,
     tg:9.5, aceroG:'A36', Lcr:150, K:0.65, theta:45, Lwg:250, w:6, electrodo:'E70XX', d:19.1, grado:'A325', rosca:'N',
     // Diagonal de tubo cuadrado ranurado y soldado a la cartela (opción A de Amo, 20-nov)
-    diag:'L', Bt:100, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4 };
+    diag:'L', Bt:100, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4,
+    // Revisión con Amo (20-nov, puntos 1–8)
+    Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'' };
 }
-function calcCartela(c){
+function calcCartela0(c){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch);
   const P = +c.Pu || 0, Pa = Math.abs(P), d = +c.d, n = Math.max(1, Math.round(+c.n)), s = +c.s, Le = +c.Le, b = +c.bL, t = +c.tL, nL = +c.nL === 1 ? 1 : 2, ga = +c.ga, tg = +c.tg;
   const aL = ACEROS[c.aceroL], ag = ACEROS[c.aceroG], FEXX = ELECTRODOS[c.electrodo];
@@ -953,9 +956,19 @@ function calcCartela(c){
   const A1 = (2 * b - t) * t, Ag = nL * A1; xb = (b * t * t / 2 + (b - t) * t * (t + (b - t) / 2)) / A1;   // centroide medido desde la espalda
   pasos.push(`Diagonal ${nL === 2 ? '2L' : 'L'} ${b}×${b}×${t} mm (${c.aceroL}): Ag = ${r1(Ag)} mm², x̄ = ${r1(xb)} mm; Pu = ${r2(P)} kN (${P >= 0 ? 'tensión' : 'compresión'})`);
   // Pernos
-  const bAE = aplast(Le - dh / 2, t, d, aL.Fu).phiRn, bAI = aplast(s - dh, t, d, aL.Fu).phiRn, bG = 0.75 * 2.4 * d * tg * ag.Fu / 1000;
-  const rE = Math.min(nL * rv, nL * bAE, bG), rI = Math.min(nL * rv, nL * bAI, bG);
-  add('pernos', `Pernos (${n}, ${nL === 2 ? 'doble' : 'simple'} cortante)`, 'F.2.10.3.6 y F.2.10.3.10', Pa, rE + (n - 1) * rI, 'kN', `por perno: borde ${r2(rE)}, interior ${r2(rI)} kN (cartela ${r2(bG)} kN)`);
+  // Aplastamiento con el sentido de la fuerza (20-nov): en tensión el angular desgarra hacia su extremo (Le, perno junto al soporte)
+  // y la cartela hacia su borde libre (Leg, perno más lejano); en compresión los dos empujan hacia adentro (sin borde).
+  const Leg = +c.Leg || 0, ten = P > 0;
+  const bAE = aplast(Le - dh / 2, t, d, aL.Fu).phiRn, bAI = aplast(s - dh, t, d, aL.Fu).phiRn;
+  const bGE = aplast(Leg - dh / 2, tg, d, ag.Fu).phiRn, bGI = aplast(s - dh, tg, d, ag.Fu).phiRn, bG0 = 0.75 * 2.4 * d * tg * ag.Fu / 1000;
+  const rPer = Array.from({ length:n }, (_, i) => Math.min(nL * rv, nL * (ten && i === 0 ? bAE : n > 1 ? bAI : 0.75 * 2.4 * d * t * aL.Fu / 1000), ten && i === n - 1 ? bGE : n > 1 ? bGI : bG0));
+  add('pernos', `Pernos (${n}, ${nL === 2 ? 'doble' : 'simple'} cortante)`, 'F.2.10.3.6 y F.2.10.3.10', Pa, rPer.reduce((a, x) => a + x, 0), 'kN',
+    ten ? `junto al soporte ${r2(rPer[0])} (borde del angular Le), más lejano ${r2(rPer[n - 1])} (borde de la cartela Leg), interiores ${n > 2 ? r2(rPer[1]) : '—'} kN` : `compresión: los pernos empujan hacia adentro (sin borde); ${r2(rPer[0])} kN por perno`);
+  req.push(['Borde de la cartela Leg (perno más lejano al borde) ≥ mín.', Leg >= bm, `${Leg} ≥ ${bm} mm`]);
+  req.push(['Mínimo 2 pernos en la conexión de la diagonal', n >= 2, `${n} pernos`]);
+  { const GU = [[51, 29], [64, 35], [76, 44], [89, 51], [102, 64], [127, 76], [152, 89]], gu = (GU.find(([bb]) => bb >= b - 2) || GU[GU.length - 1])[1];
+    if(Math.abs(ga - gu) > 6) av.push(`Gramil del angular: el usual para un ala de ${b} mm es ≈ ${gu} mm (usted tiene ${ga} mm); revise que el perno no quede cerca del talón ni del borde.`); }
+  if(nL === 2) av.push('Dos angulares espalda con espalda: lleve separadores (platinas de relleno) a lo largo de la diagonal; su separación se revisa con la diagonal en el Anexo D (E6).');
   // Diagonal
   const l = (n - 1) * s, An = Ag - nL * dn * t; U = Math.max(l > 0 ? 1 - xb / l : 0, n >= 4 ? 0.8 : n === 3 ? 0.6 : 0); const Ae = U * An;
   if(P > 0){
@@ -963,7 +976,7 @@ function calcCartela(c){
     add('diagonal', 'Rotura a tensión (con rezago de cortante U)', 'F.2.4.2 (D2-2), Tabla D3.1', P, 0.75 * aL.Fu * Ae / 1000, 'kN', `U = máx(1 − x̄/l; caso 8) = ${r3(U)}, Ae = ${r1(Ae)} mm²`);
   } else pasos.push('Compresión: el pandeo de la diagonal se revisa como elemento (Anexo D); aquí solo la conexión.');
   const agv = (Le + l) * t, anv = agv - (n - 0.5) * dn * t, ant = (b - ga - dn / 2) * t;
-  add('diagonal', `Bloque de cortante en el angular (×${nL})`, 'F.2.10.4.3 (J4-5)', Pa, nL * bloqueRn(aL.Fy, aL.Fu, agv, anv, ant), 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm²`);
+  if(P > 0) add('diagonal', `Bloque de cortante en el angular (×${nL})`, 'F.2.10.4.3 (J4-5)', Pa, nL * bloqueRn(aL.Fy, aL.Fu, agv, anv, ant), 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm²`);
   // Cartela: sección de Whitmore
   Lw = 2 * l * Math.tan(Math.PI / 6) + (n > 1 ? 0 : dh);
   pasos.push(`Cartela t = ${tg} mm: ancho de Whitmore Lw = 2·(n − 1)·s·tan30° = ${r1(Lw)} mm`);
@@ -971,16 +984,70 @@ function calcCartela(c){
   req.push(['Borde Le ≥ mín.', Le >= bm, `${Le} ≥ ${bm} mm`]);
   req.push(['Borde del angular b − ga ≥ mín.', b - ga >= bm, `${b - ga} ≥ ${bm} mm`]);
   }
+  const bWg = nz(c.bWg), Lw0 = Lw;
+  if(bWg > 0 && bWg < Lw){ Lw = bWg; av.push(`La sección de Whitmore (${r1(Lw0)} mm) es más ancha que la cartela en ese punto (${r1(bWg)} mm): se usa el ancho real de la cartela.`); }
+  if(bWg > 0) pasos.push(`Ancho de la cartela en la sección de Whitmore = ${r1(bWg)} mm → ancho efectivo = ${r1(Lw)} mm`);
   const Aw = Lw * tg;
   if(P > 0) add('cartela', 'Fluencia en la sección de Whitmore', 'F.2.10.4.1 (J4-1)', P, 0.9 * ag.Fy * Aw / 1000, 'kN', `Aw = ${r1(Aw)} mm²`);
-  else { const KLr = +c.K * +c.Lcr / (tg / Math.sqrt(12));
+  if(P > 0 && !tub){ const AnW = Math.min((Lw - dh) * tg, 0.85 * Aw);
+    add('cartela', 'Rotura en la sección de Whitmore (por el agujero)', 'F.2.10.4.1 (J4-2), An ≤ 0.85·Ag', P, 0.75 * ag.Fu * AnW / 1000, 'kN', `An = mín((Lw − dh)·tg; 0.85·Aw) = ${r1(AnW)} mm²`); }
+  if(P <= 0){ const KLr = +c.K * +c.Lcr / (tg / Math.sqrt(12));
     add('cartela', 'Pandeo de la cartela (sección de Whitmore)', 'F.2.10.4.4 (J4-6) / E3', Pa, 0.9 * fcrE3(ag.Fy, KLr) * Aw / 1000, 'kN', `KL/r = ${c.K}·${c.Lcr}/r = ${r1(KLr)}`); }
   // Soldadura cartela–soporte
-  const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, w = +c.w;
-  add('soldadura', 'Filetes cartela–soporte (ambas caras)', 'F.2.10.2.4 (J2-4, J2-5)', Pa, 2 * fw(FEXX, w) * Lwg * (1 + 0.5 * Math.pow(Math.sin(th), 1.5)), 'kN', `L = ${Lwg} mm, θ = ${c.theta}° entre la fuerza y el cordón`);
+  const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, w = +c.w, fd = c.duct === false ? 1 : 1.25, Pw = fd * Pa, eW = nz(c.eW);
+  if(fd > 1) pasos.push(`Soldadura cartela–soporte con factor de ductilidad 1.25 (Manual AISC parte 13): fuerza de diseño ${r2(Pw)} kN`);
+  add('soldadura', `Filetes cartela–soporte (ambas caras)${fd > 1 ? ' · ×1.25 ductilidad' : ''}`, 'F.2.10.2.4 (J2-4, J2-5)', Pw, 2 * fw(FEXX, w) * Lwg * (1 + 0.5 * Math.pow(Math.sin(th), 1.5)), 'kN', `L = ${Lwg} mm, θ = ${c.theta}° entre la fuerza y el cordón`);
+  if(eW){ const Ppar = Pw * Math.cos(th), Pn = Pw * Math.sin(th), M = Pn * eW / 1000;              // kN·m: la componente normal no pasa por el centro del cordón
+    const fs = Ppar / (2 * Lwg), fn = Pn / (2 * Lwg) + 6 * M * 1000 / (2 * Lwg * Lwg), f = Math.hypot(fs, fn);   // kN/mm por cordón
+    add('soldadura', 'Filetes cartela–soporte con la excentricidad (método elástico)', 'F.2.10.2.4 (J2-4)', f, fw(FEXX, w), 'kN/mm', `e = ${eW} mm → M = ${r2(M)} kN·m; f = √(fs² + fn²) por cordón`); }
+  else if(Pa > 0) pasos.push('Soldadura cartela–soporte: se supone que el eje de la diagonal pasa por el centro del cordón (e = 0); si no, escriba la excentricidad para revisar el momento.');
   add('cartela', 'Cartela junto a la soldadura (cortante + tensión)', 'F.2.10.4 · F.2.10.2.4', Pa, Math.min(0.6 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.cos(th), 0.01), 0.9 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.sin(th), 0.01)), 'kN', 'componentes de la fuerza contra fluencia por cortante y por tensión');
   req.push(['Filete ≥ mín. Tabla J2.4', w >= (tg > 19 ? 8 : tg > 12.7 ? 6 : tg > 6.4 ? 5 : 3), `${w} mm`]);
-  return fin(ch, req, av, pasos, { dh, Lw, U, xb });
+  return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb });
+}
+
+// Área y acero de la diagonal (para el sismo)
+function diagDe(c){
+  if(c.diag === 'tubo'){ const B = +c.Bt, td = 0.93 * +c.tt; return { Ag:B * B - (B - 2 * td) ** 2, ac:c.aceroT || 'A500 Gr C' }; }
+  const b = +c.bL, t = +c.tL, nL = +c.nL === 1 ? 1 : 2; return { Ag:nL * (2 * b - t) * t, ac:c.aceroL };
+}
+// Envoltura (20-nov): sismo (pórtico arriostrado concéntrico) y 💡 sugerencia
+function calcCartela(c){
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '';
+  let R;
+  if(sis){
+    const { Ag, ac } = diagDe(c), A = ACEROS[ac] || ACEROS.A36, Ry = RY(ac), Pt = Ry * A.Fy * Ag / 1000, Pnd = nz(c.Pnd), Pc = 1.1 * Ry * Pnd;
+    const Rt = calcCartela0({ ...c, Pu:Math.max(Pt, nz(c.Pu)) });
+    if(Rt.error) return Rt;
+    // la diagonal fluye por diseño: no se revisa su fluencia; en sus estados de rotura se puede usar Rt·Fu (AISC 341 A3.2)
+    const rt = RT(ac);
+    Rt.ch = Rt.ch.filter(x => !(x.grupo === 'diagonal' && /^Fluencia/.test(x.nombre)));
+    Rt.ch.forEach(x => { if(x.grupo === 'diagonal' && /Rotura|Bloque|Pared/.test(x.nombre)){ x.cap *= rt; x.ratio = x.dem / x.cap; x.extra = `${x.extra ? x.extra + ' · ' : ''}con Rt = ${rt}`; } x.nombre += ' · tensión esperada'; });
+    R = Rt;
+    R.pasos.unshift(`Sismo ${sis} (pórtico arriostrado concéntrico ${sis === 'DES' ? 'especial' : 'ordinario/moderado'}, NSR-10 F.3 / AISC 341 ${sis === 'DES' ? 'F2.6c' : 'F1.6a'}): la conexión se diseña para lo que la diagonal puede llegar a dar → tensión Ry·Fy·Ag = ${r3(Ry)}·${A.Fy}·${Math.round(Ag)} = ${r2(Pt)} kN${Pnd ? `; compresión 1.1·Ry·Pn = 1.1·${r3(Ry)}·${r2(Pnd)} = ${r2(Pc)} kN` : ''}.`);
+    if(Pnd > 0 || nz(c.Pu) < 0){ const Rc = calcCartela0({ ...c, Pu:-Math.max(Pc, Math.abs(Math.min(nz(c.Pu), 0))) });
+      Rc.ch.filter(x => /Pandeo/.test(x.nombre)).forEach(x => { x.nombre += ' · compresión esperada'; R.ch.push(x); }); }
+    else R.av.push('Sismo: escriba Pn de la diagonal (resistencia nominal a compresión, del Anexo D) para revisar la cartela con 1.1·Ry·Pn.');
+    R.pasos.splice(1, 0, `La diagonal fluye por diseño: no se revisa su fluencia; en sus estados de rotura (sección neta, bloque, pared) se usa Rt·Fu con Rt = ${rt} (AISC 341 A3.2).`);
+    if(sis === 'DES') R.req.push(['Sismo DES: franja libre de 2·tg entre el extremo de la diagonal y la línea donde la cartela queda restringida (para que se doble sin romperse)', true, `2·tg = ${2 * +c.tg} mm · indicar en planos`]);
+    R.req.push([`Sismo: pernos pretensionados en agujeros estándar; soldaduras con electrodo de tenacidad (demanda crítica si es DES)`, true, 'indicar en planos']);
+    if(R.ch.some(x => x.grupo === 'diagonal' && /Rotura|neta/.test(x.nombre) && x.ratio > 1)) R.av.push('Sismo: la sección neta de la diagonal no alcanza a desarrollar Ry·Fy·Ag: refuerce la diagonal en la conexión (platinas soldadas) o aumente la longitud de la conexión.');
+    R.max = R.ch.reduce((m, x) => Math.max(m, x.ratio), 0); R.ok = R.max <= 1 && !R.req.some(q => !q[1]);
+  } else R = calcCartela0(c);
+  if(R.error || c._sinSug || R.ok) return R;
+  // 💡 espesor de cartela, número de pernos (o largo de la soldadura del tubo) y largo de la soldadura al soporte mínimos que cumplen
+  const tub = c.diag === 'tubo', tgs = ESP_PL.filter(x => x >= Math.min(+c.tg, 6.4)), base = { _sinSug:true };
+  const conex = tub ? [100, 125, 150, 175, 200, 250, 300, 350, 400].filter(x => x >= +c.Bt - 1e-6).map(Lws => ({ Lws })) : [2, 3, 4, 5, 6, 7, 8].map(n => ({ n }));
+  const largos = [+c.Lwg, ...[150, 200, 250, 300, 350, 400, 450, 500, 600].filter(x => x > +c.Lwg)];
+  let best = null;
+  // con sismo la rotura de la propia diagonal no se arregla con la cartela: se busca lo demás y se avisa aparte
+  const okS = t => !t.error && t.ch.every(x => x.ratio <= 1 || (sis && x.grupo === 'diagonal' && /Rotura/.test(x.nombre))) && !t.req.some(q => !q[1]);
+  for(const tg of tgs){ for(const cx of conex){ for(const Lwg of largos){ const t = calcCartela({ ...c, ...base, tg, ...cx, Lwg }); if(okS(t)){ best = { tg, ...cx, Lwg }; break; } } if(best) break; } if(best) break; }
+  if(best){ const cambia = Object.keys(best).filter(k => +best[k] !== +c[k]);
+    const fin2 = calcCartela({ ...c, ...base, ...best });
+    if(cambia.length) R.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar cartela de ${best.tg} mm, ${tub ? `soldadura del tubo de ${best.Lws} mm` : `${best.n} pernos`} y soldadura al soporte de ${best.Lwg} mm${fin2.ok ? '' : ' (la diagonal sigue sin alcanzar en su sección neta: refuércela)'}` }; }
+  else R.av.push('No se encontró una combinación de cartela, pernos y soldadura que cumpla: revise la diagonal (perfil o acero), el diámetro de los pernos o el filete.');
+  return R;
 }
 
 // ── Placa base a momento: usa el mismo cálculo del Anexo E del generador (calc/anexoE.js) ─────────────

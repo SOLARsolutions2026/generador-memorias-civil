@@ -187,6 +187,22 @@ function svgCorteEsq(cl, sis){
     <text x="34" y="64" text-anchor="end" font-size="9" fill="${ln}">Ala</text><text x="100" y="124" text-anchor="middle" font-size="9" fill="${ln}">Columna en planta · alma horizontal</text>
   </svg>`;
 }
+// Longitud de pandeo de la cartela por el método de Thornton (pedido de Amo 20-nov)
+function figLcr(tub){
+  const ln = '#475569', az = '#93c5fd', azB = '#1d4ed8', mo = '#7c3aed', nar = '#ea580c', t = (x, y, s, c = ln, a = 'start') => `<text x="${x}" y="${y}" font-size="9" fill="${c}" text-anchor="${a}">${s}</text>`;
+  const ux = 0.707, uy = -0.707, nx = 0.707, ny = 0.707, A = [175, 50], W0 = [A[0] - 46 * ux, A[1] - 46 * uy], hw = 38;   // A = punto lejano; W0 = centro de la sección de Whitmore
+  const e1 = [W0[0] + hw * nx, W0[1] + hw * ny], e2 = [W0[0] - hw * nx, W0[1] - hw * ny], yS = 150;
+  const down = p => [p[0] - (yS - p[1]), yS];                   // sigue la dirección de la diagonal hasta el soporte (a 45°)
+  const d0 = down(W0), d1 = down(e1), d2 = down(e2);
+  return `<figure class="fig-ayuda"><svg viewBox="0 0 230 175" role="img" aria-label="Longitud de pandeo de la cartela">
+    <rect x="10" y="${yS}" width="210" height="10" fill="#cbd5e1" stroke="${ln}"/>
+    <path d="M15 ${yS} L15 115 L150 15 L215 50 L220 ${yS} Z" fill="${az}" stroke="${azB}"/>
+    <line x1="${A[0] + 60 * ux}" y1="${A[1] + 60 * uy}" x2="${W0[0] - 8 * ux}" y2="${W0[1] - 8 * uy}" stroke="${ln}" stroke-width="${tub ? 16 : 9}" opacity=".45"/>
+    <path d="M${A[0]} ${A[1]} L${e1[0]} ${e1[1]} M${A[0]} ${A[1]} L${e2[0]} ${e2[1]} M${e1[0]} ${e1[1]} L${e2[0]} ${e2[1]}" stroke="${mo}" stroke-dasharray="3 2" fill="none"/>
+    ${[[W0, d0, 'L1'], [e1, d1, 'L2'], [e2, d2, 'L3']].map(([p, q, l]) => `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${nar}" stroke-width="1.6"/>${t((p[0] + q[0]) / 2 + 4, (p[1] + q[1]) / 2, l, nar)}`).join('')}
+    ${t(e1[0] + 4, e1[1] + 2, 'Whitmore', mo)}${t(115, 172, 'soporte (borde soldado)', ln, 'middle')}
+  </svg><figcaption>Lcr = (L1 + L2 + L3)/3: se miden desde la sección de Whitmore (centro y extremos) hasta el borde soldado, en la dirección de la diagonal; si una línea sale por un borde libre, se mide hasta ese borde. K = 0.65 si la cartela está sujeta en un borde (Thornton); 0.5 si está bien sujeta en sus dos bordes (cartela de esquina compacta); 1.2 si el borde libre es largo y puede desplazarse lateralmente.</figcaption></figure>`;
+}
 function figContinuidad(dos, cl, sis){
   const col = '#cbd5e1', ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
   const viga = (x1, x2) => `<rect x="${x1}" y="46" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="117" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="53" width="${x2 - x1}" height="64" fill="#f1f5f9" stroke="none"/>`;
@@ -404,11 +420,18 @@ function seccionesDe(c){
     ...(tbo ? [['stub', 'Soldadura tubo–cartela', () => `4 filetes de ${c.wt} mm × ${c.Lws} mm · ${c.electrodo}`,
       g3(campo(c, 'Lws', 'Largo de cada cordón Lws [mm]', { h:'Traslapo del tubo sobre la cartela; ≥ B' }), campo(c, 'wt', 'Filete w [mm]', { h:'4 cordones: 2 por cada cara ranurada' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : [
     ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · Le ${c.Le} · ga ${c.ga}`,
-      g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Le', 'Borde al extremo Le [mm]'), campo(c, 'ga', 'Gramil en el angular ga [mm]', { h:'Del talón a la línea de pernos' }))]]),
-    ['cart', 'Cartela', () => `t ${c.tg} mm · ${c.aceroG} · Lcr ${c.Lcr} mm · K ${c.K}`,
-      g3(campo(c, 'tg', 'Espesor tg [mm]'), campo(c, 'aceroG', 'Acero', { sel:SEL_ACERO }), '<div></div>', campo(c, 'Lcr', 'Longitud libre de pandeo [mm]', { h:tbo ? 'Del final de la soldadura del tubo al borde soldado' : 'Del último perno al borde soldado' }), campo(c, 'K', 'Factor K', { h:'0.65 esquina; 1.2 si se puede desplazar' }))],
-    ['sold', 'Soldadura cartela–soporte', () => `filete ${c.w} mm · L ${c.Lwg} mm · θ ${c.theta}°`,
-      g3(campo(c, 'Lwg', 'Largo del cordón L [mm]'), campo(c, 'w', 'Filete w [mm]', { h:'Por ambas caras' }), campo(c, 'theta', 'θ: fuerza–cordón [°]', { h:'90° = fuerza perpendicular al cordón' }), ...(tbo ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))] ]; }
+      g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Le', 'Borde al extremo Le [mm]'), campo(c, 'ga', 'Gramil en el angular ga [mm]', { h:'Del talón a la línea de pernos' }), campo(c, 'Leg', 'Borde de la cartela Leg [mm]', { h:'Del perno más lejano al borde de la cartela' }))]]),
+    ['cart', 'Cartela', () => `t ${c.tg} mm · ${c.aceroG} · Lcr ${c.Lcr} mm · K ${c.K}${nz(c.bWg) ? ` · ancho ${c.bWg} mm` : ''}`,
+      conFig(`<div class="fg g2">${[campo(c, 'tg', 'Espesor tg [mm]'), campo(c, 'aceroG', 'Acero', { sel:SEL_ACERO }),
+        campo(c, 'bWg', 'Ancho de la cartela en la sección de Whitmore [mm]', { h:'Vacío = la cartela es más ancha (no limita)' }), '<div></div>',
+        campo(c, 'Lcr', 'Longitud de pandeo Lcr [mm]', { h:'Promedio L1, L2, L3 de la figura (Thornton)' }), campo(c, 'K', 'Factor K', { h:'0.5 bien sujeta · 0.65 un borde · 1.2 si se desplaza' })].join('')}</div>`, figLcr(tbo))],
+    ['sold', 'Soldadura cartela–soporte', () => `filete ${c.w} mm · L ${c.Lwg} mm · θ ${c.theta}°${c.duct === false ? '' : ' · ×1.25'}${nz(c.eW) ? ` · e ${c.eW} mm` : ''}`,
+      g3(campo(c, 'Lwg', 'Largo del cordón L [mm]'), campo(c, 'w', 'Filete w [mm]', { h:'Por ambas caras' }), campo(c, 'theta', 'θ: fuerza–cordón [°]', { h:'90° = fuerza perpendicular al cordón' }),
+        campo(c, 'eW', 'Excentricidad e [mm]', { h:'Del eje de la diagonal al centro del cordón; 0 = pasa por el centro' }), ...(tbo ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
+      + `<div class="f"><label class="ck"><input type="checkbox" data-k="duct" ${c.duct !== false ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Diseñar la soldadura para 1.25 veces la fuerza (ductilidad, Manual AISC parte 13)</label></div>`],   // vacío en conexiones viejas = sí
+    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · tensión Ry·Fy·Ag${nz(c.Pnd) ? ` · compresión 1.1·Ry·Pn (Pn ${c.Pnd} kN)` : ''}` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico arriostrado concéntrico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (ordinario/moderado)'], ['DES', 'DES (especial)']] }),
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'Pnd', 'Pn de la diagonal a compresión [kN]', { h:'Resistencia nominal (sin φ), del Anexo D' })] : []))] ]; }
   if(c.tipo === 'base') return [
     ['col', 'Columna', () => c.columna, g3(SELP('columna', 'Perfil'))],
     ['placa', 'Placa base', () => `${c.N} × ${c.B} × ${c.tp} mm · ${c.aceroPlaca} · filete ${c.w} mm`,
