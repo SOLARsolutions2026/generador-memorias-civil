@@ -129,3 +129,4 @@ h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
 .fig-ayuda figcaption{font-size:11px;line-height:1.35;color:#475569;margin-top:4px}
 .sec-bd > .fig-ayuda{max-width:300px;margin-top:8px}
 @media (max-width:700px){.con-fig{grid-template-columns:1fr}.con-fig .fig-ayuda{max-width:300px}}
+.con-fig.ancho{grid-template-columns:1fr}.con-fig.ancho .fig-ayuda{max-width:520px}

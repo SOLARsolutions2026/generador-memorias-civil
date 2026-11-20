@@ -169,7 +169,7 @@ const SEL_ACERO = Object.keys(Conex.ACEROS).map(k => [k, `${k} (Fy ${Conex.ACERO
 const dnom = c => (Conex.DIAM.find(x => x[1] === +c.d) || [`${c.d} mm`])[0];
 const SOPN = { ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga principal' };
 // Figuras de ayuda junto a los datos (pedido de Amo 20-nov): placas de continuidad de la columna y placa de apoyo
-const conFig = (campos, fig) => `<div class="con-fig"><div>${campos}</div>${fig}</div>`;
+const conFig = (campos, fig, cls = '') => `<div class="con-fig ${cls}"><div>${campos}</div>${fig}</div>`;
 function figContinuidad(dos){
   const col = '#cbd5e1', ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
   const viga = (x1, x2) => `<rect x="${x1}" y="46" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="117" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="53" width="${x2 - x1}" height="64" fill="#f1f5f9" stroke="none"/>`;
@@ -201,6 +201,38 @@ function figDebil(dos){
     <line x1="144" y1="68" x2="196" y2="40" stroke="${nar}"/><text x="198" y="36" font-size="9" fill="${nar}">Sold.</text>
     <text x="24" y="100" font-size="9" fill="${ln}">Alma</text><line x1="44" y1="97" x2="66" y2="97" stroke="${ln}"/>
   </svg><figcaption>Vista en planta. El alma de la columna es delgada y se doblaría con la fuerza de las alas de la viga; por eso se ponen placas de continuidad (azul) a la altura de las alas, soldadas al alma y a las dos alas de la columna. Las alas de la viga se sueldan a las placas.</figcaption></figure>`;
+}
+// Corte por el eje de la viga cuando llega al alma de la columna (pedido de Amo 20-nov): A = alas a tope (CJP), B = placa traslapada
+function svgCorteDebil(op, o = {}){
+  const ln = '#475569', az = '#93c5fd', azB = '#1d4ed8', nar = '#ea580c', t = (x, y, s, a = 'start', col = ln, fs = 11) => `<text x="${x}" y="${y}" font-size="${fs}" fill="${col}" text-anchor="${a}">${s}</text>`;
+  let h = `<defs><pattern id="hc${op}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#64748b" stroke-width="1.2"/></pattern></defs>
+    <rect x="80" y="20" width="12" height="260" fill="url(#hc${op})" stroke="${ln}"/>
+    <line x1="210" y1="20" x2="210" y2="280" stroke="#94a3b8" stroke-dasharray="5 4"/>${t(214, 290, 'borde del ala de la columna', 'start', '#64748b', 10)}
+    ${t(20, 150, 'Alma de')}${t(20, 163, 'la columna')}<line x1="72" y1="152" x2="82" y2="152" stroke="${ln}"/>
+    <rect x="92" y="90" width="5" height="112" fill="${nar}" opacity=".75"/>${t(104, 255, `Filete alma–alma${o.w ? ` ${o.w} mm` : ''}`, 'start', nar)}<line x1="110" y1="245" x2="96" y2="200" stroke="${nar}"/>`;
+  if(op === 'tope'){
+    h += `<rect x="92" y="72" width="168" height="12" fill="${az}" stroke="${azB}"/><rect x="92" y="208" width="168" height="12" fill="${az}" stroke="${azB}"/>
+      <rect x="266" y="72" width="214" height="11" fill="#cbd5e1" stroke="${ln}"/><rect x="266" y="209" width="214" height="11" fill="#cbd5e1" stroke="${ln}"/>
+      <rect x="97" y="84" width="383" height="124" fill="#f1f5f9"/><line x1="97" y1="146" x2="480" y2="146" stroke="#94a3b8" stroke-dasharray="6 4"/>
+      <rect x="260" y="72" width="6" height="12" fill="${nar}"/><rect x="260" y="208" width="6" height="12" fill="${nar}"/>
+      ${t(100, 64, `Placa de continuidad${o.ts ? ` ts = ${o.ts} mm` : ' (ts ≥ tf)'}`, 'start', azB)}${t(470, 64, 'Ala de la viga', 'end')}
+      ${t(270, 250, 'Ala a tope con la placa (CJP)', 'start', nar)}<line x1="268" y1="240" x2="264" y2="222" stroke="${nar}"/>`;
+  } else {
+    h += `<rect x="92" y="60" width="268" height="12" fill="${az}" stroke="${azB}"/><rect x="92" y="220" width="268" height="12" fill="${az}" stroke="${azB}"/>
+      <rect x="98" y="72" width="382" height="11" fill="#cbd5e1" stroke="${ln}"/><rect x="98" y="209" width="382" height="11" fill="#cbd5e1" stroke="${ln}"/>
+      <rect x="98" y="83" width="382" height="126" fill="#f1f5f9"/><line x1="98" y1="146" x2="480" y2="146" stroke="#94a3b8" stroke-dasharray="6 4"/>
+      <path d="M360 72 L360 62 L370 72 Z M360 220 L360 230 L370 220 Z" fill="${nar}"/>
+      <line x1="210" y1="48" x2="360" y2="48" stroke="${ln}"/><path d="M210 45 v6 M360 45 v6" stroke="${ln}"/>${t(285, 44, `traslapo Lt${o.Lt ? ` = ${o.Lt} mm` : ''}`, 'middle')}
+      ${t(100, 30, `Placa sobre el ala${o.ts ? ` ts = ${o.ts} mm` : ''}`, 'start', azB)}${t(470, 100, 'Ala de la viga', 'end')}
+      ${t(300, 262, `Filetes de la placa sobre el ala${o.wT ? ` ${o.wT} mm` : ''}`, 'start', nar)}<line x1="330" y1="252" x2="364" y2="230" stroke="${nar}"/>`;
+  }
+  h += t(330, 140, o.viga ? `Viga ${o.viga}` : 'Viga (alma)', 'start', ln, 12);
+  return `<svg viewBox="0 0 500 300" class="dsvg" role="img" aria-label="Corte de la unión al alma de la columna">${h}</svg>`;
+}
+function figCorteDebil(op){
+  return `<figure class="fig-ayuda">${svgCorteDebil(op)}<figcaption>${op === 'tope'
+    ? 'Corte por el eje de la viga. Las alas de la viga se cortan y se sueldan a tope (penetración completa) con el borde de la placa, en el mismo plano; la placa sale 50–75 mm fuera de las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'
+    : 'Corte por el eje de la viga. La viga entra completa entre las alas de la columna; una placa va encima del ala superior y otra debajo de la inferior, soldadas con filete por sus bordes sobre el ala (largo Lt) y al alma y a las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'}</figcaption></figure>`;
 }
 function figPlacaApoyo(){
   const col = '#cbd5e1', ln = '#475569', nar = '#ea580c';
@@ -245,10 +277,12 @@ function seccionesDe(c){
     ['miem', 'Miembro soldado', () => c.miembro === 'tubo' ? `Tubo ${c.H}×${c.B}×${c.tt} mm · ${c.aceroViga}` : `${c.viga} · ${c.aceroViga}`,
       g3(campo(c, 'miembro', 'Tipo', { sel:[['I', 'Perfil I'], ['tubo', 'Tubo rectangular']] }), c.miembro === 'tubo' ? '' : SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))
       + (c.miembro === 'tubo' ? g3(campo(c, 'H', 'Alto H [mm]', { h:'En la dirección 2' }), campo(c, 'B', 'Ancho B [mm]'), campo(c, 'tt', 'Espesor t [mm]')) : '')],
-    ['sold', 'Soldadura en todo el perímetro', () => c.union === 'cjp' ? 'penetración completa' : `filete ${tub ? 'b' : 'alas'} ${c.w} mm · ${tub ? 'd' : 'alma'} ${nz(c.wAlma) > 0 ? c.wAlma : c.w} mm · ${c.electrodo}${c.kds ? ' · con aumento por dirección' : ''}`,
+    ...(c.soporte === 'alma' ? [['sold', 'Soldadura del alma de la viga', () => c.union === 'cjp' ? 'penetración completa' : `filete ${c.w} mm por ambas caras · ${c.electrodo}`,
+      g3(campo(c, 'union', 'Tipo', { sel:[['filete', 'Filete por ambas caras'], ['cjp', 'Penetración completa']] }), c.union === 'cjp' ? '' : campo(c, 'w', 'Filete del alma [mm]', { h:'Al alma de la columna; toma el cortante V2' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : []),
+    ...(c.soporte === 'alma' ? [] : [['sold', 'Soldadura en todo el perímetro', () => c.union === 'cjp' ? 'penetración completa' : `filete ${tub ? 'b' : 'alas'} ${c.w} mm · ${tub ? 'd' : 'alma'} ${nz(c.wAlma) > 0 ? c.wAlma : c.w} mm · ${c.electrodo}${c.kds ? ' · con aumento por dirección' : ''}`,
       g3(campo(c, 'union', 'Tipo de soldadura', { sel:[['filete', 'Filete en todo el contorno'], ['cjp', 'Penetración completa']] }),
         ...(c.union === 'cjp' ? [] : [campo(c, 'w', tub ? 'Filete caras horizontales (b) [mm]' : 'Filete de las alas w [mm]'), campo(c, 'wAlma', tub ? 'Filete caras verticales (d) [mm]' : 'Filete del alma [mm]', { h:'Vacío = igual al anterior' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
-      + (c.union === 'cjp' ? '' : ck('kds', 'Aplicar el aumento por dirección del filete (1 + 0.5·sen^1.5θ, J2-5): más resistencia donde la fuerza va de frente al cordón'))],
+      + (c.union === 'cjp' ? '' : ck('kds', 'Aplicar el aumento por dirección del filete (1 + 0.5·sen^1.5θ, J2-5): más resistencia donde la fuerza va de frente al cordón'))]]),
     ['sop', 'Soporte', () => c.soporte === 'placa' ? `Placa t ${c.tSop} mm · ${c.aceroSop}` : c.columna ? `${c.soporte === 'alma' ? 'Alma' : 'Ala'} de ${c.columna} · ${c.aceroCol}${c.dosLados ? ` · viga al otro lado M₂ ${c.Mu2}` : ''} · placas: ${(RIGS[c.rigCol || 'auto'] || '').split(' (')[0].toLowerCase()}` : 'columna sin revisar',
       g3(campo(c, 'soporte', 'Se suelda a', { sel:[['col', 'Ala de una columna (eje fuerte)'], ['alma', 'Alma de una columna (eje débil)'], ['placa', 'Una placa']] }),
         ...(c.soporte === 'placa' ? [campo(c, 'tSop', 'Espesor de la placa [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })]
@@ -258,7 +292,11 @@ function seccionesDe(c){
         + ck('dosLados', c.soporte === 'alma' ? 'Llega otra viga a momento al otro lado del alma' : 'Llega otra viga a momento al otro lado de la columna')
         + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
         + `<h4 class="sub">Placas de continuidad de la columna${c.soporte === 'alma' ? ' (obligatorias si hay momento)' : ''}</h4>`
-        + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, c.soporte === 'alma' ? figDebil(c.dosLados) : figContinuidad(c.dosLados)))],
+        + (c.soporte === 'alma'
+          ? conFig(`<div class="fg g3">${[campo(c, 'uDebil', 'Unión de las alas a las placas', { sel:[['trasl', 'B · Placa traslapada con filete'], ['tope', 'A · Alas a tope (CJP)']] }), campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }),
+              ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete placa–columna [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]),
+              ...(c.uDebil === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { h:'Largo de la placa sobre el ala' }), campo(c, 'wT', 'Filete placa–ala [mm]')])].join('')}</div>`, figCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl'), 'ancho')
+          : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados))))],
     ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
         ...(c.sismo === 'DMO' || c.sismo === 'DES' ? [campo(c, 'Lh', 'Luz libre de la viga L [m]', { h:'Entre caras de columnas (la rótula queda en la cara)' }), campo(c, 'Vg', 'Vg: cortante de gravedad [kN]', { h:'1.2D + 0.5L (o la del modelo)' })] : []))
@@ -450,7 +488,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -714,6 +752,8 @@ function dibBase(c, r){
   return svgW(X(Lp / 2) + 70, Y(Wp / 2) + 36, h, 'Placa base: planta', `Planta · columna ${esc(cl.nom)} · el sentido N es el del peralte`);
 }
 function dibSoldada(c, r){
+  if(c.soporte === 'alma'){ const g = r.geo; return svgCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl', { ts:g.rig?.ts, Lt:c.Lt, wT:c.wT, w:c.union === 'cjp' ? '' : c.w, viga:g.m.nom })
+    + `<div class="hint" style="text-align:center">Corte por el eje de la viga · viga al alma de ${esc(c.columna)} · ${c.uDebil === 'tope' ? 'alas a tope (CJP) con la placa' : 'placas traslapadas sobre las alas'}</div>`; }
   const al = c.soporte === 'alma', m = r.geo.m, cl0 = c.soporte !== 'placa' ? Conex.perfil(c.columna) : null, cl = al ? null : cl0, ts = al && cl0 ? cl0.tw : cl ? cl.tf : +c.tSop || 20, dc = cl ? cl.d : al && r.geo.rig ? ts + r.geo.rig.bs + 30 : al ? 60 : ts;
   const k = 240 / (m.d + 80), X = v => 30 + (v + dc) * k, Y = v => 40 + v * k, Ls = 260, cjp = c.union === 'cjp', w = cjp ? 6 : +c.w;
   let h = cl ? `<rect x="${X(-dc)}" y="${Y(-40)}" width="${(dc - ts) * k}" height="${(m.d + 80) * k}" class="vg"/><rect x="${X(-dc)}" y="${Y(-40)}" width="${cl.tf * k}" height="${(m.d + 80) * k}" class="sop"/>` : '';

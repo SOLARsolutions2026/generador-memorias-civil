@@ -1051,7 +1051,8 @@ function defaultsSoldada(){
     wAlma:'', kds:false,                                         // filete del alma (vacío = igual al de las alas) · aumento por dirección J2-5
     dosLados:false, Mu2:40, sentido2:'opuesto',                  // viga al otro lado de la columna
     rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36',              // placas de continuidad de la columna
-    sismo:'no', Lh:6, Vg:30 };                                   // WUF-W (AISC 358 cap. 8)
+    sismo:'no', Lh:6, Vg:30,                                     // WUF-W (AISC 358 cap. 8)
+    uDebil:'trasl', Lt:150, wT:6 };                              // viga al alma de la columna: placas traslapadas (B) o alas a tope (A)
 }
 // Cordón en todo el perímetro por el método elástico con la garganta de cada tramo (alas y alma pueden tener filetes distintos).
 // Cada punto: σ = P/A + M3·y/Ix + M2·x/Iy; V2 lo toman los cordones del alma (lados verticales del tubo), V3 los de las alas; torsión T·r/J.
@@ -1121,13 +1122,57 @@ function calcSoldada(c){
   let tsW = 0;
   if(alma && (Mcol > 0 || c.rigCol === 'si') && c.rigCol !== 'no'){
     const b = Math.min(m.bf, cl.d - 2 * cl.tf), bsW = (cl.bf - cl.tw) / 2;
-    const tReq = Math.max(m.tf, FfuE * 1000 / (0.9 * arW.Fy * b), bsW / (0.56 * Math.sqrt(E / arW.Fy)));
+    const tReq = Math.max(c.uDebil === 'tope' ? m.tf : 6.4, FfuE * 1000 / (0.9 * arW.Fy * b), bsW / (0.56 * Math.sqrt(E / arW.Fy)));
     tsW = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1); }
-  const dosA = alma && !!c.dosLados;
+  const dosA = alma && !!c.dosLados, tope = c.uDebil === 'tope';
+  // Traslapada: la fuerza de cada ala pasa a la placa con brazo d + ts (placas por fuera de las alas)
+  const FfuA = alma && tsW && !tope ? Mcol * 1000 / (m.d + tsW) + Math.abs(P) / 2 : FfuE;
 
   // ── Soldadura ──
   let sug = null;
-  if(c.union === 'cjp'){
+  if(alma){
+    // Viga al alma de la columna (pedido de Amo 20-nov): el alma de la viga se suelda al alma de la columna (toma V2);
+    // las alas van a las placas de continuidad: «tope» = CJP en el mismo plano · «trasl» = placa por fuera del ala con filetes (por defecto).
+    const hw = m.tub ? m.d - 2 * m.tf : m.d - 2 * m.tf - 2 * (m.r || 0), w = +c.w || 0, Vw = Math.abs(V2);
+    if(c.union === 'cjp') pasos.push(`Alma de la viga al alma de la columna con penetración completa (resistencia del metal base); toma V2 = ${r2(Vw)} kN.`);
+    else {
+      const qL = Vw / (2 * hw);                                                   // kN/mm por cordón (2 cordones)
+      pasos.push(`Alma de la viga al alma de la columna: 2 filetes de ${w} mm, largo h = ${r1(hw)} mm; toman V2 = ${r2(Vw)} kN → ${r3(qL)} kN/mm por cordón${Math.abs(T) || Math.abs(V3) ? ' (T y V3 no se reparten aquí: avisos)' : ''}`);
+      add('soldadura', 'Filetes del alma de la viga al alma de la columna', 'F.2.10.2.4 (J2-4), φ = 0.75', qL, fw2(FEXX, w), 'kN/mm', `V2/(2h), w = ${w} mm`);
+      add('soldadura', 'Metal base del alma de la viga junto a los filetes', 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', m.tub ? qL : 2 * qL, 0.45 * am.Fu * m.tw / 1000, 'kN/mm', m.tub ? `pared t = ${m.tw} mm` : `dos cordones sobre tw = ${m.tw} mm`);
+      add('columna', 'Metal base del alma de la columna junto a los filetes', 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', 2 * qL * (dosA ? 2 : 1), 0.45 * acS.Fu * cl.tw / 1000, 'kN/mm', `tw = ${cl.tw} mm${dosA ? '; con la viga del otro lado (×2)' : ''}`);
+      req.push(['Filete del alma ≥ mínimo Tabla J2.4', w >= wMinT(Math.min(m.tw, cl.tw)), `${w} ≥ ${wMinT(Math.min(m.tw, cl.tw))} mm`]);
+      const wOk = [3, 5, 6, 8, 10, 12, 14, 16].find(x => x >= wMinT(Math.min(m.tw, cl.tw)) && qL <= fw2(FEXX, x) + 1e-9 && 2 * qL * (dosA ? 2 : 1) <= 0.45 * acS.Fu * cl.tw / 1000);
+      if(wOk && wOk !== w) sug = { tipo:'sold', ok:true, w:wOk, txt:`💡 Usar filete de ${wOk} mm en el alma` };
+    }
+    if(Math.abs(T) > 0 || Math.abs(V3) > 0) av.push('V3 y T no se revisan en la soldadura al alma de la columna; si son importantes, revíselos aparte.');
+    if(Mcol > 0 && tsW){
+      const b = Math.min(m.bf, cl.d - 2 * cl.tf);
+      if(tope){
+        pasos.push(`Alas de la viga a tope con el borde de la placa (penetración completa, mismo plano): resistencia igual al metal base; la placa ts = ${tsW} mm ≥ tf = ${m.tf} mm.`);
+        add('viga', 'Ala de la viga a tensión en la junta', 'F.2.4 (D2-1), φ = 0.90', FfuA, 0.9 * am.Fy * m.bf * m.tf / 1000, 'kN', '0.9·Fy·bf·tf');
+        req.push(['Alas a tope: soldadura de penetración completa con bisel y respaldo; inspección (ultrasonido recomendado)', true, 'indicar en planos']);
+      } else {
+        const Lt = +c.Lt || 0, wT = +c.wT || 0, fwT = fw2(FEXX, wT), Rl = 2 * Lt * fwT, Rt = b * fwT, cap = Math.max(Rl + Rt, 0.85 * Rl + 1.5 * Rt);
+        pasos.push(`Placas traslapadas por fuera de las alas (encima del ala superior y debajo de la inferior): brazo d + ts → F = M/(d + ts) + P/2 = ${r2(FfuA)} kN; filetes de ${wT} mm: 2 longitudinales de ${Lt} mm + 1 transversal de ${r1(b)} mm (J2.4c: máx(Rl + Rt; 0.85Rl + 1.5Rt) = ${r2(cap)} kN)`);
+        add('soldadura', 'Filetes de la placa sobre el ala de la viga', 'F.2.10.2.4 (J2-4, J2.4c), φ = 0.75', FfuA, cap, 'kN', `2 × ${Lt} mm + ${r1(b)} mm, w = ${wT} mm`);
+        const blq = (Fu, t) => 0.75 * (0.6 * Fu * 2 * Lt * t + Fu * b * t) / 1000;
+        add('placas', 'Placa: rotura junto a los filetes (bloque)', 'F.2.10.4.3 (J4-5), φ = 0.75', FfuA, blq(arW.Fu, tsW), 'kN', `0.6·Fu·2Lt·ts + Fu·b·ts, ts = ${tsW} mm`);
+        add('viga', 'Ala de la viga: rotura junto a los filetes (bloque)', 'F.2.10.4.3 (J4-5), φ = 0.75', FfuA, blq(am.Fu, m.tf), 'kN', `0.6·Fu·2Lt·tf + Fu·b·tf, tf = ${m.tf} mm`);
+        const tm = Math.min(tsW, m.tf);
+        req.push(['Filete de la placa sobre el ala ≥ mínimo Tabla J2.4', wT >= wMinT(tm), `${wT} ≥ ${wMinT(tm)} mm`]);
+        req.push(['Filete en el borde de la placa ≤ ts − 1.6 mm (J2.2b)', tsW < 6 ? wT <= tsW : wT <= tsW - 1.6 + 1e-6, `${wT} ≤ ${r1(tsW < 6 ? tsW : tsW - 1.6)} mm`]);
+        if(Lt < b) av.push(`El traslapo (${Lt} mm) es más corto que el ancho de la placa (${r1(b)} mm); se recomienda Lt ≥ b para repartir bien la fuerza.`);
+        av.push('Placa traslapada: queda fuera del plano del ala; la pequeña excentricidad (tf + ts)/2 no se revisa. Las placas van encima del ala superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.');
+        // 💡 traslapo y filete mínimos que cumplen
+        { let best = null;
+          [5, 6, 8, 10, 12, 14, 16].filter(x => x >= wMinT(tm) && x <= (tsW < 6 ? tsW : tsW - 1.6)).forEach(x => { for(let L = Math.max(75, Math.ceil(b / 25) * 25); L <= 450; L += 25){ const f = fw2(FEXX, x), rl = 2 * L * f, rt = b * f, cp = Math.max(rl + rt, 0.85 * rl + 1.5 * rt);
+            if(cp >= FfuA && blq(arW.Fu, tsW) >= FfuA && blq(am.Fu, m.tf) >= FfuA){ const v = x * x * (2 * L + b); if(!best || v < best.v) best = { wT:x, Lt:L, v }; break; } } });
+          if(best && (best.wT !== wT || best.Lt !== Lt)){ const t2 = `traslapo de ${best.Lt} mm con filete de ${best.wT} mm`;
+            sug = sug ? { ...sug, wT:best.wT, Lt:best.Lt, txt:`${sug.txt} y ${t2}` } : { tipo:'sold', ok:true, wT:best.wT, Lt:best.Lt, txt:`💡 Usar ${t2}` }; } }
+      }
+    }
+  } else if(c.union === 'cjp'){
     pasos.push('Penetración completa en todo el perímetro: la soldadura tiene la resistencia del metal base (Tabla F.2.10.2-5); se revisa la sección del miembro en la cara del soporte.');
     const Pc = 0.9 * am.Fy * m.A / 1000, Mcx = 0.9 * am.Fy * m.Zx / 1e6, Mcy = 0.9 * am.Fy * m.Zy / 1e6, pr = Math.abs(P) / Pc, M3m = Math.abs(nz(c.Mu));
     const inter = pr >= 0.2 ? pr + 8 / 9 * (M3m / Mcx + Math.abs(M2) / Mcy) : pr / 2 + M3m / Mcx + Math.abs(M2) / Mcy;
@@ -1175,7 +1220,7 @@ function calcSoldada(c){
   }
 
   // ── Soporte ──
-  const Ffu = Mcol * 1000 / (m.d - m.tf) + Math.abs(P) / 2;
+  const Ffu = alma ? FfuA : Mcol * 1000 / (m.d - m.tf) + Math.abs(P) / 2;
   const N = m.tf + 2 * (c.union === 'cjp' ? 0 : +c.w);
   pasos.push(`Fuerza en cada ala Ffu = ${sis ? 'Mf' : 'M3'}/(d − tf) + |P|/2 = ${r2(Ffu)} kN; longitud de apoyo N = tf + 2w = ${r1(N)} mm`);
   let rig = null;
@@ -1196,10 +1241,10 @@ function calcSoldada(c){
       pasos.push(`Placas de continuidad a la altura de las alas de la viga: ts = ${tsW} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), soldadas a las dos alas de la columna con filetes de ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'} (Lf = ${r1(Lf)} mm por ala) y al alma`);
       add('placas', 'Placa de continuidad a tensión (recibe el ala de la viga)', 'F.2.4 (D2-1), φ = 0.90', Ffu, 0.9 * arW.Fy * b * tsW / 1000, 'kN', `0.9·Fy·b·ts, b = ${r1(b)} mm`);
       add('placas', 'Filetes de la placa a las dos alas de la columna', 'F.2.10.2.4 (J2-4)', Fm, capWl(ws), 'kN', `2 alas × 2 filetes × ${r1(Lf)} mm · ${ws} mm`);
-      req.push(['Placas: ts ≥ tf de la viga', tsW >= m.tf - 1e-6, `${tsW} ≥ ${m.tf} mm`]);
+      if(tope) req.push(['Placas: ts ≥ tf de la viga (alas a tope en el mismo plano)', tsW >= m.tf - 1e-6, `${tsW} ≥ ${m.tf} mm`]);
       req.push(['Placas: bs/ts ≤ 0.56√(E/Fy)', bsW / tsW <= 0.56 * Math.sqrt(E / arW.Fy) + 1e-6, `${r1(bsW / tsW)} ≤ ${r1(0.56 * Math.sqrt(E / arW.Fy))}`]);
       req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMinT(Math.min(tsW, cl.tf)), `${ws} ≥ ${wMinT(Math.min(tsW, cl.tf))} mm`]);
-      av.push('Prolongue las placas de continuidad 50–75 mm fuera de las alas de la columna si el ala de la viga no cabe completa entre ellas, y suelde el ala de la viga a la placa con penetración completa.');
+      if(tope) av.push('Prolongue las placas de continuidad 50–75 mm fuera de las alas de la columna y suelde el ala de la viga a tope (penetración completa) con el borde de la placa.');
       if(dosA && op) av.push('Vigas a los dos lados del alma con momentos opuestos: la parte que se equilibra pasa por el espesor del alma; suelde las placas al alma con penetración completa.');
     }
     if(Mcol > 0){ const Vw = !dosA ? Ffu : op ? Math.abs(Ffu - F2) : Ffu + F2, Rvf = 0.9 * 0.6 * ac.Fy * 2 * cl.bf * cl.tf / 1000;
