@@ -1163,7 +1163,7 @@ function defaultsNudo(){
 // Viga que llega con cada conexión: perfil, momento, cortante y axial
 function vigaDe(c){
   let vg = null;
-  if(c.tipo === 'soldada' && c.miembro === 'H') vg = { nom:`Tubo ${c.H}×${c.B}×${c.tt}`, d:+c.H, bf:+c.B, tw:+c.tt, tf:+c.tt, r:0 };
+  if(c.tipo === 'soldada' && c.miembro === 'tubo') vg = { nom:`Tubo ${c.H}×${c.B}×${c.tt}`, d:+c.H, bf:+c.B, tw:+c.tt, tf:+c.tt, r:0 };
   else vg = perfil(c.viga);
   const mom = MOMENTO.includes(c.tipo);
   return { vg, mom, M:mom ? Math.abs(+c.Mu || 0) : 0, V:Math.abs(+c.Vu || 0), P:mom ? Math.abs(+c.P || 0) : 0 };
