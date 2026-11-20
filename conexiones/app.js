@@ -485,7 +485,9 @@ function seccionesDe(c){
   return [
     ['geo', 'Distribución de pernos', () => `${c.filas} filas × ${c.cols} columnas · s ${c.s} · g ${c.g} · bordes ${c.Lev}/${c.Leh}`,
       g3(campo(c, 'filas', 'Filas (vertical)'), campo(c, 'cols', 'Columnas (horizontal)'), '<div></div>', campo(c, 's', 'Separación vertical s [mm]'), campo(c, 'g', 'Separación horizontal g [mm]'), '<div></div>', campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'Leh', 'Borde horizontal Leh [mm]'))],
-    ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}`, g3(...pernosTipo)],
+    ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}${c.desliz ? ` · deslizamiento crítico clase ${c.claseSup || 'A'}` : ''}`, g3(...pernosTipo)
+      + ck('desliz', 'Pernos de deslizamiento crítico (J3-8): cuando la unión no puede deslizar (vibración, cargas que cambian de sentido)')
+      + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')],
     ['chapa', 'Chapa y soporte', () => `PL ${c.tp} mm ${c.aceroPl} · soporte t ${c.tSop} mm ${c.aceroSop}`,
       g3(campo(c, 'tp', 'Espesor de la chapa tp [mm]'), campo(c, 'aceroPl', 'Acero de la chapa', { sel:SEL_ACERO }), '<div></div>', campo(c, 'tSop', 'Espesor del soporte [mm]', { h:'Ala de la columna u otra chapa' }), campo(c, 'aceroSop', 'Acero del soporte', { sel:SEL_ACERO }))] ];
 }

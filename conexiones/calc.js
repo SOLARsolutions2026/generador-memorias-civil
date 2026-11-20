@@ -185,13 +185,13 @@ function defaultsGrupo(){
   return { tipo:'grupo', nom:'', desc:'', Pu:60, ang:0, e:200,
     filas:3, cols:2, s:75, g:75, Lev:40, Leh:40,
     d:19.1, grado:'A325', rosca:'N',
-    tp:12.7, aceroPl:'A36', tSop:12, aceroSop:'A572 Gr 50' };
+    tp:12.7, aceroPl:'A36', tSop:12, aceroSop:'A572 Gr 50', desliz:false, claseSup:'A' };
 }
 function calcGrupo(c){
   const ch = [], av = [], pasos = [];
   const P = +c.Pu || 0, d = +c.d, nf = Math.max(1, Math.round(+c.filas)), nc = Math.max(1, Math.round(+c.cols)), s = +c.s, g = +c.g, e = +c.e, ang = +c.ang || 0;
   const pl = ACEROS[c.aceroPl], sp = ACEROS[c.aceroSop], tp = +c.tp, ts = +c.tSop, Lev = +c.Lev, Leh = +c.Leh;
-  const dh = agujero(d), dn = anchoNeto(d);
+  const dh = agujero(d), dn = anchoNeto(d), n = nf * nc, E = 200000;
   const pernos = []; for(let j = 0; j < nc; j++) for(let i = 0; i < nf; i++) pernos.push({ x:j * g, y:-i * s });
   const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
   const req = [], bm = bordeMin(d);
@@ -200,28 +200,81 @@ function calcGrupo(c){
   req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
 
   const ic = icr(pernos, e, ang), el = elastico(pernos, e, ang);
-  const pc = pernoCorte(d, c.grado, c.rosca, 1);
-  const lcE = Math.min(Lev, Leh) - dh / 2, lcI = Math.min(nf > 1 ? s : 1e9, nc > 1 ? g : 1e9) - dh;
-  const bE = aplast(lcE, tp, d, pl.Fu), bI = aplast(Math.min(lcI, 1e6), tp, d, pl.Fu), bS = aplast(Math.min(lcI, 1e6), ts, d, sp.Fu);
-  const rn = Math.min(pc.phiRn, bE.phiRn, bI.phiRn, bS.phiRn);
-  const cual = rn === pc.phiRn ? 'cortante del perno' : rn === bS.phiRn ? 'aplastamiento en el soporte' : 'aplastamiento en la chapa';
-  pasos.push(`${nf} filas × ${nc} columnas = ${pernos.length} pernos de ${d} mm ${c.grado}-${c.rosca}; s = ${s}, g = ${g} mm`);
-  pasos.push(`Cortante de un perno: φrn = 0.75·${pc.Fnv}·${r1(pc.Ab)} = ${r2(pc.phiRn)} kN`);
-  pasos.push(`Aplastamiento: chapa borde ${r2(bE.phiRn)} kN, chapa interior ${r2(bI.phiRn)} kN, soporte ${r2(bS.phiRn)} kN`);
-  pasos.push(`Centro instantáneo (e = ${e} mm, carga a ${ang}° de la vertical): C = ${r3(ic.C)}; método elástico: C = ${r3(el.C)} (referencia)`);
-  add('pernos', 'Grupo de pernos excéntrico (centro instantáneo)', 'F.2.10.3 · Manual AISC parte 7', P, ic.C * rn, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rn)} kN (${cual})`);
+  const pc = pernoCorte(d, c.grado, c.rosca, 1), ta = ang * Math.PI / 180, Pv = P * Math.cos(ta), Ph = P * Math.sin(ta);
+  // Aplastamiento perno por perno (revisión con Amo, 20-nov): borde libre de cada perno en el sentido de la carga sobre la chapa
+  // (u = dirección de P). Hacia otro agujero lc = distancia − dh; hacia el borde lc = distancia − dh/2. El soporte se toma sin borde.
+  const ux = Math.sin(ta), uy = -Math.cos(ta), xL = -Leh, xR = (nc - 1) * g + Leh, yT = Lev, yB = -(nf - 1) * s - Lev;
+  const lcDe = p => {
+    let dist = Infinity;
+    if(ux > 1e-9) dist = Math.min(dist, (xR - p.x) / ux); if(ux < -1e-9) dist = Math.min(dist, (xL - p.x) / ux);
+    if(uy > 1e-9) dist = Math.min(dist, (yT - p.y) / uy); if(uy < -1e-9) dist = Math.min(dist, (yB - p.y) / uy);
+    let lc = dist - dh / 2, borde = true;
+    pernos.forEach(q => { if(q === p) return; const dx = q.x - p.x, dy = q.y - p.y, t = dx * ux + dy * uy, off = Math.abs(dx * uy - dy * ux);
+      if(t > 0 && off < dh && t - dh < lc){ lc = t - dh; borde = false; } });
+    return { lc, borde };
+  };
+  const bS = 0.75 * 2.4 * d * ts * sp.Fu / 1000;
+  const rnP = pernos.map(p => { const L = lcDe(p); return { ...L, r:Math.min(pc.phiRn, aplast(L.lc, tp, d, pl.Fu).phiRn, bS) }; });
+  const rMax = Math.min(pc.phiRn, 0.75 * 2.4 * d * tp * pl.Fu / 1000, bS);
+  // capacidad del grupo: C·rn con el perno "normal"; cada perno con menos resistencia descuenta su faltante en proporción C/n
+  const capIC = ic.C * rMax - rnP.reduce((a, x) => a + (rMax - x.r), 0) * ic.C / n;
+  const rMin = Math.min(...rnP.map(x => x.r));
+  const cual = rMax === pc.phiRn ? 'cortante del perno' : rMax === bS ? 'aplastamiento en el soporte' : 'aplastamiento en la chapa';
+  pasos.push(`${nf} filas × ${nc} columnas = ${n} pernos de ${d} mm ${c.grado}-${c.rosca}; s = ${s}, g = ${g} mm`);
+  pasos.push(`Cortante de un perno: φrn = 0.75·${pc.Fnv}·${r1(pc.Ab)} = ${r2(pc.phiRn)} kN; aplastamiento en el soporte (sin borde) ${r2(bS)} kN`);
+  pasos.push(`Aplastamiento en la chapa perno por perno, en el sentido de la carga (${ang}° de la vertical): ${rnP.map((x, k) => `${k + 1}: lc ${r1(x.lc)} mm → ${r2(x.r)} kN${x.borde ? ' (borde)' : ''}`).join(' · ')}`);
+  pasos.push(`Centro instantáneo (e = ${e} mm): C = ${r3(ic.C)}; método elástico: C = ${r3(el.C)} (referencia). Capacidad = C·rn − Σ(rn − rnᵢ)·C/n = ${r2(capIC)} kN (rn = ${r2(rMax)} kN, ${cual})`);
+  add('pernos', 'Grupo de pernos excéntrico (centro instantáneo, perno por perno)', 'F.2.10.3 · Manual AISC parte 7', Math.abs(P), capIC, 'kN', `C = ${r2(ic.C)} · perno más débil ${r2(rMin)} kN`);
+  // Deslizamiento crítico (J3-8): un plano
+  if(c.desliz){ const mu = c.claseSup === 'B' ? 0.50 : 0.30, Tb = pretension(c.grado, d), rs = 1.0 * mu * 1.13 * Tb;
+    pasos.push(`Deslizamiento crítico (J3-8): φrn = 1.0·${mu}·1.13·1·${Tb} = ${r2(rs)} kN por perno (superficie clase ${c.claseSup === 'B' ? 'B' : 'A'})`);
+    add('pernos', `Deslizamiento del grupo (${n} pernos, 1 plano)`, 'F.2.10.3.8 (J3-4), φ = 1.00', Math.abs(P), ic.C * rs, 'kN', `C = ${r2(ic.C)} · ${r2(rs)} kN`);
+    if(!Tb) av.push('Pernos A307: no se pueden usar como deslizamiento crítico (no tienen pretensión).');
+    req.push([`Pernos de deslizamiento crítico, superficies clase ${c.claseSup === 'B' ? 'B' : 'A'} (sin pintura en las caras de contacto)`, !!Tb, Tb ? 'indicar en planos' : 'A307 no sirve']); }
 
   // Chapa: sección vertical en la columna de pernos más cercana a la carga
   const Hp = (nf - 1) * s + 2 * Lev, cen = (nc - 1) * g / 2, e1 = Math.max(0, e - cen);   // brazo hasta la línea de pernos más cercana a la carga
-  const Mu = P * Math.cos(ang * Math.PI / 180) * e1 / 1000;
-  const Zg = tp * Hp * Hp / 4; let Zn = Zg; for(let i = 0; i < nf; i++) Zn -= dn * tp * Math.abs(i * s - (nf - 1) * s / 2);
-  add('chapa', 'Fluencia por flexión en la línea de pernos', 'Manual AISC parte 15 · F.2.6', Mu, 0.9 * pl.Fy * Zg / 1e6, 'kN·m', `Mu = P·e₁, e₁ = ${r1(e1)} mm`);
-  add('chapa', 'Rotura por flexión en la línea de pernos', 'Manual AISC (9-4)', Mu, 0.75 * pl.Fu * Zn / 1e6, 'kN·m', `Znet = ${Math.round(Zn)} mm³`);
-  const V = P * Math.cos(ang * Math.PI / 180);
+  const Mu = Math.abs(Pv) * e1 / 1000, Nh = Math.abs(Ph), V = Math.abs(Pv);
+  const Zg = tp * Hp * Hp / 4, Sg = tp * Hp * Hp / 6; let Zn = Zg; for(let i = 0; i < nf; i++) Zn -= dn * tp * Math.abs(i * s - (nf - 1) * s / 2);
+  const An = (Hp - nf * dn) * tp, phMy = 0.9 * pl.Fy * Zg / 1e6, phMu = 0.75 * pl.Fu * Zn / 1e6, phPy = 0.9 * pl.Fy * Hp * tp / 1000, phPu = 0.75 * pl.Fu * Math.min(An, 0.85 * Hp * tp) / 1000;
+  add('chapa', 'Fluencia por flexión en la línea de pernos', 'Manual AISC parte 15 · F.2.6', Mu, phMy, 'kN·m', `Mu = P·cos θ·e₁, e₁ = ${r1(e1)} mm`);
+  add('chapa', 'Rotura por flexión en la línea de pernos', 'Manual AISC (9-4)', Mu, phMu, 'kN·m', `Znet = ${Math.round(Zn)} mm³`);
   add('chapa', 'Fluencia por cortante', 'F.2.10.4.2 (J4-3)', V, 0.6 * pl.Fy * Hp * tp / 1000, 'kN', `Agv = ${r1(Hp * tp)} mm²`);
   add('chapa', 'Rotura por cortante', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * pl.Fu * (Hp - nf * dn) * tp / 1000, 'kN', `Anv = ${r1((Hp - nf * dn) * tp)} mm²`);
+  // Flexión + cortante (Manual AISC ec. 10-5) y la parte horizontal de la carga (axial) con la flexión
+  add('chapa', 'Flexión + cortante (fluencia)', 'Manual AISC ec. 10-5', Math.hypot(V / (0.6 * pl.Fy * Hp * tp / 1000), Mu / phMy), 1, '', '(V/φVn)² + (M/φMn)² ≤ 1');
+  if(Nh > 0){
+    pasos.push(`Parte horizontal de la carga: P·sen θ = ${r2(Nh)} kN → ${Ph >= 0 ? 'tensión' : 'compresión'} de la chapa en la línea de pernos, se suma a la flexión`);
+    add('chapa', `Axial (P·sen θ) + flexión: fluencia`, 'F.2.8.1 (H1-1b), sección rectangular', Nh / phPy + Mu / phMy, 1, '', `N = ${r2(Nh)} kN, φPn = ${r2(phPy)} kN`);
+    if(Ph > 0) add('chapa', 'Axial + flexión: rotura por los agujeros', 'F.2.10.4.1 (J4-2) + Manual (9-4)', Nh / phPu + Mu / phMu, 1, '', `φPn = 0.75·Fu·An = ${r2(phPu)} kN`); }
+  // Bloque de cortante (forma en L): cortante a lo largo de la columna de pernos, tensión hacia el borde vertical
+  { const agv = (Lev + (nf - 1) * s) * tp, anv = agv - (nf - 0.5) * dn * tp, ant = (Leh + (nc - 1) * g - (nc - 0.5) * dn) * tp, Ubs = nc > 1 ? 0.5 : 1;
+    const cap = 0.75 * Math.min(0.6 * pl.Fu * anv + Ubs * pl.Fu * ant, 0.6 * pl.Fy * agv + Ubs * pl.Fu * ant) / 1000;
+    add('chapa', 'Bloque de cortante (en L)', 'F.2.10.4.3 (J4-5)', V, cap, 'kN', `Agv ${r1(agv)}, Anv ${r1(anv)}, Ant ${r1(ant)} mm², Ubs = ${Ubs}`); }
+  // Pandeo de la chapa (Manual AISC 9-18): λ = h√Fy / (10t√(475 + 280(h/c)²)), Fy en ksi
+  if(e1 > 0){ const FyK = pl.Fy / 6.895, lam = (Hp / tp) * Math.sqrt(FyK) / (10 * Math.sqrt(475 + 280 * (Hp / e1) ** 2));
+    const Q = lam <= 0.7 ? 1 : lam <= 1.41 ? 1.34 - 0.486 * lam : 1.30 / (lam * lam), phMb = 0.9 * pl.Fy * Q * Sg / 1e6;
+    add('chapa', 'Pandeo de la chapa (flexión)', 'Manual AISC ec. 9-18 a 9-20', Mu, phMb, 'kN·m', `λ = ${r3(lam)}, Q = ${r3(Q)}, Fcr = Fy·Q, S = tp·h²/6`); }
   const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
-  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ pernos, Hp, ic, el, e } };
+  const R = { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ pernos, Hp, ic, el, e } };
+  return R;
+}
+// Envoltura con la 💡 (fuerzas extra incluidas): filas, columnas, diámetro y espesor mínimos que cumplen
+function calcGrupoS(c){
+  const R = calcGrupo(c);
+  if(c._sinSug) return R;
+  const tot = x => { const r = Conex.calc({ ...c, ...x, _sinSug:true }); return r; };
+  if(tot({}).ok) return R;
+  const dA = DIAM.map(x => x[1]).filter(x => x >= +c.d - 1e-6), tA = ESP_PL.filter(x => x >= +c.tp - 1e-6);
+  let best = null;
+  for(const d of dA){ for(const t of tA){ for(let nc = Math.max(1, +c.cols); nc <= 3 && !best; nc++) for(let nf = 2; nf <= 8; nf++){
+    const o = { d, tp:t, cols:nc, filas:nf }; if(+c.s < 2.67 * d) o.s = Math.ceil(3 * d / 5) * 5; if(nc > 1 && +c.g < 2.67 * d) o.g = Math.ceil(3 * d / 5) * 5;
+    const bm = bordeMin(d); if(+c.Lev < bm) o.Lev = bm; if(+c.Leh < bm) o.Leh = bm;
+    if(tot(o).ok){ best = o; break; } } if(best) break; } if(best) break; }
+  if(best){ const dn = (DIAM.find(x => x[1] === best.d) || [best.d + ' mm'])[0];
+    R.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar ${best.filas} filas × ${best.cols} columna${best.cols > 1 ? 's' : ''} de pernos de ${dn} y chapa de ${best.tp} mm${best.s && best.s !== +c.s ? ` (s = ${best.s} mm)` : ''}` }; }
+  else R.av.push('No se encontró un grupo que cumpla (hasta 8 filas × 3 columnas, pernos de 1-1/8" y chapa de 38 mm): reduzca la excentricidad o use otra solución.');
+  return R;
 }
 
 // ── Chapa de testa extendida, 4 pernos sin rigidizar (4E) — decisión de Amo 10-nov: placa gruesa sin palanca ─────────────
@@ -1078,6 +1131,7 @@ function calcBase(c){
 }
 
 
+const pasos2 = (r, t) => { if(r && r.pasos) r.pasos.push(t); };
 // ═════════ Fuerzas en los dos ejes y torsión (pedido de Amo 10-nov) ═════════
 // Ejes del miembro conectado (como el Anexo D): 1 = eje del miembro, 2 = eje fuerte (cortante V2, momento M3), 3 = eje débil (V3, M2); T = torsión.
 // Cargas mayoradas resultantes que da Amo (una sola fila). P: + tensión, − compresión.
@@ -1209,7 +1263,20 @@ const EXTRA = {
     const rC = Math.min(fv(c, d), aplast(Math.min(+c.Lev, +c.Leh) - dh / 2, +c.tp, d, pl.Fu).phiRn, 0.75 * 2.4 * d * +c.tSop * ACEROS[c.aceroSop].Fu / 1000);
     const b = pernos3D(pts, { Fu:Pu * Math.sin(t), Fv:Pu * Math.cos(t), Mn:Pu * e / 1000, N:nz(c.Nt), Mu:nz(c.Mx), Mv:nz(c.My) }, { d, grado:c.grado, rosca:c.rosca, rCorte:rC });
     add('pernos', 'Pernos con fuerzas en el plano y fuera de él (método elástico, J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN (φRn ${r2(b.capT)})`);
-    av.push('Con tensión normal a la chapa los pernos pueden trabajar con efecto palanca; aquí no se calcula.'); },
+    // Palanca (Manual AISC parte 9, pedido de Amo 20-nov): la chapa y el soporte se doblan entre los pernos y el punto de carga
+    if(b.t > 0){ const nc = Math.round(+c.cols), nf = Math.round(+c.filas), g = +c.g, s = +c.s, Leh = +c.Leh;
+      const B = 0.75 * PERNOS[c.grado].Fnt * Math.PI * d * d / 4 / 1000, T = b.t;                       // kN por perno
+      const bb = nc > 1 ? g / 2 : Math.max(+c.Leh, 30), aa = nc > 1 ? Math.min(Leh, 1.25 * bb) : Math.min(Leh, 1.25 * bb);
+      const bp = bb - d / 2, ap = aa + d / 2, rho = bp / ap, pp = nf > 1 ? Math.min(s, 2 * +c.Lev + 0) : 2 * +c.Lev, delta = 1 - dh / pp;
+      const palanca = (t, Fu, nom) => {
+        const tc = Math.sqrt(4 * B * 1000 * bp / (0.9 * pp * Fu)), tmin = Math.sqrt(4 * T * 1000 * bp / (0.9 * pp * Fu));
+        let al = (1 / (delta * (1 + rho))) * ((tc / t) ** 2 - 1); al = Math.max(0, Math.min(1, al));
+        const Q = t >= tc ? 1 : Math.min(1, (t / tc) ** 2 * (1 + delta * al));
+        add('pernos', `Palanca: tensión de los pernos con ${nom}`, 'Manual AISC parte 9 (9-21 a 9-29)', T, B * Q, 'kN', `t ${t} mm, tc ${r1(tc)} mm, Q = ${r3(Q)}; sin palanca hace falta t ≥ ${r1(tmin)} mm`);
+        return tmin; };
+      pasos2(r, `Palanca (Manual AISC parte 9): ${nc > 1 ? `la carga normal se aplica entre las dos columnas: b = g/2 = ${r1(bb)} mm` : `una sola columna: b = Leh = ${r1(bb)} mm (supuesto)`}, a = ${r1(aa)} mm, p = ${r1(pp)} mm, B = ${r2(B)} kN por perno, T = ${r2(T)} kN`);
+      palanca(+c.tp, pl.Fu, 'la chapa'); palanca(+c.tSop, ACEROS[c.aceroSop].Fu, 'el soporte');
+      if(nc === 1) av.push('Palanca con una sola columna de pernos: se supuso b = Leh; revise con la geometría real del elemento que aplica la tensión.'); } },
   base(c, r, add, av){ if(!hayExtra(c, ['T'])) return;
     const R = r.geo.R, nB = +c.nB, T = nz(c.T), pts = [];
     for(const sx of [-1, 1]) for(let j = 0; j < nB; j++) pts.push({ u:sx * +c.S1 / 2, v:nB > 1 ? -+c.S2 / 2 + j * +c.S2 / (nB - 1) : 0 });
@@ -1765,7 +1832,7 @@ function ajustarNudo(n, lista){
   });
   return k;
 }
-const CALC = { aleta:calcAleta, grupo:calcGrupo, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
+const CALC = { aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
 const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
