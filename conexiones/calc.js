@@ -777,7 +777,7 @@ function calcAsiento(c, sinSug){
 function defaultsEmpalme(){
   return { tipo:'empalme', nom:'', desc:'', Mu:80, Vu:60, viga:'IPE 300', aceroViga:'A572 Gr 50', gap:10,
     tpf:12.7, bpf:150, aceroPl:'A36', nf:3, sf:75, gf:90, Lef:38,
-    tpw:8, hpw:210, nw:3, sw:65, Lew:38, Lehw:40,
+    tpw:8, hpw:210, nw:3, sw:65, Lew:38, Lehw:40, ncw:1, gw:75,      // ncw = columnas de pernos del alma a cada lado (1 o 2), gw = separación entre ellas
     d:19.1, grado:'A325', rosca:'N',
     interior:false, tpi:10, bpi:'',                 // cubrejuntas interiores de las alas (pedido de Amo 20-nov)
     desliz:false, claseSup:'A',                      // pernos de deslizamiento crítico (J3-8)
@@ -854,26 +854,29 @@ function calcEmpalme(c, sinSug){
   else pasos.push(`Ala en tensión: Fu·Afn = ${r1(ac.Fu * Afn / 1000)} ≥ Yt·Fy·Afg = ${r1(Yt * ac.Fy * Afg / 1000)} kN → no reduce la resistencia (F13.1)`);
   // Alma
   const tpw = +c.tpw, hpw = +c.hpw, nw = Math.max(1, Math.round(+c.nw)), sw = +c.sw, Lew = +c.Lew, Lehw = +c.Lehw;
-  const ew = gap / 2 + Lehw;                                 // excentricidad del cortante a la línea de pernos
-  const pts = Array.from({ length:nw }, (_, i) => ({ x:0, y:i * sw })), ic = icr(pts, ew, 0);
+  const ncw = +c.ncw === 2 ? 2 : 1, gw = ncw === 2 ? +c.gw || 0 : 0;   // 1 o 2 columnas de pernos a cada lado de la junta (pedido de Amo 20-nov)
+  const ew = gap / 2 + Lehw + gw / 2;                        // excentricidad del cortante al centro del grupo de pernos
+  const pts = []; for(let j = 0; j < ncw; j++) for(let i = 0; i < nw; i++) pts.push({ x:j * gw, y:i * sw });
+  const ic = icr(pts, ew, 0), nTw = ncw * nw;
   const bWp = aplast(Lew - dh / 2, tpw, d, pl.Fu).phiRn, bWb = 0.75 * 2.4 * d * vg.tw * ac.Fu / 1000;
   const rW = Math.min(2 * rv, 2 * bWp, bWb);
-  pasos.push(`Alma: 2 cubrejuntas ${hpw} × ${tpw} mm; ${nw} pernos a cada lado (doble cortante) con e = gap/2 + Leh = ${r1(ew)} mm → C = ${r2(ic.C)}`);
-  add('pernos', `Pernos del alma, a cada lado (${nw}, doble cortante, excéntricos)`, 'F.2.10.3 · Manual AISC parte 7', V, ic.C * rW, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rW)} kN`);
-  if(c.desliz) add('pernos', `Deslizamiento de los pernos del alma (${nw}, 2 planos, excéntricos)`, 'F.2.10.3.8 (J3-4), φ = 1.00', V, ic.C * 2 * 1.0 * mu * 1.13 * Tb, 'kN', `C = ${r2(ic.C)} · ${r2(2 * mu * 1.13 * Tb)} kN por perno`);
+  pasos.push(`Alma: 2 cubrejuntas ${hpw} × ${tpw} mm; ${ncw === 2 ? `2 columnas de ${nw} pernos (${nTw}) separadas gw = ${gw} mm` : `${nw} pernos en una columna`} a cada lado (doble cortante) con e = gap/2 + Leh${ncw === 2 ? ' + gw/2' : ''} = ${r1(ew)} mm → C = ${r2(ic.C)} (centro instantáneo)`);
+  add('pernos', `Pernos del alma, a cada lado (${ncw === 2 ? `2 × ${nw}` : nw}, doble cortante, excéntricos)`, 'F.2.10.3 · Manual AISC parte 7', V, ic.C * rW, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rW)} kN`);
+  if(c.desliz) add('pernos', `Deslizamiento de los pernos del alma (${nTw}, 2 planos, excéntricos)`, 'F.2.10.3.8 (J3-4), φ = 1.00', V, ic.C * 2 * 1.0 * mu * 1.13 * Tb, 'kN', `C = ${r2(ic.C)} · ${r2(2 * mu * 1.13 * Tb)} kN por perno`);
   add('almaPl', 'Cubrejuntas del alma: fluencia por cortante (2)', 'F.2.10.4.2 (J4-3)', V, 0.6 * pl.Fy * 2 * hpw * tpw / 1000, 'kN', '');
   add('almaPl', 'Cubrejuntas del alma: rotura por cortante (2)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * pl.Fu * 2 * (hpw - nw * dn) * tpw / 1000, 'kN', '');
   const Mw = V * ew / 1000, Zw = 2 * tpw * hpw * hpw / 4;
   add('almaPl', 'Cubrejuntas del alma: flexión por la excentricidad', 'F.2.6 · φb = 0.90', Mw, 0.9 * pl.Fy * Zw / 1e6, 'kN·m', `Mu = Vu·e = ${r3(Mw)} kN·m`);
   if(!c.resComp) add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1)', V, phVn, 'kN', `φv = ${phiV}`);
   // Bloque de cortante de las cubrejuntas del alma (pedido de Amo 20-nov): se arranca la parte entre la línea de pernos y el borde vertical
-  { const agv = (Lew + (nw - 1) * sw) * tpw, anv = agv - (nw - 0.5) * dn * tpw, ant = (Lew - dn / 2) * tpw;
+  { const agv = (Lew + (nw - 1) * sw) * tpw, anv = agv - (nw - 0.5) * dn * tpw, ant = (Lew + gw - (ncw - 0.5) * dn) * tpw;   // con 2 columnas la línea de tensión cruza los dos agujeros
     add('almaPl', 'Cubrejuntas del alma: bloque de cortante (2)', 'F.2.10.4.3 (J4-5)', V, 2 * bloqueRn(pl.Fy, pl.Fu, agv, anv, ant), 'kN', `por placa: Agv = ${r1(agv)}, Anv = ${r1(anv)}, Ant = ${r1(ant)} mm²`); }
   req.push(['Cubrejunta del ala bpf ≤ bf de la viga', bpf <= vg.bf + 1e-6, `${bpf} ≤ ${vg.bf} mm`]);
   req.push(['Bordes de la cubrejunta del ala (bpf − gf)/2 y Lef ≥ mín.', Math.min((bpf - gf) / 2, Lef) >= bm, `${r1(Math.min((bpf - gf) / 2, Lef))} ≥ ${bm} mm`]);
   req.push(['Cubrejunta del alma cabe entre las alas: hpw ≤ T', hpw <= vg.T + 1e-6, `${hpw} ≤ ${r1(vg.T)} mm`]);
   req.push(['Pernos del alma caben: (nw − 1)·sw + 2·Lew ≤ hpw', (nw - 1) * sw + 2 * Lew <= hpw + 1e-6, `${(nw - 1) * sw + 2 * Lew} ≤ ${hpw} mm`]);
-  req.push(['Separaciones ≥ 2.67d', Math.min(sf, sw) >= 2.67 * d - 1e-6, `${Math.min(sf, sw)} ≥ ${r1(2.67 * d)} mm`]);
+  req.push(['Separaciones ≥ 2.67d', Math.min(sf, sw, ncw === 2 ? gw : Infinity) >= 2.67 * d - 1e-6, `${Math.min(sf, sw, ncw === 2 ? gw : Infinity)} ≥ ${r1(2.67 * d)} mm`]);
+  if(ncw === 2) pasos.push(`Cubrejunta del alma: largo total = 2·(Lehw + gw + Lew) + gap = ${r1(2 * (Lehw + gw + Lew) + gap)} mm`);
   req.push([c.desliz ? `Pernos de deslizamiento crítico, superficies clase ${c.claseSup === 'B' ? 'B' : 'A'} (sin pintura en las caras de contacto)` : 'Pernos pretensionados (empalme a momento)', true, 'indicar en planos']);
   if(c.desliz && c.grado === 'A307') req.push(['Deslizamiento crítico requiere A325 o A490', false, 'A307']);
   const R = fin(ch, req, av, pasos, { vg, dh, Ff, ic, inter, bpi, tpi });
@@ -889,15 +892,16 @@ function calcEmpalme(c, sinSug){
     for(let nfS = 1; nfS <= 6 && !best; nfS++) for(const t of ESP){ const o = { ...base, nf:nfS, tpf:t }; if(okParte(o, 'ala')){ best = o; break; } }
     const hpwMax = Math.floor(vg.T / 5) * 5, swMin = Math.ceil(2.67 * d / 5) * 5;
     let bw = null;
-    for(const geo of [{}, { hpw:hpwMax }, { hpw:hpwMax, sw:swMin }]){ for(let nwS = 2; nwS <= 8 && !bw; nwS++) for(const t of ESP.filter(x => x <= 12.7)){ const o = { ...geo, nw:nwS, tpw:t }; if(okParte(o, 'alma')){ bw = o; break; } } if(bw) break; }
+    const gwS = Math.max(+c.gw || 0, Math.ceil(2.67 * d / 5) * 5, 60);
+    for(const geo of [{}, { hpw:hpwMax }, { hpw:hpwMax, sw:swMin }, { ncw:2, gw:gwS }, { ncw:2, gw:gwS, hpw:hpwMax }, { ncw:2, gw:gwS, hpw:hpwMax, sw:swMin }]){ for(let nwS = 2; nwS <= 8 && !bw; nwS++) for(const t of ESP.filter(x => x <= 12.7)){ const o = { ...geo, nw:nwS, tpw:t }; if(okParte(o, 'alma')){ bw = o; break; } } if(bw) break; }
     const todo = { ...(best || {}), ...(bw || {}) }, cambia = Object.keys(todo).some(k => +todo[k] !== +c[k]);
     if(cambia){ const t1 = best ? `${best.nf} filas por lado en las alas con cubrejunta de ${best.tpf} mm${best.gf ? ` (gramil ${best.gf} mm${best.bpf ? `, ancho ${best.bpf} mm` : ''})` : ''}` : '';
-      const t2 = bw ? `${bw.nw} pernos por lado en el alma con cubrejuntas de ${bw.tpw} mm${bw.hpw ? ` de ${bw.hpw} mm de alto` : ''}${bw.sw ? ` y separación ${bw.sw} mm` : ''}` : '';
+      const t2 = bw ? `${+(bw.ncw ?? c.ncw) === 2 ? `2 columnas de ${bw.nw} pernos (gw ${bw.gw ?? c.gw} mm)` : `${bw.nw} pernos`} por lado en el alma con cubrejuntas de ${bw.tpw} mm${bw.hpw ? ` de ${bw.hpw} mm de alto` : ''}${bw.sw ? ` y separación ${bw.sw} mm` : ''}` : '';
       R.sug = { tipo:'sold', ok:true, ...todo, txt:`💡 Usar ${[t1, t2].filter(Boolean).join(' y ')}` }; }
     if(!best){ if(R.ch.some(x => x.grupo === 'viga' && x.ratio > 1)) R.av.push('La viga misma no resiste las fuerzas en la zona del empalme (ver «Viga»): no hay cubrejuntas que lo arreglen; revise el perfil o mueva el empalme.');
       else if(inter) R.av.push(`El ala de la viga (${vg.bf} mm) es angosta para cubrejuntas interiores con pernos de ${d} mm: los pernos no caben con los bordes mínimos a cada lado del alma. Use pernos más pequeños o solo la cubrejunta exterior.`);
       else R.av.push('Alas: con el diámetro y los anchos actuales no se encontró una combinación que cumpla (hasta 6 filas y 25.4 mm): aumente el diámetro de los pernos o use cubrejuntas interiores.'); }
-    if(!bw) R.av.push(`Alma: con una sola columna de pernos de ${d} mm por lado no se alcanza${c.resComp ? ' la resistencia completa a cortante de la viga' : ' el cortante'} (cabe hasta ${Math.floor((hpwMax - 2 * c.Lew) / swMin) + 1} pernos en ${hpwMax} mm): use pernos más grandes o menos cortante de diseño.`);
+    if(!bw) R.av.push(`Alma: ni con dos columnas de pernos de ${d} mm por lado se alcanza${c.resComp ? ' la resistencia completa a cortante de la viga' : ' el cortante'} (caben hasta ${Math.floor((hpwMax - 2 * c.Lew) / swMin) + 1} pernos por columna en ${hpwMax} mm): use pernos más grandes, un perfil de alma más gruesa o menos cortante de diseño.`);
   }
   return R;
 }
@@ -1077,9 +1081,10 @@ const EXTRA = {
     add('pernos', 'Pernos de un ala con M3, P, V3, M2 y T (método elástico)', 'F.2.10.3.6', b.rat, 1, '', `cortante del perno crítico ${r2(b.r)} kN (φrn ${r2(rC)}); por ala: F ${r2(Ff)} kN, V ${r2(Vf)} kN, M ${r2(Mf)} kN·m`);
     const sp = secPlatina(bpf, tpf, pl.Fy, { N:Ff, VL:Vf, Vt:0, T:0, ML:Mf + Vf * gap / 2000, Mt:0 });
     add('alas', 'Cubrejunta del ala: tensión + flexión en su plano (M2) + cortante', 'F.2.10.4 · Manual AISC ec. 10-5', sp.ratio, 1, '', `flexión/axial ${r3(sp.flex)}, cortante ${r3(sp.corte)}`);
-    if(Math.abs(P) > 0){ const ew = gap / 2 + +c.Lehw, Pw = Math.abs(P) * Aw / At, nw = Math.round(+c.nw);
+    if(Math.abs(P) > 0){ const ncw = +c.ncw === 2 ? 2 : 1, gw = ncw === 2 ? +c.gw || 0 : 0, ew = gap / 2 + +c.Lehw + gw / 2, Pw = Math.abs(P) * Aw / At, nw = Math.round(+c.nw);
       const rW = Math.min(2 * fv(c, d), aplast(+c.Lehw - dh / 2, vg.tw, d, ACEROS[c.aceroViga].Fu).phiRn, 2 * aplast(Math.min(+c.Lew, +c.Lehw) - dh / 2, +c.tpw, d, pl.Fu).phiRn);
-      const bw = pernos3D(Array.from({ length:nw }, (_, i) => ({ u:0, v:i * +c.sw })), { Fu:Pw, Fv:V2, Mn:V2 * ew / 1000, N:0, Mu:0, Mv:0 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rW });
+      const ptw = []; for(let j = 0; j < ncw; j++) for(let i = 0; i < nw; i++) ptw.push({ u:j * gw, v:i * +c.sw });
+      const bw = pernos3D(ptw, { Fu:Pw, Fv:V2, Mn:V2 * ew / 1000, N:0, Mu:0, Mv:0 }, { d, grado:c.grado, rosca:c.rosca, rCorte:rW });
       add('pernos', 'Pernos del alma con V2 y la parte de P (método elástico)', 'F.2.10.3.6', bw.rat, 1, '', `P en el alma ${r2(Pw)} kN; cortante crítico ${r2(bw.r)} kN`); } },
   cartela(c, r, add, av){ if(!hayExtra(c, ['V2', 'V3', 'T', 'M2', 'M3'])) return;
     const d = +c.d, n = Math.round(+c.n), s = +c.s, nL = +c.nL === 1 ? 1 : 2, dh = agujero(d), ag = ACEROS[c.aceroG], aL = ACEROS[c.aceroL];

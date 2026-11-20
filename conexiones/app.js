@@ -389,8 +389,10 @@ function seccionesDe(c){
       g3(campo(c, 'bpf', 'Ancho bpf [mm]'), campo(c, 'tpf', 'Espesor tpf [mm]'), campo(c, 'aceroPl', 'Acero de las platinas', { sel:SEL_ACERO }), campo(c, 'nf', 'Filas por lado (2 pernos c/u)'), campo(c, 'sf', 'Separación sf [mm]'), campo(c, 'gf', 'Gramil gf [mm]'), campo(c, 'Lef', 'Borde Lef [mm]'))
       + ck('interior', 'Agregar cubrejuntas interiores (una a cada lado del alma, por dentro del ala): los pernos del ala trabajan en doble cortante')
       + (c.interior ? g3(campo(c, 'tpi', 'Espesor interiores tpi [mm]'), campo(c, 'bpi', 'Ancho de cada interior bpi [mm]', { h:'Vacío = el que cabe entre el radio y el borde del ala' })) : '')],
-    ['alma', 'Cubrejuntas del alma (2)', () => `PL ${c.hpw} × ${c.tpw} mm · ${c.nw} pernos por lado · s ${c.sw}`,
-      g3(campo(c, 'hpw', 'Alto hpw [mm]'), campo(c, 'tpw', 'Espesor tpw [mm]'), campo(c, 'nw', 'Pernos por lado nw'), campo(c, 'sw', 'Separación sw [mm]'), campo(c, 'Lew', 'Borde vertical Lew [mm]'), campo(c, 'Lehw', 'Junta a los pernos Lehw [mm]'))],
+    ['alma', 'Cubrejuntas del alma (2)', () => `PL ${c.hpw} × ${c.tpw} mm · ${+c.ncw === 2 ? `2 columnas de ${c.nw}` : c.nw} pernos por lado · s ${c.sw}${+c.ncw === 2 ? ` · gw ${c.gw}` : ''}`,
+      g3(campo(c, 'hpw', 'Alto hpw [mm]'), campo(c, 'tpw', 'Espesor tpw [mm]'), campo(c, 'ncw', 'Columnas de pernos por lado', { sel:[['1', '1 columna'], ['2', '2 columnas']] }),
+        campo(c, 'nw', +c.ncw === 2 ? 'Pernos por columna nw' : 'Pernos por lado nw'), campo(c, 'sw', 'Separación vertical sw [mm]'), ...(+c.ncw === 2 ? [campo(c, 'gw', 'Separación entre columnas gw [mm]', { h:'≥ 2.67d' })] : []),
+        campo(c, 'Lew', 'Borde Lew [mm]', { h:'Vertical y horizontal' }), campo(c, 'Lehw', 'Junta a los pernos Lehw [mm]', { h:'Del extremo de la viga a la primera columna' }))],
     ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}${c.desliz ? ` · deslizamiento crítico clase ${c.claseSup || 'A'}` : ''}`, g3(...pernosTipo)
       + ck('desliz', 'Pernos de deslizamiento crítico (J3-8): para cuando el momento cambia de sentido o la junta no se puede mover')
       + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')] ];
@@ -539,7 +541,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -766,8 +768,9 @@ function dibAsiento(c, r){
 }
 function dibEmpalme(c, r){
   const vg = r.geo.vg, gap = +c.gap || 0, nf = +c.nf, sf = +c.sf, Lef = +c.Lef, tpf = +c.tpf, nw = +c.nw, sw = +c.sw, hpw = +c.hpw, Lew = +c.Lew, Lehw = +c.Lehw;
-  const Lpf = 2 * (Lef + (nf - 1) * sf) + gap, Lpw = 2 * (Lehw + Lew) + gap, Wt = Math.max(Lpf, Lpw) + 160, k = Math.min(400 / Wt, 280 / (vg.d + 40));
-  const X = v => 20 + (v + Wt / 2) * k, Y = v => 30 + v * k;
+  const ncw = +c.ncw === 2 ? 2 : 1, gw = ncw === 2 ? +c.gw || 0 : 0;
+  const Lpf = 2 * (Lef + (nf - 1) * sf) + gap, Lpw = 2 * (Lehw + gw + Lew) + gap, Wt = Math.max(Lpf, Lpw) + 160, k = Math.min(400 / Wt, 280 / (vg.d + 40));
+  const X = v => 20 + (v + Wt / 2) * k, Y = v => 44 + v * k;
   let h = `<rect x="${X(-Wt / 2 + 10)}" y="${Y(0)}" width="${(Wt / 2 - 10 - gap / 2) * k}" height="${vg.d * k}" class="vg"/><rect x="${X(gap / 2)}" y="${Y(0)}" width="${(Wt / 2 - 10 - gap / 2) * k}" height="${vg.d * k}" class="vg"/>
     <rect x="${X(-Lpf / 2)}" y="${Y(-tpf)}" width="${Lpf * k}" height="${tpf * k}" class="pl"/><rect x="${X(-Lpf / 2)}" y="${Y(vg.d)}" width="${Lpf * k}" height="${tpf * k}" class="pl"/>
     <rect x="${X(-Lpw / 2)}" y="${Y((vg.d - hpw) / 2)}" width="${Lpw * k}" height="${hpw * k}" class="pl"/>`;
@@ -775,8 +778,8 @@ function dibEmpalme(c, r){
     h += `<rect x="${X(-Lpf / 2)}" y="${Y(vg.tf)}" width="${Lpf * k}" height="${ti * k}" class="pl"/><rect x="${X(-Lpf / 2)}" y="${Y(vg.d - vg.tf - ti)}" width="${Lpf * k}" height="${ti * k}" class="pl"/>`; }
   for(const sg of [-1, 1]) for(let i = 0; i < nf; i++){ const x = sg * (gap / 2 + Lef + i * sf);
     h += `<line x1="${X(x)}" y1="${Y(-tpf - 6)}" x2="${X(x)}" y2="${Y(vg.tf + 6)}" class="bl"/><line x1="${X(x)}" y1="${Y(vg.d - vg.tf - 6)}" x2="${X(x)}" y2="${Y(vg.d + tpf + 6)}" class="bl"/>`; }
-  for(const sg of [-1, 1]) for(let i = 0; i < nw; i++) h += `<circle cx="${X(sg * (gap / 2 + Lehw))}" cy="${Y((vg.d - hpw) / 2 + Lew + i * sw)}" r="${Math.max(3, r.geo.dh / 2 * k)}" class="bolt"/>`;
-  h += cotaH(Y(vg.d + tpf) + 16, X(-Lpf / 2), X(Lpf / 2), `cubrejunta del ala ${f2(Lpf, 0)}`) + `<text x="${X(-Wt / 4)}" y="${Y(vg.d / 2) + 3}" class="lbl" text-anchor="middle">${esc(vg.nom)}</text>`;
+  for(const sg of [-1, 1]) for(let j = 0; j < ncw; j++) for(let i = 0; i < nw; i++) h += `<circle cx="${X(sg * (gap / 2 + Lehw + j * gw))}" cy="${Y((vg.d - hpw) / 2 + Lew + i * sw)}" r="${Math.max(3, r.geo.dh / 2 * k)}" class="bolt"/>`;
+  h += cotaH(Y(vg.d + tpf) + 16, X(-Lpf / 2), X(Lpf / 2), `cubrejunta del ala ${f2(Lpf, 0)}`) + `<text x="${X(-Wt / 2 + 10)}" y="${Y(-tpf) - 14}" class="lbl">${esc(vg.nom)}</text>`;
   return svgW(X(Wt / 2) + 10, Y(vg.d + tpf) + 34, h, 'Empalme de viga', 'Elevación · las líneas azules de las alas son pernos vistos de lado');
 }
 function dibCartela(c, r){
