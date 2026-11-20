@@ -121,3 +121,11 @@ details.pd>.fg{padding:16px 18px 6px}
 .nd-t select{min-width:0;width:100%}
 .nd-t td{vertical-align:middle}
 h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
+
+/* Figuras de ayuda junto a los datos (pedido de Amo 20-nov) */
+.con-fig{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;align-items:start}
+.fig-ayuda{margin:0;padding:8px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.fig-ayuda svg{display:block;width:100%;height:auto}
+.fig-ayuda figcaption{font-size:11px;line-height:1.35;color:#475569;margin-top:4px}
+.sec-bd > .fig-ayuda{max-width:300px;margin-top:8px}
+@media (max-width:700px){.con-fig{grid-template-columns:1fr}.con-fig .fig-ayuda{max-width:300px}}

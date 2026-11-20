@@ -168,6 +168,35 @@ const SEL_ACERO = Object.keys(Conex.ACEROS).map(k => [k, `${k} (Fy ${Conex.ACERO
 // resumen de lo escrito a la derecha, se abre y se cierra tocando la franja; varias pueden quedar abiertas).
 const dnom = c => (Conex.DIAM.find(x => x[1] === +c.d) || [`${c.d} mm`])[0];
 const SOPN = { ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga principal' };
+// Figuras de ayuda junto a los datos (pedido de Amo 20-nov): placas de continuidad de la columna y placa de apoyo
+const conFig = (campos, fig) => `<div class="con-fig"><div>${campos}</div>${fig}</div>`;
+function figContinuidad(dos){
+  const col = '#cbd5e1', ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
+  const viga = (x1, x2) => `<rect x="${x1}" y="46" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="117" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="53" width="${x2 - x1}" height="64" fill="#f1f5f9" stroke="none"/>`;
+  return `<figure class="fig-ayuda"><svg viewBox="0 0 230 175" role="img" aria-label="Placas de continuidad de la columna">
+    ${viga(8, 84)}${dos ? viga(160, 222).replace(/fill="#cbd5e1"/g, 'fill="#e2e8f0"').replace(/stroke="#475569"/g, 'stroke="#94a3b8" stroke-dasharray="3 2"') : ''}
+    <rect x="84" y="8" width="8" height="160" fill="${col}" stroke="${ln}"/><rect x="152" y="8" width="8" height="160" fill="${col}" stroke="${ln}"/>
+    <rect x="92" y="8" width="60" height="160" fill="#f8fafc" stroke="none"/><line x1="122" y1="8" x2="122" y2="168" stroke="${ln}" stroke-dasharray="4 3"/>
+    <rect x="92" y="46" width="60" height="7" fill="${azul}" stroke="${azulB}"/><rect x="92" y="117" width="60" height="7" fill="${azul}" stroke="${azulB}"/>
+    <path d="M92 46 l4 -4 v4 z M152 46 l-4 -4 v4 z M92 124 l4 4 v-4 z M152 124 l-4 4 v-4 z" fill="${nar}"/>
+    <text x="46" y="88" text-anchor="middle" font-size="10" fill="${ln}">Viga</text>
+    ${dos ? `<text x="191" y="88" text-anchor="middle" font-size="9" fill="#94a3b8">Otra viga</text>` : ''}
+    <text x="122" y="20" text-anchor="middle" font-size="9" fill="${ln}">Columna</text>
+    <line x1="104" y1="44" x2="64" y2="26" stroke="${azulB}"/><text x="60" y="24" text-anchor="end" font-size="9" fill="${azulB}">Placa ts</text>
+    <line x1="104" y1="126" x2="64" y2="146" stroke="${azulB}"/><text x="60" y="150" text-anchor="end" font-size="9" fill="${azulB}">Placa ts</text>
+  </svg><figcaption>Las placas de continuidad van dentro de la columna, entre sus dos alas, a la altura de las alas de la viga. Rigidizan el ala y el alma de la columna donde llega la fuerza de cada ala.</figcaption></figure>`;
+}
+function figPlacaApoyo(){
+  const col = '#cbd5e1', ln = '#475569', nar = '#ea580c';
+  return `<figure class="fig-ayuda"><svg viewBox="0 0 230 175" role="img" aria-label="Viga soldada a una placa de apoyo">
+    <rect x="132" y="12" width="12" height="150" fill="#93c5fd" stroke="#1d4ed8"/>
+    <rect x="20" y="40" width="112" height="8" fill="${col}" stroke="${ln}"/><rect x="20" y="126" width="112" height="8" fill="${col}" stroke="${ln}"/><rect x="20" y="48" width="112" height="78" fill="#f1f5f9" stroke="none"/>
+    <path d="M132 40 l-5 -5 v5 z M132 48 l-5 5 v-5 z M132 126 l-5 -5 v5 z M132 134 l-5 5 v-5 z" fill="${nar}"/><rect x="128" y="52" width="4" height="70" fill="${nar}" opacity=".55"/>
+    <text x="76" y="92" text-anchor="middle" font-size="10" fill="${ln}">Viga</text>
+    <line x1="144" y1="30" x2="170" y2="22" stroke="#1d4ed8"/><text x="172" y="20" font-size="9" fill="#1d4ed8">Placa de</text><text x="172" y="31" font-size="9" fill="#1d4ed8">apoyo · t</text>
+    <line x1="129" y1="100" x2="170" y2="120" stroke="${nar}"/><text x="172" y="124" font-size="9" fill="${nar}">Soldadura</text>
+  </svg><figcaption>La viga se suelda a una placa (por ejemplo, una placa de base o una placa embebida). Se revisa la flexión de la placa bajo el ala en tensión; lo que sostiene la placa se revisa aparte.</figcaption></figure>`;
+}
 function seccionesDe(c){
   const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
   const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] }),
@@ -208,11 +237,12 @@ function seccionesDe(c){
       g3(campo(c, 'soporte', 'Se suelda a', { sel:[['col', 'Ala de una columna'], ['placa', 'Una placa']] }),
         ...(c.soporte === 'placa' ? [campo(c, 'tSop', 'Espesor de la placa [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })]
           : [SELP('columna', 'Perfil de la columna', '— No revisar la columna —'), campo(c, 'aceroCol', 'Acero', { sel:SEL_ACERO })]))
+      + (c.soporte === 'placa' ? figPlacaApoyo() : '')
       + (c.soporte === 'placa' || !c.columna ? '' : ck('colTope', 'La unión está en el extremo superior de la columna')
         + ck('dosLados', 'Llega otra viga a momento al otro lado de la columna')
         + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
         + `<h4 class="sub">Placas de continuidad de la columna</h4>`
-        + g3(campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])))],
+        + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados)))],
     ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
         ...(c.sismo === 'DMO' || c.sismo === 'DES' ? [campo(c, 'Lh', 'Luz libre de la viga L [m]', { h:'Entre caras de columnas (la rótula queda en la cara)' }), campo(c, 'Vg', 'Vg: cortante de gravedad [kN]', { h:'1.2D + 0.5L (o la del modelo)' })] : []))
@@ -304,7 +334,7 @@ function seccionesDe(c){
       + ck('dosLados', 'Llega otra viga a momento al otro lado de la columna')
       + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
       + `<h4 class="sub">Rigidizadores de la columna (placas de continuidad)</h4>`
-      + g3(campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:'Vacío = automático' }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]))],
+      + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:'Vacío = automático' }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados))],
     ['placa', 'Placa de testa', () => `${e8 ? '8 pernos rigidizada (8ES)' : '4 pernos (4E)'} · PL ${c.tp} × ${c.bp} mm ${c.aceroPl} · extensión ${c.ambos ? 'arriba y abajo' : 'solo arriba'}`,
       g3(campo(c, 'config', 'Configuración', { sel:[['4E', '4 pernos sin rigidizar (4E)'], ['8ES', '8 pernos con rigidizador (8ES)']] }), campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }),
         ...(e8 ? [campo(c, 'tsE', 'Rigidizador de la extensión ts [mm]', { h:'Triangular, en el eje del alma' }), campo(c, 'wsE', 'Filete del rigidizador [mm]')] : []))
@@ -457,8 +487,8 @@ function nudoFormHTML(n){
       ${g3(campo(n, 'sentido', 'Vigas de las dos alas', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }),
         campo(n, 'sentidoW', 'Vigas a los dos lados del alma', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }))}`)
     + sec(3, 'Placas de continuidad', { auto:'automático', si:'siempre', no:'sin placas' }[n.rigCol] + (n.tsC ? ` · ts ${n.tsC} mm` : ''),
-      g3(campo(n, 'rigCol', '¿Lleva placas?', { sel:[['auto', 'Automático (si hacen falta)'], ['si', 'Sí'], ['no', 'No']] }), campo(n, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(n, 'wsC', 'Filete a las alas [mm]', { h:'Vacío = automático' }),
-        campo(n, 'aceroRigC', 'Acero de las placas', { sel:SEL_ACERO }), campo(n, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })));
+      conFig(`<div class="fg g2">${[campo(n, 'rigCol', '¿Lleva placas?', { sel:[['auto', 'Automático (si hacen falta)'], ['si', 'Sí'], ['no', 'No']] }), campo(n, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(n, 'wsC', 'Filete a las alas [mm]', { h:'Vacío = automático' }),
+        campo(n, 'aceroRigC', 'Acero de las placas', { sel:SEL_ACERO }), campo(n, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })].join('')}</div>`, figContinuidad(nudoCons(n).some(x => x.cara === 'ala2'))));
 }
 function resNudoHTML(n, r){
   if(r.error) return `<div class="note">${esc(r.error)}</div>`;
