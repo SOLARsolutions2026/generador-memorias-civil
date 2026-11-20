@@ -458,7 +458,7 @@ function calcTesta(c){
     // a) sin rigidizadores
     let Yc;
     if(ras) Yc = nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2 : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;   // por confirmar (Guía 16)
-    else if(e8) Yc = cl.bf / 2 * (H.h1 / sC + H.h4 / sC) + 2 / g * (H.h1 * (pb + cc / 2 + sC) + H.h2 * (pb / 2 + cc / 4) + H.h3 * (pb / 2 + cc / 2) + H.h4 * sC) + g / 2;   // AISC 358 Tabla 6.5 (8ES), por confirmar
+    else if(e8) Yc = cl.bf / 2 * (H.h1 / sC + H.h4 / sC) + 2 / g * (H.h1 * (pb + cc / 2 + sC) + H.h2 * (pb / 2 + cc / 4) + H.h3 * (pb / 2 + cc / 2) + H.h4 * sC) + g / 2;   // AISC 358-22 Tabla 6.6 sin rigidizar (8ES), confirmada 20-nov
     else Yc = cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2;
     // Demanda en el ala: sin sismo, Mu (la palanca se avisa con tcf,req de placa gruesa); con sismo, 1.11·Mf (AISC 358)
     const demCf = sis ? 1.11 * Mu : Mu, demThick = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
