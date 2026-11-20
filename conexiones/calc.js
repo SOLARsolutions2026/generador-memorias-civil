@@ -433,7 +433,7 @@ function calcTesta(c){
       if(Rst > 0 && c.rigCol === 'no') av.push(`Faltan ${r2(Rst)} kN en la columna: cambie «Rigidizadores de la columna» a automático para diseñarlos.`);
     } else {
       // c) Rigidizadores transversales (placas de continuidad) a la altura de las dos alas de la viga, a ambos lados del alma — F.2.10.10.7/8 (J10.7, J10.8)
-      const ar = ACEROS[c.aceroRigC] || ACEROS.A36, clip = 20, bsMax = (cl.bf - cl.tw) / 2;
+      const ar = ACEROS[c.aceroRigC] || ACEROS.A36, KC = corteEsq(cl, sis), clip = KC.ala, bsMax = (cl.bf - cl.tw) / 2;
       const bsMin = Math.max(bbf / 3 - cl.tw / 2, 0);
       const bs = +c.bsC > 0 ? +c.bsC : Math.floor(bsMax - 2);
       const Lr = dc - 2 * cl.tf;                                     // largo completo entre alas
@@ -446,11 +446,11 @@ function calcTesta(c){
       const fwr = w => fw2(FEXX, w);
       const wsMin = Math.min(ts, cl.tf) <= 6 ? 3 : Math.min(ts, cl.tf) <= 13 ? 5 : Math.min(ts, cl.tf) <= 19 ? 6 : 8;
       // filetes al ala: 2 placas × 2 caras × (bs − clip), transversales (×1.5); al alma: 2 placas × 2 caras × (Lr − 2·clip)
-      const wsReq = Math.max(wsMin, ...[3, 5, 6, 8, 10, 12, 14, 16].filter(w => 1.5 * fwr(w) * 4 * (bs - clip) >= Fst && fwr(w) * 4 * (Lr - 2 * clip) >= Fst).slice(0, 1));
+      const wsReq = Math.max(wsMin, ...[3, 5, 6, 8, 10, 12, 14, 16].filter(w => 1.5 * fwr(w) * 4 * (bs - clip) >= Fst && fwr(w) * 4 * (Lr - 2 * KC.alma) >= Fst).slice(0, 1));
       const ws = +c.wsC > 0 ? +c.wsC : wsReq;
-      rig = { bs, ts, ws, Lr, clip };
+      rig = { bs, ts, ws, Lr, clip, corte:KC };
       pasos.push(`Rigidizadores de la columna (${c.rigCol === 'si' ? 'pedidos' : sisPide ? 'exigidos con sismo' : 'necesarios'}): fuerza que deben tomar Rst = ${r2(Fst)} kN${faltas.filter(([, R, F]) => F > R).length ? ` (falla sin ellos: ${faltas.filter(([, R, F]) => F > R).map(([n]) => n).join(', ')})` : ''}`);
-      pasos.push(`2 placas por cada ala de la viga (una a cada lado del alma): ${bs} × ${ts} mm, largo ${r1(Lr)} mm, ${c.aceroRigC || 'A36'}, chaflán ${clip} mm; filetes de ${ws} mm`);
+      pasos.push(`2 placas por cada ala de la viga (una a cada lado del alma): ${bs} × ${ts} mm, largo ${r1(Lr)} mm, ${c.aceroRigC || 'A36'}, corte de esquinas ${KC.ala} × ${KC.alma} mm (ala × alma); filetes de ${ws} mm`);
       // ala de la columna rigidizada: Yc con placas de continuidad (AISC 358 Tablas 6.5/6.6), pso = psi = (c − ts)/2
       // a ras: la placa queda a la altura del ala de la viga y la fila interior a psi = pfi + tf/2 − ts/2 de ella
       const ps = Math.max(ras ? pfi + tbf / 2 - ts / 2 : (cc - ts) / 2, 1);
@@ -472,7 +472,7 @@ function calcTesta(c){
       add('rigidizador', 'Placas de continuidad: fluencia a tensión', 'F.2.10.10.8 (J10.8) · φ = 0.90', Fst, capT(ts), 'kN', `0.9·Fy·2·(bs − ${clip})·ts`);
       add('rigidizador', 'Placas de continuidad: compresión como columna (K = 0.75, 25tw de alma)', 'F.2.10.10.8 (J10.8) · F.2.5 (E3)', Fst, capC(ts), 'kN', `L = ${r1(Lr)} mm`);
       add('soldadura', 'Filetes de los rigidizadores al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 = 1.5)', Fst, 1.5 * fwr(ws) * 4 * (bs - clip), 'kN', `4 filetes de ${ws} mm × ${bs - clip} mm`);
-      add('soldadura', 'Filetes de los rigidizadores al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, fwr(ws) * 4 * (Lr - 2 * clip), 'kN', `4 filetes de ${ws} mm × ${r1(Lr - 2 * clip)} mm`); }
+      add('soldadura', 'Filetes de los rigidizadores al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, fwr(ws) * 4 * (Lr - 2 * KC.alma), 'kN', `4 filetes de ${ws} mm × ${r1(Lr - 2 * KC.alma)} mm`); }
       else pasos.push('El alma no necesita fuerza adicional: los rigidizadores van con las dimensiones mínimas de J10.8 para que el ala de la columna trabaje como placa gruesa (sin palanca en los pernos).');
       req.push(['Rigidizador: bs + tw/2 ≥ bf de la viga/3 (J10.8)', bs >= bsMin - 1e-6, `${bs} ≥ ${r1(bsMin)} mm`]);
       req.push(['Rigidizador: bs ≤ (bfc − twc)/2 (cabe en el ala)', bs <= bsMax + 1e-6, `${bs} ≤ ${r1(bsMax)} mm`]);
@@ -480,7 +480,7 @@ function calcTesta(c){
       req.push(['Rigidizador: bs/ts ≤ 0.56·√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy) + 1e-6, `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
       if(sisPide) req.push([`Con sismo: placas de continuidad ts ≥ ${dos ? 'tf de la viga (conexión a los dos lados)' : 'tf/2 de la viga'} (AISC 341 E3.6f)`, ts >= (dos ? tbf : tbf / 2) - 1e-6, `${ts} mm`]);
       req.push(['Filete de los rigidizadores ≥ mín. Tabla J2.4', ws >= wsMin, `${ws} ≥ ${wsMin} mm`]);
-      req.push([`Chaflán de ${clip} mm en las esquinas de las placas (radio de la columna)`, true, 'indicar en planos']);
+      req.push(reqCorte(KC));
     }
     // d) zona de panel: una viga, suma (mismo sentido) o diferencia (opuestos)
     const Vp = !dos ? Ffu : opuesto ? Math.abs(Ffu - F2) : Ffu + F2, Rv = 0.9 * 0.6 * ac.Fy * dc * cl.tw / 1000;
@@ -1153,6 +1153,11 @@ function soldPerim(m, o){
     const kq = p.s.tipo + ':' + p.s.cara; qmax[kq] = Math.max(qmax[kq] || 0, q); });
   return { A, AF, AW, Ix, Iy, J, LF, LW, peor, qmax, fd };
 }
+// Corte de las esquinas de las placas de continuidad junto al radio alma–ala de la columna (pedido de Amo 20-nov, igual en todas):
+// sin sismo a 45° con cateto = radio del perfil (mín. 15 mm); con sismo AWS D1.8 cláusula 4.1 (AISC 341 I2.4): a lo largo del alma
+// por lo menos 38 mm más allá de k (desde la cara interior del ala = r + 38) y a lo largo del ala no más de 12 mm más allá de k1 (se usa r).
+const corteEsq = (cl, sis) => { const r = Math.max(+cl.r || 0, 15); return { ala:r, alma:sis ? Math.ceil(r + 38) : r, sis:!!sis }; };
+const reqCorte = k => [`Corte de las esquinas de las placas (radio alma–ala de la columna): ${k.ala} mm a lo largo del ala × ${k.alma} mm a lo largo del alma${k.sis ? ' (AWS D1.8 cl. 4.1 / AISC 341 I2.4)' : ' (a 45°, cateto = radio del perfil, mín. 15 mm)'}`, true, 'indicar en planos'];
 // Ancho de la placa de continuidad que recibe el ala en el eje débil: con tubo, la lengüeta queda en la parte plana (B − 4t, pedido de Amo 20-nov)
 const bPlDebil = (m, cl) => Math.min(m.tub ? m.bf - 4 * m.tf : m.bf, cl.d - 2 * cl.tf);
 function calcSoldada(c){
@@ -1304,7 +1309,7 @@ function calcSoldada(c){
     // Viga al alma de la columna (eje débil): el alma no resiste la fuerza de las alas fuera de su plano → placas de continuidad
     // a la altura de las alas, soldadas al alma y a las dos alas de la columna; las alas de la columna trabajan a cortante en su plano.
     const ac = ACEROS[c.aceroCol], Mu2 = dosA ? Math.abs(+c.Mu2 || 0) : 0, F2 = dosA ? Mu2 * 1000 / (m.d - m.tf) : 0, op = dosA && c.sentido2 !== 'mismo';
-    const clip = Math.max(cl.r, 15), bsW = (cl.bf - cl.tw) / 2, Lf = bsW - clip, b = bPlDebil(m, cl);
+    const KC = corteEsq(cl, sis), clip = KC.ala, bsW = (cl.bf - cl.tw) / 2, Lf = bsW - clip, b = bPlDebil(m, cl);
     pasos.push(`Viga al alma de ${cl.nom} (eje débil): espacio entre alas d − 2tf = ${r1(cl.d - 2 * cl.tf)} mm; ancho por lado del alma bs = (bf − tw)/2 = ${r1(bsW)} mm`);
     req.push(['El ala de la viga cabe entre las alas de la columna: b ≤ d − 2tf', m.bf <= cl.d - 2 * cl.tf + 1e-6, `${m.bf} ≤ ${r1(cl.d - 2 * cl.tf)} mm`]);
     if(m.bf > cl.d - 2 * cl.tf - 2 * cl.r) av.push(`El ala de la viga (${m.bf} mm) choca con los radios de la columna (T = ${r1(cl.d - 2 * cl.tf - 2 * cl.r)} mm): recorte las esquinas del ala o use placas prolongadas fuera de las alas.`);
@@ -1313,13 +1318,15 @@ function calcSoldada(c){
     if(tsW){
       const Fm = Math.max(Ffu, F2), capWl = w => fw2(FEXX, w) * 4 * Lf;
       const ws = +c.wsC > 0 ? +c.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMinT(Math.min(tsW, cl.tf)) && capWl(w) >= Fm) || 16);
-      rig = { ts:tsW, ws, bs:bsW, clip, debil:true };
+      rig = { ts:tsW, ws, bs:bsW, clip, corte:KC, debil:true };
       pasos.push(`Placas de continuidad a la altura de las alas de la viga: ts = ${tsW} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), soldadas a las dos alas de la columna con filetes de ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'} (Lf = ${r1(Lf)} mm por ala) y al alma`);
       add('placas', 'Placa de continuidad a tensión (recibe el ala de la viga)', 'F.2.4 (D2-1), φ = 0.90', Ffu, 0.9 * arW.Fy * b * tsW / 1000, 'kN', `0.9·Fy·b·ts, b = ${r1(b)} mm`);
       add('placas', 'Filetes de la placa a las dos alas de la columna', 'F.2.10.2.4 (J2-4)', Fm, capWl(ws), 'kN', `2 alas × 2 filetes × ${r1(Lf)} mm · ${ws} mm`);
       if(tope) req.push(['Placas: ts ≥ tf de la viga (alas a tope en el mismo plano)', tsW >= m.tf - 1e-6, `${tsW} ≥ ${m.tf} mm`]);
       req.push(['Placas: bs/ts ≤ 0.56√(E/Fy)', bsW / tsW <= 0.56 * Math.sqrt(E / arW.Fy) + 1e-6, `${r1(bsW / tsW)} ≤ ${r1(0.56 * Math.sqrt(E / arW.Fy))}`]);
       req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMinT(Math.min(tsW, cl.tf)), `${ws} ≥ ${wMinT(Math.min(tsW, cl.tf))} mm`]);
+      req.push(reqCorte(KC));
+      if(Mcol > 0 && (tope ? m.bf : b) < cl.d - 2 * cl.tf - 1) req.push([`Placa en forma de T (más angosta donde ${tope ? 'sale de la columna' : 'monta sobre ' + (m.tub ? 'el tubo' : 'el ala')}): esquinas entrantes con radio ≥ 13 mm (recomendado 25 mm), sin cortes en ángulo recto`, true, 'indicar en planos']);
       if(tope) av.push('Prolongue las placas de continuidad 50–75 mm fuera de las alas de la columna y suelde el ala de la viga a tope (penetración completa) con el borde de la placa.');
       if(dosA && op) av.push('Vigas a los dos lados del alma con momentos opuestos: la parte que se equilibra pasa por el espesor del alma; suelde las placas al alma con penetración completa.');
     }
@@ -1351,7 +1358,7 @@ function calcSoldada(c){
     if(c.rigCol === 'no' && (Rst > 0 || sisPide)) req.push(['Placas de continuidad de la columna', false, sisPide ? 'el sismo las exige (AISC 341)' : `faltan ${r2(Rst)} kN en el ala o el alma`]);
     let capPl = 0;
     if(usar){
-      const clip = Math.max(cl.r, 15), bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lwc = cl.d - 2 * cl.tf - 2 * clip;
+      const KC = corteEsq(cl, sis), clip = KC.ala, bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lwc = cl.d - 2 * cl.tf - 2 * KC.alma;
       const tMinP = (dos || sis) ? m.tf : m.tf / 2;
       const Fst = Math.max(Rst, sisPide ? Ffu : 0);
       const tReq = Math.max(tMinP, bs / (0.56 * Math.sqrt(E / ar.Fy)), Fst > 0 ? Fst * 1000 / (0.9 * ar.Fy * 2 * Lf) : 0);
@@ -1359,12 +1366,13 @@ function calcSoldada(c){
       const capFl = w => 1.5 * fw2(FEXX, w) * 2 * 2 * Lf, capWb = w => fw2(FEXX, w) * 2 * 2 * Lwc;
       const ws = +c.wsC > 0 ? +c.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMinT(Math.min(ts, cl.tf)) && capFl(w) >= Fst && capWb(w) >= Fst) || 16);
       capPl = 0.9 * ar.Fy * 2 * Lf * ts / 1000;
-      rig = { ts, ws, bs, clip };
-      pasos.push(`Placas de continuidad (2 por ala de la viga): bs = (bf − tw)/2 = ${r1(bs)} mm, despunte ${r1(clip)} mm, ts = ${ts} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'}; fuerza que toman ${r2(Fst)} kN`);
+      rig = { ts, ws, bs, clip, corte:KC };
+      pasos.push(`Placas de continuidad (2 por ala de la viga): bs = (bf − tw)/2 = ${r1(bs)} mm, corte de esquinas ${KC.ala} × ${KC.alma} mm (ala × alma), ts = ${ts} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'}; fuerza que toman ${r2(Fst)} kN`);
       req.push([`Placas: ts ≥ ${dos || sis ? 'tf' : 'tf/2'} de la viga (J10.8${sis ? ', AISC 341' : ''})`, ts >= tMinP - 1e-6, `${ts} ≥ ${r1(tMinP)} mm`]);
       req.push(['Placas: bs + tw/2 ≥ bf de la viga/3 (J10.8)', bs + cl.tw / 2 >= m.bf / 3 - 1e-6, `${r1(bs + cl.tw / 2)} ≥ ${r1(m.bf / 3)} mm`]);
       req.push(['Placas: bs/ts ≤ 0.56√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy) + 1e-6, `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
       req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMinT(Math.min(ts, cl.tf)), `${ws} ≥ ${wMinT(Math.min(ts, cl.tf))} mm`]);
+      req.push(reqCorte(KC));
       if(Fst > 0){
         add('placas', 'Placas de continuidad: fluencia (tensión / compresión corta)', 'F.2.10.10.8 (J10.8), φ = 0.90', Fst, capPl, 'kN', `0.9·Fy·2·(bs − despunte)·ts`);
         add('placas', 'Filetes de las placas al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 ×1.5)', Fst, capFl(ws), 'kN', `2 placas × 2 caras × ${r1(Lf)} mm · ${ws} mm`);
@@ -1516,7 +1524,7 @@ function calcNudo(n, lista){
   const usar = n.rigCol === 'si' || (n.rigCol === 'auto' && pide);
   if(hayDebil && n.rigCol === 'no') req.push(['Placas de continuidad para las vigas a momento del eje débil', false, 'son obligatorias: escoja «Automático» o «Sí»']);
   if(!usar && Rst > 0) av.push(`Las alas de la viga piden rigidizadores en la columna (faltan ${r2(Rst)} kN); escoja «Automático» o «Sí» en placas de continuidad.`);
-  const clip = Math.max(cl.r, 15), bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lw = cl.d - 2 * cl.tf - 2 * clip;
+  const KC = corteEsq(cl, false), clip = KC.ala, bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lw = cl.d - 2 * cl.tf - 2 * KC.alma;
   const tfV = Math.max(0, ...V.filter(v => v.mom && v.vg).map(v => v.vg.tf));
   const vDeb = [...momF('alma1'), ...momF('alma2')];
   let ts = 0, ws = 0;
@@ -1528,10 +1536,11 @@ function calcNudo(n, lista){
     const Fpl = Math.max(W1, W2, Rst);
     const capW = w => fw2(FEXX, w) * 4 * Lf;
     ws = +n.wsC > 0 ? +n.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMin(Math.min(ts, cl.tf)) && capW(w) >= Fpl) || 16);
-    pasos.push(`Placas de continuidad (un par a la altura de cada ala de las vigas): ancho por lado bs = (bf − tw)/2 = ${r1(bs)} mm, despunte ${r1(clip)} mm, largo junto al ala Lf = ${r1(Lf)} mm, junto al alma ${r1(Lw)} mm; ts = ${ts} mm (${n.aceroRigC}${+n.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm ${n.electrodo}${+n.wsC > 0 ? '' : ' (automático)'}.`);
+    pasos.push(`Placas de continuidad (un par a la altura de cada ala de las vigas): ancho por lado bs = (bf − tw)/2 = ${r1(bs)} mm, corte de esquinas a 45° de ${r1(clip)} mm, largo junto al ala Lf = ${r1(Lf)} mm, junto al alma ${r1(Lw)} mm; ts = ${ts} mm (${n.aceroRigC}${+n.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm ${n.electrodo}${+n.wsC > 0 ? '' : ' (automático)'}.`);
     req.push(['Placas: ts ≥ tf de las vigas a momento', ts >= tfV / (hayDebil ? 1 : 2) - 1e-6, `${ts} ≥ ${r1(tfV / (hayDebil ? 1 : 2))} mm${hayDebil ? '' : ' (tf/2, J10.8)'}`]);
     req.push(['Placas: bs/ts ≤ 0.56√(E/Fy) (J10.8)', bs / ts <= 0.56 * Math.sqrt(E / ar.Fy), `${r1(bs / ts)} ≤ ${r1(0.56 * Math.sqrt(E / ar.Fy))}`]);
     req.push(['Placas: filete ≥ mínimo Tabla J2.4', ws >= wMin(Math.min(ts, cl.tf)), `${ws} ≥ ${wMin(Math.min(ts, cl.tf))} mm`]);
+    req.push(reqCorte(KC));
     if(Fpl > 0) add('placas', 'Filetes de la placa a las dos alas de la columna', 'F.2.10.2.4 (J2-4), φ = 0.75', Fpl, capW(ws), 'kN', `2 alas × 2 filetes × Lf ${r1(Lf)} mm · ${ws} mm (fuerza paralela al cordón)`);
     if(Rst > 0) add('placas', 'Compresión / tensión de las placas (eje fuerte)', 'F.2.10.10.8 (J10.8), φ = 0.90', Rst, 0.9 * ar.Fy * 2 * (bs - clip) * ts / 1000, 'kN', `0.9·Fy·2·(bs − despunte)·ts; faltante de las cargas concentradas ${r2(Rst)} kN`);
   }
