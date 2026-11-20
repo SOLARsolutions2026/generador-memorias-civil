@@ -428,7 +428,7 @@ function ejesCon(){
     const v = (k, off) => eje === 1 ? A(k, 0, off) : eje === 2 ? A(off, 0, k) : A(0, k, off);
     return lin(id, 'f', ...v(0.45, d), ...v(1.05, d), 2.2) + lin(id, 'm', ...v(0.45, -d), ...v(1.4, -d), 2.2); };
   const lb = (eje, k, off, t, c, a = 'start', dx = 4, dy = 4) => { const q = eje === 1 ? A(k, 0, off) : eje === 2 ? A(off, 0, k) : A(0, k, off); return txt(q[0] + dx, q[1] + dy, t, c, a); };
-  return `<svg viewBox="0 18 300 185" class="ejes" role="img" aria-label="Ejes 1, 2 y 3 con sus fuerzas y momentos">${ejDefs(id)}${ala(-h / 2)}${alma}${ala(h / 2 - t)}
+  return `<svg viewBox="0 18 300 197" class="ejes" role="img" aria-label="Ejes 1, 2 y 3 con sus fuerzas y momentos">${ejDefs(id)}${ala(-h / 2)}${alma}${ala(h / 2 - t)}
     ${lin(id, 'a', ...O, ...A(L, 0, 0))}${lin(id, 'a', ...O, ...A(0, 0, L))}${lin(id, 'a', ...O, ...A(0, L, 0))}
     ${par(1)}${par(2)}${par(3)}
     ${txt(...A(L + 0.05, 0, 0).map((v, i) => v + (i ? 4 : 2)), 'eje 1')}${txt(A(0, 0, L)[0] + 5, A(0, 0, L)[1] + 2, 'eje 2')}${txt(A(0, L, 0)[0] - 4, A(0, L, 0)[1] + 4, 'eje 3', EJ.az, 'end')}
@@ -750,7 +750,7 @@ function dibCartela(c, r){
 }
 function dibBase(c, r){
   const cl = r.geo.cl, N = +c.N, B = +c.B, Lp = +c.Lp, Wp = +c.Wp, S1 = +c.S1, S2 = +c.S2, nB = +c.nB;
-  const k = 300 / Math.max(Lp, Wp), X = v => 30 + (v + Lp / 2) * k, Y = v => 30 + (v + Wp / 2) * k;
+  const k = 300 / Math.max(Lp, Wp), X = v => 30 + (v + Lp / 2) * k, Y = v => 44 + (v + Wp / 2) * k;
   let h = `<rect x="${X(-Lp / 2)}" y="${Y(-Wp / 2)}" width="${Lp * k}" height="${Wp * k}" fill="#e5e7eb" stroke="#94a3b8"/><rect x="${X(-N / 2)}" y="${Y(-B / 2)}" width="${N * k}" height="${B * k}" class="pl"/>
     <path d="M${X(-cl.d / 2)} ${Y(-cl.bf / 2)} h${cl.tf * k} v${(cl.bf - cl.tw) / 2 * k} h${(cl.d - 2 * cl.tf) * k} v${-(cl.bf - cl.tw) / 2 * k} h${cl.tf * k} v${cl.bf * k} h${-cl.tf * k} v${-(cl.bf - cl.tw) / 2 * k} h${-(cl.d - 2 * cl.tf) * k} v${(cl.bf - cl.tw) / 2 * k} h${-cl.tf * k} z" fill="#f1f5f9" stroke="#475569"/>`;
   for(const sx of [-1, 1]) for(let j = 0; j < nB; j++){ const y = nB > 1 ? -S2 / 2 + j * S2 / (nB - 1) : 0; h += `<circle cx="${X(sx * S1 / 2)}" cy="${Y(y)}" r="${Math.max(3, 12 * k)}" class="bolt"/>`; }
@@ -852,7 +852,7 @@ function dibGrupo(c, r){
   const g = r.geo, nf = +c.filas, nc = +c.cols, s = +c.s, gg = +c.g, Lev = +c.Lev, Leh = +c.Leh, e = +c.e, ang = +c.ang || 0;
   const Bw = (nc - 1) * gg + 2 * Leh, Hp = g.Hp, xc = Leh + (nc - 1) * gg / 2, yc = Lev + (nf - 1) * s / 2;
   const xmin = Math.min(-60, xc + e - 30), xmax = Math.max(Bw + 20, xc + e + 40) + 110, W = xmax - xmin, k = Math.min(330 / W, 300 / (Hp + 60));
-  const X = v => 20 + (v - xmin) * k, Y = v => 30 + v * k;
+  const X = v => 20 + (v - xmin) * k, Y = v => 44 + v * k;
   let h = `<rect x="${X(-12)}" y="${Y(-20)}" width="${12 * k}" height="${(Hp + 40) * k}" class="sop"/><rect x="${X(0)}" y="${Y(0)}" width="${Bw * k}" height="${Hp * k}" class="pl"/>`;
   for(let j = 0; j < nc; j++) for(let i = 0; i < nf; i++) h += `<circle cx="${X(Leh + j * gg)}" cy="${Y(Lev + i * s)}" r="${Math.max(3, (+c.d + 1.6) / 2 * k)}" class="bolt"/>`;
   h += `<circle cx="${X(xc)}" cy="${Y(yc)}" r="3" class="cg"/><text x="${X(xc) + 5}" y="${Y(yc) - 5}" class="lbl">CG</text>`;

@@ -69,7 +69,7 @@ function ejesPlaca(){
 // Conexión viga–columna: momento, cortante y axial en el extremo de la viga
 function ejesVC(){
   const id = ejId();
-  const svg = `<svg viewBox="0 0 320 200" role="img" aria-label="Fuerzas en el extremo de la viga">${ejDefs(id)}
+  const svg = `<svg viewBox="0 0 320 207" role="img" aria-label="Fuerzas en el extremo de la viga">${ejDefs(id)}
     <rect x="40" y="10" width="34" height="180" fill="#dbe3ee" stroke="${EJ.az}" stroke-width="1.2"/>${txt(57, 200, 'columna', EJ.gr, 'middle', 400)}
     <rect x="74" y="80" width="200" height="40" fill="#e8eef7" stroke="${EJ.az}" stroke-width="1.2"/>${txt(255, 136, 'viga', EJ.gr, 'middle', 400)}
     <path d="M118,62 A34,34 0 1 1 112,140" fill="none" stroke="${EJ.m}" stroke-width="2" marker-end="url(#${id}f)"/>${txt(152, 64, 'M', EJ.m)}
