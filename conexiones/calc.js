@@ -1153,6 +1153,8 @@ function soldPerim(m, o){
     const kq = p.s.tipo + ':' + p.s.cara; qmax[kq] = Math.max(qmax[kq] || 0, q); });
   return { A, AF, AW, Ix, Iy, J, LF, LW, peor, qmax, fd };
 }
+// Ancho de la placa de continuidad que recibe el ala en el eje débil: con tubo, la lengüeta queda en la parte plana (B − 4t, pedido de Amo 20-nov)
+const bPlDebil = (m, cl) => Math.min(m.tub ? m.bf - 4 * m.tf : m.bf, cl.d - 2 * cl.tf);
 function calcSoldada(c){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch), E = 200000;
   const P = nz(c.P), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2);
@@ -1192,7 +1194,7 @@ function calcSoldada(c){
   const FfuE = Mcol * 1000 / (m.d - m.tf) + Math.abs(P) / 2, arW = ACEROS[c.aceroRigC] || ACEROS.A36;
   let tsW = 0;
   if(alma && (Mcol > 0 || c.rigCol === 'si') && c.rigCol !== 'no'){
-    const b = Math.min(m.bf, cl.d - 2 * cl.tf), bsW = (cl.bf - cl.tw) / 2;
+    const b = bPlDebil(m, cl), bsW = (cl.bf - cl.tw) / 2;
     const tReq = Math.max(c.uDebil === 'tope' && !m.tub ? m.tf : 6.4, FfuE * 1000 / (0.9 * arW.Fy * b), bsW / (0.56 * Math.sqrt(E / arW.Fy)));
     tsW = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1); }
   const dosA = alma && !!c.dosLados, tope = c.uDebil === 'tope' && !m.tub;          // tubo: siempre placa traslapada sobre la cara (pedido de Amo 20-nov)
@@ -1218,7 +1220,7 @@ function calcSoldada(c){
     }
     if(Math.abs(T) > 0 || Math.abs(V3) > 0) av.push('V3 y T no se revisan en la soldadura al alma de la columna; si son importantes, revíselos aparte.');
     if(Mcol > 0 && tsW){
-      const b = Math.min(m.bf, cl.d - 2 * cl.tf);
+      const b = bPlDebil(m, cl);
       if(tope){
         pasos.push(`Alas de la viga a tope con el borde de la placa (penetración completa, mismo plano): resistencia igual al metal base; la placa ts = ${tsW} mm ≥ tf = ${m.tf} mm.`);
         add('viga', 'Ala de la viga a tensión en la junta', 'F.2.4 (D2-1), φ = 0.90', FfuA, 0.9 * am.Fy * m.bf * m.tf / 1000, 'kN', '0.9·Fy·bf·tf');
@@ -1235,7 +1237,8 @@ function calcSoldada(c){
         req.push(['Filete en el borde de la placa ≤ ts − 1.6 mm (J2.2b)', tsW < 6 ? wT <= tsW : wT <= tsW - 1.6 + 1e-6, `${wT} ≤ ${r1(tsW < 6 ? tsW : tsW - 1.6)} mm`]);
         if(Lt < b) av.push(`El traslapo (${Lt} mm) es más corto que el ancho de la placa (${r1(b)} mm); se recomienda Lt ≥ b para repartir bien la fuerza.`);
         if(m.tub){ if(c.uDebil === 'tope') av.push('Con viga de tubo las placas van traslapadas sobre las caras superior e inferior del tubo (no a tope); se calculó así.');
-          av.push(`Tubo: los filetes longitudinales de la placa deben quedar sobre la cara plana del tubo (ancho plano ≈ B − 4t = ${r1(m.bf - 4 * m.tf)} mm). Si la placa es más ancha que el tubo, esos cordones quedan en la esquina redondeada (bisel abocinado, J2.1a, garganta ≈ 5/16·R) y deben revisarse aparte.`); }
+          pasos.push(`Tubo: la lengüeta de la placa sobre el tubo se hace con ancho b = ${r1(b)} mm, dentro de la parte plana de la cara (B − 4t = ${r1(m.bf - 4 * m.tf)} mm; radio exterior ≈ 2t), para que los filetes longitudinales queden sobre la cara plana.`);
+          req.push(['Placa dentro de la parte plana del tubo: b ≤ B − 4t', b <= m.bf - 4 * m.tf + 1e-6 && b > 0, `${r1(b)} ≤ ${r1(m.bf - 4 * m.tf)} mm`]); }
         av.push(m.tub ? 'Placa traslapada: queda fuera del plano de la cara del tubo; la pequeña excentricidad (t + ts)/2 no se revisa. Las placas van encima de la cara superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.' : 'Placa traslapada: queda fuera del plano del ala; la pequeña excentricidad (tf + ts)/2 no se revisa. Las placas van encima del ala superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.');
         // 💡 traslapo y filete mínimos que cumplen
         { let best = null;
@@ -1301,7 +1304,7 @@ function calcSoldada(c){
     // Viga al alma de la columna (eje débil): el alma no resiste la fuerza de las alas fuera de su plano → placas de continuidad
     // a la altura de las alas, soldadas al alma y a las dos alas de la columna; las alas de la columna trabajan a cortante en su plano.
     const ac = ACEROS[c.aceroCol], Mu2 = dosA ? Math.abs(+c.Mu2 || 0) : 0, F2 = dosA ? Mu2 * 1000 / (m.d - m.tf) : 0, op = dosA && c.sentido2 !== 'mismo';
-    const clip = Math.max(cl.r, 15), bsW = (cl.bf - cl.tw) / 2, Lf = bsW - clip, b = Math.min(m.bf, cl.d - 2 * cl.tf);
+    const clip = Math.max(cl.r, 15), bsW = (cl.bf - cl.tw) / 2, Lf = bsW - clip, b = bPlDebil(m, cl);
     pasos.push(`Viga al alma de ${cl.nom} (eje débil): espacio entre alas d − 2tf = ${r1(cl.d - 2 * cl.tf)} mm; ancho por lado del alma bs = (bf − tw)/2 = ${r1(bsW)} mm`);
     req.push(['El ala de la viga cabe entre las alas de la columna: b ≤ d − 2tf', m.bf <= cl.d - 2 * cl.tf + 1e-6, `${m.bf} ≤ ${r1(cl.d - 2 * cl.tf)} mm`]);
     if(m.bf > cl.d - 2 * cl.tf - 2 * cl.r) av.push(`El ala de la viga (${m.bf} mm) choca con los radios de la columna (T = ${r1(cl.d - 2 * cl.tf - 2 * cl.r)} mm): recorte las esquinas del ala o use placas prolongadas fuera de las alas.`);

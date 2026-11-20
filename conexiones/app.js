@@ -187,21 +187,41 @@ function figContinuidad(dos){
   </svg><figcaption>Las placas de continuidad van dentro de la columna, entre sus dos alas, a la altura de las alas de la viga. Rigidizan el ala y el alma de la columna donde llega la fuerza de cada ala.</figcaption></figure>`;
 }
 const opDebil = c => c.miembro !== 'tubo' && c.uDebil === 'tope' ? 'tope' : 'trasl';   // con tubo siempre traslapada (Amo 20-nov)
-function svgPlantaDebil(dos, op, tub){
-  const ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
-  return `<svg viewBox="0 0 230 190" class="dsvg" role="img" aria-label="Viga soldada al alma de la columna, en planta">
-    <rect x="62" y="70" width="104" height="54" fill="${azul}" stroke="${azulB}" opacity=".75"/>${dos ? `<rect x="62" y="124" width="104" height="0" stroke="none"/>` : ''}
-    <rect x="56" y="58" width="8" height="78" fill="#cbd5e1" stroke="${ln}"/><rect x="164" y="58" width="8" height="78" fill="#cbd5e1" stroke="${ln}"/>
-    <rect x="64" y="94" width="100" height="6" fill="#cbd5e1" stroke="${ln}"/>
-    ${tub ? `<rect x="88" y="4" width="52" height="91" fill="#f1f5f9" stroke="${ln}" stroke-width="3" rx="4"/>` : `<rect x="84" y="4" width="60" height="64" fill="#f1f5f9" stroke="${ln}"/><line x1="114" y1="4" x2="114" y2="94" stroke="${ln}" stroke-width="3"/>`}
-    ${op === 'trasl' ? (tub ? `<rect x="92" y="24" width="44" height="46" fill="${azul}" stroke="${azulB}" opacity=".8"/><path d="M92 24 v46 M136 24 v46 M92 24 h44" stroke="${nar}" stroke-width="2.5" fill="none"/>` : `<rect x="84" y="24" width="60" height="46" fill="${azul}" stroke="${azulB}" opacity=".8"/><path d="M84 24 v46 M144 24 v46 M84 24 h60" stroke="${nar}" stroke-width="2.5" fill="none"/>`) : `<rect x="84" y="66" width="60" height="4" fill="${nar}"/>`}
-    ${dos ? `<rect x="84" y="126" width="60" height="60" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="3 2"/><line x1="114" y1="100" x2="114" y2="186" stroke="#94a3b8" stroke-width="3" stroke-dasharray="3 2"/>` : ''}
-    <text x="114" y="${tub ? 18 : 30}" text-anchor="middle" font-size="10" fill="${ln}">${tub ? 'Tubo' : 'Viga'}</text>
-    <text x="114" y="${dos ? 160 : 150}" text-anchor="middle" font-size="9" fill="${dos ? '#94a3b8' : ln}">${dos ? 'Otra viga' : 'Columna (planta)'}</text>
-    <line x1="160" y1="80" x2="196" y2="66" stroke="${azulB}"/><text x="198" y="58" font-size="9" fill="${azulB}">Placa</text><text x="198" y="69" font-size="9" fill="${azulB}">ts</text>
-    <line x1="144" y1="68" x2="196" y2="40" stroke="${nar}"/><text x="198" y="36" font-size="9" fill="${nar}">Sold.</text>
-    <text x="24" y="100" font-size="9" fill="${ln}">Alma</text><line x1="44" y1="97" x2="66" y2="97" stroke="${ln}"/>
-  </svg>`;
+function svgPlantaDebil(dos, op = 'trasl', tub){
+  // Planta (corregida 20-nov, observación de Amo): la placa llena el espacio entre las alas de la columna, del alma hasta las puntas
+  // de las alas, del lado de la viga (y del otro lado solo si llega otra viga). Traslapada: sale una lengüeta sobre el ala (o sobre
+  // la parte plana del tubo) con filetes por sus bordes. A tope: sale 50–75 mm y el ala se suelda a tope (CJP) contra su borde.
+  const ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c', gris = '#f1f5f9';
+  const yW = 94, tW = 6, yT = 58, yB = 136, xA = 64, xB = 164, cx = 114;
+  const bw = tub ? 52 : 60, bl = tub ? 36 : 50, tope = op === 'tope' && !tub;
+  const viga = (y0, y1, dash) => tub
+    ? `<rect x="${cx - bw / 2}" y="${y0}" width="${bw}" height="${y1 - y0}" rx="5" fill="${gris}" stroke="${dash ? '#94a3b8' : ln}" stroke-width="3"${dash ? ' stroke-dasharray="4 3"' : ''}/>`
+    : `<rect x="${cx - bw / 2}" y="${y0}" width="${bw}" height="${y1 - y0}" fill="${dash ? '#f8fafc' : gris}" stroke="${dash ? '#94a3b8' : ln}"${dash ? ' stroke-dasharray="4 3"' : ''}/><line x1="${cx}" y1="${y0}" x2="${cx}" y2="${y1}" stroke="${dash ? '#94a3b8' : ln}" stroke-width="3"${dash ? ' stroke-dasharray="4 3"' : ''}/>`;
+  let h = `<rect x="${xA}" y="${yW}" width="${xB - xA}" height="${tW}" fill="#cbd5e1" stroke="${ln}"/>`;
+  if(!tope) h += viga(4, yW - 2);                         // traslapada: la viga entra hasta el alma y la placa queda ENCIMA del ala
+  // placas dentro de la columna
+  h += `<rect x="${xA}" y="${yT}" width="${xB - xA}" height="${yW - yT}" fill="${azul}" stroke="${azulB}" opacity="${tope ? .8 : .85}"/>`;
+  if(dos) h += `<rect x="${xA}" y="${yW + tW}" width="${xB - xA}" height="${yB - yW - tW}" fill="${azul}" stroke="${azulB}" opacity=".8"/>`;
+  h += `<rect x="56" y="${yT}" width="8" height="${yB - yT}" fill="#cbd5e1" stroke="${ln}"/><rect x="164" y="${yT}" width="8" height="${yB - yT}" fill="#cbd5e1" stroke="${ln}"/>`;
+  let sold;
+  if(tope){
+    const yP = yT - 14;                                   // la placa sale 50–75 mm de las alas de la columna
+    h += viga(4, yP - 2) + `<rect x="${cx - bw / 2}" y="${yP}" width="${bw}" height="${yT - yP}" fill="${azul}" stroke="${azulB}" opacity=".8"/>`
+      + `<rect x="${cx - bw / 2}" y="${yP - 3}" width="${bw}" height="3" fill="${nar}"/><line x1="${cx}" y1="${yP}" x2="${cx}" y2="${yW}" stroke="${ln}" stroke-width="3"/>`;
+    sold = [cx + bw / 2, yP - 2];
+  } else {
+    const yL = 24;                                        // lengüeta de largo Lt sobre el ala o la cara del tubo
+    h += `<rect x="${cx - bl / 2}" y="${yL}" width="${bl}" height="${yT - yL}" fill="${azul}" stroke="${azulB}" opacity=".85"/>`
+      + `<path d="M${cx - bl / 2} ${yT} V${yL} H${cx + bl / 2} V${yT}" stroke="${nar}" stroke-width="2.5" fill="none"/>`;
+    sold = [cx + bl / 2, 34];
+  }
+  if(dos) h += viga(yW + tW + 2, 186, true);
+  h += `<text x="${cx}" y="16" text-anchor="middle" font-size="10" fill="${ln}" stroke="#f1f5f9" stroke-width="3" paint-order="stroke">${tub ? 'Tubo' : 'Viga'}</text>
+    <text x="${cx}" y="${dos ? 176 : 152}" text-anchor="middle" font-size="9" fill="${dos ? '#94a3b8' : ln}">${dos ? 'Otra viga' : 'Columna (planta)'}</text>
+    <line x1="150" y1="78" x2="196" y2="72" stroke="${azulB}"/><text x="198" y="68" font-size="9" fill="${azulB}">Placa</text><text x="198" y="79" font-size="9" fill="${azulB}">ts</text>
+    <line x1="${sold[0]}" y1="${sold[1]}" x2="196" y2="40" stroke="${nar}"/><text x="198" y="38" font-size="9" fill="${nar}">Sold.</text>
+    <text x="24" y="100" font-size="9" fill="${ln}">Alma</text><line x1="44" y1="97" x2="66" y2="97" stroke="${ln}"/>`;
+  return `<svg viewBox="0 0 230 190" class="dsvg" role="img" aria-label="Viga soldada al alma de la columna, en planta">${h}</svg>`;
 }
 function figDebil(dos){ return `<figure class="fig-ayuda">${svgPlantaDebil(dos)}<figcaption>Vista en planta. El alma de la columna es delgada y se doblaría con la fuerza de las alas de la viga; por eso se ponen placas de continuidad (azul) a la altura de las alas, soldadas al alma y a las dos alas de la columna. Las alas de la viga se sueldan a las placas.</figcaption></figure>`; }
 function svgCorteDebil(op, o = {}){
