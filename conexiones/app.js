@@ -186,23 +186,23 @@ function figContinuidad(dos){
     <line x1="104" y1="126" x2="64" y2="146" stroke="${azulB}"/><text x="60" y="150" text-anchor="end" font-size="9" fill="${azulB}">Placa ts</text>
   </svg><figcaption>Las placas de continuidad van dentro de la columna, entre sus dos alas, a la altura de las alas de la viga. Rigidizan el ala y el alma de la columna donde llega la fuerza de cada ala.</figcaption></figure>`;
 }
-function figDebil(dos){
+function svgPlantaDebil(dos, op){
   const ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
-  return `<figure class="fig-ayuda"><svg viewBox="0 0 230 190" role="img" aria-label="Viga soldada al alma de la columna, en planta">
+  return `<svg viewBox="0 0 230 190" class="dsvg" role="img" aria-label="Viga soldada al alma de la columna, en planta">
     <rect x="62" y="70" width="104" height="54" fill="${azul}" stroke="${azulB}" opacity=".75"/>${dos ? `<rect x="62" y="124" width="104" height="0" stroke="none"/>` : ''}
     <rect x="56" y="58" width="8" height="78" fill="#cbd5e1" stroke="${ln}"/><rect x="164" y="58" width="8" height="78" fill="#cbd5e1" stroke="${ln}"/>
     <rect x="64" y="94" width="100" height="6" fill="#cbd5e1" stroke="${ln}"/>
     <rect x="84" y="4" width="60" height="64" fill="#f1f5f9" stroke="${ln}"/><line x1="114" y1="4" x2="114" y2="94" stroke="${ln}" stroke-width="3"/>
-    <rect x="84" y="66" width="60" height="4" fill="${nar}"/>
+    ${op === 'trasl' ? `<rect x="84" y="24" width="60" height="46" fill="${azul}" stroke="${azulB}" opacity=".8"/><path d="M84 24 v46 M144 24 v46 M84 24 h60" stroke="${nar}" stroke-width="2.5" fill="none"/>` : `<rect x="84" y="66" width="60" height="4" fill="${nar}"/>`}
     ${dos ? `<rect x="84" y="126" width="60" height="60" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="3 2"/><line x1="114" y1="100" x2="114" y2="186" stroke="#94a3b8" stroke-width="3" stroke-dasharray="3 2"/>` : ''}
     <text x="114" y="30" text-anchor="middle" font-size="10" fill="${ln}">Viga</text>
     <text x="114" y="${dos ? 160 : 150}" text-anchor="middle" font-size="9" fill="${dos ? '#94a3b8' : ln}">${dos ? 'Otra viga' : 'Columna (planta)'}</text>
     <line x1="160" y1="80" x2="196" y2="66" stroke="${azulB}"/><text x="198" y="58" font-size="9" fill="${azulB}">Placa</text><text x="198" y="69" font-size="9" fill="${azulB}">ts</text>
     <line x1="144" y1="68" x2="196" y2="40" stroke="${nar}"/><text x="198" y="36" font-size="9" fill="${nar}">Sold.</text>
     <text x="24" y="100" font-size="9" fill="${ln}">Alma</text><line x1="44" y1="97" x2="66" y2="97" stroke="${ln}"/>
-  </svg><figcaption>Vista en planta. El alma de la columna es delgada y se doblaría con la fuerza de las alas de la viga; por eso se ponen placas de continuidad (azul) a la altura de las alas, soldadas al alma y a las dos alas de la columna. Las alas de la viga se sueldan a las placas.</figcaption></figure>`;
+  </svg>`;
 }
-// Corte por el eje de la viga cuando llega al alma de la columna (pedido de Amo 20-nov): A = alas a tope (CJP), B = placa traslapada
+function figDebil(dos){ return `<figure class="fig-ayuda">${svgPlantaDebil(dos)}<figcaption>Vista en planta. El alma de la columna es delgada y se doblaría con la fuerza de las alas de la viga; por eso se ponen placas de continuidad (azul) a la altura de las alas, soldadas al alma y a las dos alas de la columna. Las alas de la viga se sueldan a las placas.</figcaption></figure>`; }
 function svgCorteDebil(op, o = {}){
   const ln = '#475569', az = '#93c5fd', azB = '#1d4ed8', nar = '#ea580c', t = (x, y, s, a = 'start', col = ln, fs = 11) => `<text x="${x}" y="${y}" font-size="${fs}" fill="${col}" text-anchor="${a}">${s}</text>`;
   let h = `<defs><pattern id="hc${op}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#64748b" stroke-width="1.2"/></pattern></defs>
@@ -229,10 +229,10 @@ function svgCorteDebil(op, o = {}){
   h += t(330, 140, o.viga ? `Viga ${o.viga}` : 'Viga (alma)', 'start', ln, 12);
   return `<svg viewBox="0 0 500 300" class="dsvg" role="img" aria-label="Corte de la unión al alma de la columna">${h}</svg>`;
 }
-function figCorteDebil(op){
-  return `<figure class="fig-ayuda">${svgCorteDebil(op)}<figcaption>${op === 'tope'
-    ? 'Corte por el eje de la viga. Las alas de la viga se cortan y se sueldan a tope (penetración completa) con el borde de la placa, en el mismo plano; la placa sale 50–75 mm fuera de las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'
-    : 'Corte por el eje de la viga. La viga entra completa entre las alas de la columna; una placa va encima del ala superior y otra debajo de la inferior, soldadas con filete por sus bordes sobre el ala (largo Lt) y al alma y a las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'}</figcaption></figure>`;
+function figCorteDebil(op, dos){
+  return `<figure class="fig-ayuda"><div class="fig-par"><div><div class="fig-tit">Planta</div>${svgPlantaDebil(dos, op)}</div><div><div class="fig-tit">Corte por el eje de la viga</div>${svgCorteDebil(op)}</div></div><figcaption>En planta, las placas de continuidad (azul) van a la altura de las alas de la viga, soldadas al alma y a las dos alas de la columna. ${op === 'tope'
+    ? 'En el corte: las alas de la viga se cortan y se sueldan a tope (penetración completa) con el borde de la placa, en el mismo plano; la placa sale 50–75 mm fuera de las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'
+    : 'En el corte: la viga entra completa entre las alas de la columna; una placa va encima del ala superior y otra debajo de la inferior, soldadas con filete por sus bordes sobre el ala (largo Lt) y al alma y a las alas de la columna. El alma de la viga se suelda con filete al alma de la columna.'}</figcaption></figure>`;
 }
 function figPlacaApoyo(){
   const col = '#cbd5e1', ln = '#475569', nar = '#ea580c';
@@ -295,7 +295,7 @@ function seccionesDe(c){
         + (c.soporte === 'alma'
           ? conFig(`<div class="fg g3">${[campo(c, 'uDebil', 'Unión de las alas a las placas', { sel:[['trasl', 'B · Placa traslapada con filete'], ['tope', 'A · Alas a tope (CJP)']] }), campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }),
               ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete placa–columna [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]),
-              ...(c.uDebil === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { h:'Largo de la placa sobre el ala' }), campo(c, 'wT', 'Filete placa–ala [mm]')])].join('')}</div>`, figCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl'), 'ancho')
+              ...(c.uDebil === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { h:'Largo de la placa sobre el ala' }), campo(c, 'wT', 'Filete placa–ala [mm]')])].join('')}</div>`, figCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl', c.dosLados), 'ancho')
           : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados))))],
     ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
@@ -752,7 +752,7 @@ function dibBase(c, r){
   return svgW(X(Lp / 2) + 70, Y(Wp / 2) + 36, h, 'Placa base: planta', `Planta · columna ${esc(cl.nom)} · el sentido N es el del peralte`);
 }
 function dibSoldada(c, r){
-  if(c.soporte === 'alma'){ const g = r.geo; return svgCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl', { ts:g.rig?.ts, Lt:c.Lt, wT:c.wT, w:c.union === 'cjp' ? '' : c.w, viga:g.m.nom })
+  if(c.soporte === 'alma'){ const g = r.geo; return `<div class="fig-par"><div><div class="fig-tit">Planta</div>${svgPlantaDebil(c.dosLados, c.uDebil === 'tope' ? 'tope' : 'trasl')}</div><div><div class="fig-tit">Corte por el eje de la viga</div>${svgCorteDebil(c.uDebil === 'tope' ? 'tope' : 'trasl', { ts:g.rig?.ts, Lt:c.Lt, wT:c.wT, w:c.union === 'cjp' ? '' : c.w, viga:g.m.nom })}</div></div>`
     + `<div class="hint" style="text-align:center">Corte por el eje de la viga · viga al alma de ${esc(c.columna)} · ${c.uDebil === 'tope' ? 'alas a tope (CJP) con la placa' : 'placas traslapadas sobre las alas'}</div>`; }
   const al = c.soporte === 'alma', m = r.geo.m, cl0 = c.soporte !== 'placa' ? Conex.perfil(c.columna) : null, cl = al ? null : cl0, ts = al && cl0 ? cl0.tw : cl ? cl.tf : +c.tSop || 20, dc = cl ? cl.d : al && r.geo.rig ? ts + r.geo.rig.bs + 30 : al ? 60 : ts;
   const k = 240 / (m.d + 80), X = v => 30 + (v + dc) * k, Y = v => 40 + v * k, Ls = 260, cjp = c.union === 'cjp', w = cjp ? 6 : +c.w;

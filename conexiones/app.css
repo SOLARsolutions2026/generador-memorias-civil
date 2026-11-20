@@ -130,3 +130,9 @@ h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
 .sec-bd > .fig-ayuda{max-width:300px;margin-top:8px}
 @media (max-width:700px){.con-fig{grid-template-columns:1fr}.con-fig .fig-ayuda{max-width:300px}}
 .con-fig.ancho{grid-template-columns:1fr}.con-fig.ancho .fig-ayuda{max-width:520px}
+.fig-par{display:grid;grid-template-columns:1fr;gap:12px}
+.fig-par svg{width:100%;height:auto;display:block}
+.fig-par > div:first-child svg{max-width:300px;margin:0 auto}
+.fig-tit{font-size:11px;font-weight:600;color:#0f2d5e;margin-bottom:2px}
+.con-fig.ancho .fig-ayuda{max-width:none}
+@media (max-width:700px){.fig-par{grid-template-columns:1fr}}
