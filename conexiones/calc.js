@@ -386,7 +386,7 @@ function calcTesta(c){
   // 3. Placa: líneas de fluencia (placa gruesa: φd·Mpl ≥ 1.11·Mf o 1.11·φMnp)
   const sP = 0.5 * Math.sqrt(bp * g), pfiY = Math.min(pfi, sP);
   let Yp;
-  if(ras) Yp = nfR === 1 ? bp / 2 * (h1 * (1 / pfiY + 1 / sP) - 0.5) + 2 / g * (h1 * (pfiY + sP))
+  if(ras) Yp = nfR === 1 ? bp / 2 * (h1 * (1 / pfiY + 1 / sP)) + 2 / g * (h1 * (pfiY + sP))   // Guía AISC 16 (2 pernos a ras), confirmada 20-nov con el ejemplo de Murray et al. (NASCC 2003): Yp = 100.5 in
     : bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h2 / sP - 0.5) + 2 / g * (h1 * (pfiY + 0.75 * pb) + h2 * (sP + 0.25 * pb)) + g / 2;    // Guía AISC 16
   else if(e8){ const { h1:a1, h2:a2, h3:a3, h4:a4 } = H;                // AISC 358 Tabla 6.4 / Guía 4 (8ES)
     Yp = de <= sP ? bp / 2 * (a1 / (2 * de) + a2 / pfo + a3 / pfi + a4 / sP) + 2 / g * (a1 * (de + pb / 4) + a2 * (pfo + 3 * pb / 4) + a3 * (pfi + pb / 4) + a4 * (sP + 3 * pb / 4) + pb * pb) + g
@@ -460,6 +460,19 @@ function calcTesta(c){
     if(ras) Yc = nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2 : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;   // por confirmar (Guía 16)
     else if(e8) Yc = cl.bf / 2 * (H.h1 / sC + H.h4 / sC) + 2 / g * (H.h1 * (pb + cc / 2 + sC) + H.h2 * (pb / 2 + cc / 4) + H.h3 * (pb / 2 + cc / 2) + H.h4 * sC) + g / 2;   // AISC 358-22 Tabla 6.6 sin rigidizar (8ES), confirmada 20-nov
     else Yc = cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2;
+    // Chapa a ras (opción A de Amo, 20-nov): el Yc de la Guía 16 sigue POR CONFIRMAR → se revisa también el ala como T equivalente
+    // con palanca (Manual AISC parte 9) y se usa el menor de los dos.
+    if(ras){
+      const B = 0.75 * Pt, bb = g / 2 - cl.tw / 2, aa = Math.min((cl.bf - g) / 2, 1.25 * bb), bpr = bb - d / 2, apr = aa + d / 2, rho = bpr / apr;
+      const pp = (2 * sC + (nfR - 1) * pb) / nfR, delta = 1 - agujero(d) / pp;
+      const tcT = Math.sqrt(4 * B * 1000 * bpr / (0.9 * pp * ac.Fu));
+      let alT = (1 / (delta * (1 + rho))) * ((tcT / cl.tf) ** 2 - 1); alT = Math.max(0, Math.min(1, alT));
+      const QT = cl.tf >= tcT ? 1 : Math.min(1, (cl.tf / tcT) ** 2 * (1 + delta * alT));
+      const phiMT = 2 * B * QT * sumH / 1000, YcT = phiMT * 1e6 / (phD * ac.Fy * cl.tf * cl.tf);
+      pasos.push(`Ala de la columna a ras, segundo método (T equivalente con palanca, Manual AISC parte 9): b = g/2 − tw/2 = ${r1(bb)}, a = ${r1(aa)}, p = ${r1(pp)} mm por fila, B = φ·Pt = ${r2(B)} kN, tc = ${r1(tcT)} mm, Q = ${r3(QT)} → φM = 2·B·Q·Σh = ${r2(phiMT)} kN·m (equivale a Yc = ${Math.round(YcT)} mm); Yc de la Guía 16 = ${Math.round(Yc)} mm (por confirmar) → se usa el menor`);
+      av.push('Chapa a ras: la fórmula del ala de la columna de la Guía AISC 16 está por confirmar; la app también la revisa como T equivalente con palanca (Manual AISC parte 9) y usa el menor de los dos resultados.');
+      if(YcT < Yc) Yc = YcT;
+    }
     // Demanda en el ala: sin sismo, Mu (la palanca se avisa con tcf,req de placa gruesa); con sismo, 1.11·Mf (AISC 358)
     const demCf = sis ? 1.11 * Mu : Mu, demThick = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
     const phiMcf = phD * ac.Fy * cl.tf * cl.tf * Yc / 1e6, tcfReq = Math.sqrt(demThick * 1e6 / (phD * ac.Fy * Yc));
