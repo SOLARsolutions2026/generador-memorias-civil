@@ -1193,9 +1193,9 @@ function calcSoldada(c){
   let tsW = 0;
   if(alma && (Mcol > 0 || c.rigCol === 'si') && c.rigCol !== 'no'){
     const b = Math.min(m.bf, cl.d - 2 * cl.tf), bsW = (cl.bf - cl.tw) / 2;
-    const tReq = Math.max(c.uDebil === 'tope' ? m.tf : 6.4, FfuE * 1000 / (0.9 * arW.Fy * b), bsW / (0.56 * Math.sqrt(E / arW.Fy)));
+    const tReq = Math.max(c.uDebil === 'tope' && !m.tub ? m.tf : 6.4, FfuE * 1000 / (0.9 * arW.Fy * b), bsW / (0.56 * Math.sqrt(E / arW.Fy)));
     tsW = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1); }
-  const dosA = alma && !!c.dosLados, tope = c.uDebil === 'tope';
+  const dosA = alma && !!c.dosLados, tope = c.uDebil === 'tope' && !m.tub;          // tubo: siempre placa traslapada sobre la cara (pedido de Amo 20-nov)
   // Traslapada: la fuerza de cada ala pasa a la placa con brazo d + ts (placas por fuera de las alas)
   const FfuA = alma && tsW && !tope ? Mcol * 1000 / (m.d + tsW) + Math.abs(P) / 2 : FfuE;
 
@@ -1225,16 +1225,18 @@ function calcSoldada(c){
         req.push(['Alas a tope: soldadura de penetración completa con bisel y respaldo; inspección (ultrasonido recomendado)', true, 'indicar en planos']);
       } else {
         const Lt = +c.Lt || 0, wT = +c.wT || 0, fwT = fw2(FEXX, wT), Rl = 2 * Lt * fwT, Rt = b * fwT, cap = Math.max(Rl + Rt, 0.85 * Rl + 1.5 * Rt);
-        pasos.push(`Placas traslapadas por fuera de las alas (encima del ala superior y debajo de la inferior): brazo d + ts → F = M/(d + ts) + P/2 = ${r2(FfuA)} kN; filetes de ${wT} mm: 2 longitudinales de ${Lt} mm + 1 transversal de ${r1(b)} mm (J2.4c: máx(Rl + Rt; 0.85Rl + 1.5Rt) = ${r2(cap)} kN)`);
-        add('soldadura', 'Filetes de la placa sobre el ala de la viga', 'F.2.10.2.4 (J2-4, J2.4c), φ = 0.75', FfuA, cap, 'kN', `2 × ${Lt} mm + ${r1(b)} mm, w = ${wT} mm`);
+        pasos.push(`${m.tub ? "Placas traslapadas por fuera del tubo (encima de la cara superior y debajo de la inferior)" : "Placas traslapadas por fuera de las alas (encima del ala superior y debajo de la inferior)"}: brazo d + ts → F = M/(d + ts) + P/2 = ${r2(FfuA)} kN; filetes de ${wT} mm: 2 longitudinales de ${Lt} mm + 1 transversal de ${r1(b)} mm (J2.4c: máx(Rl + Rt; 0.85Rl + 1.5Rt) = ${r2(cap)} kN)`);
+        add('soldadura', m.tub ? 'Filetes de la placa sobre la cara del tubo' : 'Filetes de la placa sobre el ala de la viga', 'F.2.10.2.4 (J2-4, J2.4c), φ = 0.75', FfuA, cap, 'kN', `2 × ${Lt} mm + ${r1(b)} mm, w = ${wT} mm`);
         const blq = (Fu, t) => 0.75 * (0.6 * Fu * 2 * Lt * t + Fu * b * t) / 1000;
         add('placas', 'Placa: rotura junto a los filetes (bloque)', 'F.2.10.4.3 (J4-5), φ = 0.75', FfuA, blq(arW.Fu, tsW), 'kN', `0.6·Fu·2Lt·ts + Fu·b·ts, ts = ${tsW} mm`);
-        add('viga', 'Ala de la viga: rotura junto a los filetes (bloque)', 'F.2.10.4.3 (J4-5), φ = 0.75', FfuA, blq(am.Fu, m.tf), 'kN', `0.6·Fu·2Lt·tf + Fu·b·tf, tf = ${m.tf} mm`);
+        add('viga', m.tub ? 'Cara del tubo: rotura junto a los filetes (bloque)' : 'Ala de la viga: rotura junto a los filetes (bloque)', 'F.2.10.4.3 (J4-5), φ = 0.75', FfuA, blq(am.Fu, m.tf), 'kN', `0.6·Fu·2Lt·t + Fu·b·t, ${m.tub ? 'pared' : 'tf'} = ${m.tf} mm`);
         const tm = Math.min(tsW, m.tf);
-        req.push(['Filete de la placa sobre el ala ≥ mínimo Tabla J2.4', wT >= wMinT(tm), `${wT} ≥ ${wMinT(tm)} mm`]);
+        req.push([m.tub ? 'Filete de la placa sobre el tubo ≥ mínimo Tabla J2.4' : 'Filete de la placa sobre el ala ≥ mínimo Tabla J2.4', wT >= wMinT(tm), `${wT} ≥ ${wMinT(tm)} mm`]);
         req.push(['Filete en el borde de la placa ≤ ts − 1.6 mm (J2.2b)', tsW < 6 ? wT <= tsW : wT <= tsW - 1.6 + 1e-6, `${wT} ≤ ${r1(tsW < 6 ? tsW : tsW - 1.6)} mm`]);
         if(Lt < b) av.push(`El traslapo (${Lt} mm) es más corto que el ancho de la placa (${r1(b)} mm); se recomienda Lt ≥ b para repartir bien la fuerza.`);
-        av.push('Placa traslapada: queda fuera del plano del ala; la pequeña excentricidad (tf + ts)/2 no se revisa. Las placas van encima del ala superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.');
+        if(m.tub){ if(c.uDebil === 'tope') av.push('Con viga de tubo las placas van traslapadas sobre las caras superior e inferior del tubo (no a tope); se calculó así.');
+          av.push(`Tubo: los filetes longitudinales de la placa deben quedar sobre la cara plana del tubo (ancho plano ≈ B − 4t = ${r1(m.bf - 4 * m.tf)} mm). Si la placa es más ancha que el tubo, esos cordones quedan en la esquina redondeada (bisel abocinado, J2.1a, garganta ≈ 5/16·R) y deben revisarse aparte.`); }
+        av.push(m.tub ? 'Placa traslapada: queda fuera del plano de la cara del tubo; la pequeña excentricidad (t + ts)/2 no se revisa. Las placas van encima de la cara superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.' : 'Placa traslapada: queda fuera del plano del ala; la pequeña excentricidad (tf + ts)/2 no se revisa. Las placas van encima del ala superior y debajo de la inferior, soldadas también al alma y a las alas de la columna.');
         // 💡 traslapo y filete mínimos que cumplen
         { let best = null;
           [5, 6, 8, 10, 12, 14, 16].filter(x => x >= wMinT(tm) && x <= (tsW < 6 ? tsW : tsW - 1.6)).forEach(x => { for(let L = Math.max(75, Math.ceil(b / 25) * 25); L <= 450; L += 25){ const f = fw2(FEXX, x), rl = 2 * L * f, rt = b * f, cp = Math.max(rl + rt, 0.85 * rl + 1.5 * rt);
