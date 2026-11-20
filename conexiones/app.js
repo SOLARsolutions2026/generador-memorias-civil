@@ -208,11 +208,17 @@ function seccionesDe(c){
       + (c.soporte === 'placa' ? '' : ck('colTope', 'La unión está en el extremo superior de la columna'))] ];
   if(c.tipo === 'ras') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))], colSec(),
-    ['placa', 'Placa de testa', () => `PL ${c.tp} × ${c.bp} mm ${c.aceroPl}`, g3(campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }))
+    ['placa', 'Placa de testa', () => `PL ${c.tp} × ${c.bp} mm ${c.aceroPl} · ${c.placaTipo === 'delgada' ? 'delgada con palanca' : 'gruesa sin palanca'}`,
+      g3(campo(c, 'placaTipo', 'Método de la placa', { sel:[['gruesa', 'Placa gruesa (sin palanca)'], ['delgada', 'Placa delgada (con palanca)']], h:c.placaTipo === 'delgada' ? 'Placa más liviana; los pernos se revisan con la fuerza de palanca' : 'Placa más gruesa; los pernos solo con tensión directa' }),
+        campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }))
       + ck('ambos', 'El momento cambia de sentido (pernos también bajo el ala inferior)')],
     ['pern', 'Pernos', () => `${c.filas} fila(s) × 2 · ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g} · pfi ${c.pfi}${+c.filas === 2 ? ` · pb ${c.pb}` : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas bajo el ala en tensión', { sel:[['1', '1 fila (2 pernos)'], ['2', '2 filas (4 pernos)']] }), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'pfi', 'pfi: ala a 1.ª fila [mm]'),
-        +c.filas === 2 ? campo(c, 'pb', 'pb: entre filas [mm]') : '', c.ambos ? '' : campo(c, 'nbc', 'Pernos de cortante abajo'))], solds() ];
+        +c.filas === 2 ? campo(c, 'pb', 'pb: entre filas [mm]') : '', c.ambos ? '' : campo(c, 'nbc', 'Pernos de cortante abajo'))
+      + ck('cortTodos', 'El cortante lo toman todos los pernos (los de arriba se revisan con tensión y cortante, J3-7)')], solds(),
+    ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `pórtico ${c.sismo} — no precalificada` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }))
+      + (c.sismo === 'DMO' || c.sismo === 'DES' ? '<div class="note red">La chapa de testa a ras NO está precalificada para pórticos DMO ni DES (AISC 358): la conexión sale «No cumple». Use la chapa de testa extendida (4E u 8ES) o la soldada.</div>' : '')] ];
   if(c.tipo === 'testaV') return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }))],
     ['sop', 'Soporte', () => `t ${c.tSop} mm · ${c.aceroSop}`, g3(campo(c, 'tSop', 'Espesor del soporte [mm]', { h:'Ala o alma de la columna, alma de la viga' }), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })) + ck('dosLados', 'Hay otra conexión al otro lado (comparte los pernos)')],
@@ -386,7 +392,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };

@@ -308,18 +308,24 @@ function calcTesta(c){
       if(sis === 'DES') av.push('Pórtico DES: revise también columna fuerte–viga débil (ΣM*pc/ΣM*pb > 1) y la zona de panel con NSR-10 F.3.5 (AISC 341 E3); esta app no tiene la carga axial de la columna.'); } }
 
   // 1. Pernos a tensión sin palanca: φMnp = φ·2·Pt·Σh
-  const Pt = B.Fnt * Ab / 1000, phiMnp = phB * 2 * Pt * sumH / 1000;
-  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = Fnt·Ab = ${B.Fnt}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = ${phB}·2·Pt·Σh = ${r2(phiMnp)} kN·m (Σh = ${r1(sumH)} mm)`);
-  add('pernos', 'Rotura de los pernos a tensión (sin palanca)', `F.2.10.3.6 (J3-1) · ${sis ? 'AISC 358 (6.10-?) φn = 0.90' : 'Guía AISC 4'}`, Mu, phiMnp, 'kN·m',
-    `Pt = ${r2(Pt)} kN, ` + Object.entries(H).filter(([, v]) => v).map(([k, v]) => `${k.replace('h', 'h')} = ${r1(v)}`).join(', ') + ' mm');
-  // 2. Pernos a cortante en la zona de compresión
   const nb = c.ambos ? (ras ? 2 * nfR : e8 ? 8 : 4) : Math.max(0, Math.round(+c.nbc || 0));
-  const rv = phB * B[c.rosca === 'X' ? 'X' : 'N'] * Ab / 1000;
+  // A ras (pedido de Amo 20-nov): el cortante lo pueden tomar todos los pernos → los de tensión se revisan con J3-7
+  const todos = ras && !!c.cortTodos, nAll = 2 * nfR + nb, Fnv = B[c.rosca === 'X' ? 'X' : 'N'];
+  let FntE = B.Fnt;
+  if(todos){ const frv = Vu * 1000 / (nAll * Ab); FntE = Math.max(0, Math.min(B.Fnt, 1.3 * B.Fnt - B.Fnt / (phB * Fnv) * frv));
+    pasos.push(`Cortante en todos los pernos (${nAll}): frv = Vu/(n·Ab) = ${r1(frv)} MPa → tensión disponible con cortante (J3-3a): F'nt = 1.3·Fnt − Fnt/(φ·Fnv)·frv = ${r1(FntE)} MPa ≤ Fnt = ${B.Fnt} MPa`); }
+  const Pt = FntE * Ab / 1000, phiMnp = phB * 2 * Pt * sumH / 1000;
+  const delg = ras && c.placaTipo === 'delgada';
+  pasos.push(`Pernos: Ab = ${r1(Ab)} mm², Pt = ${todos ? "F'nt" : 'Fnt'}·Ab = ${r1(FntE)}·${r1(Ab)} = ${r2(Pt)} kN; φMnp = ${phB}·2·Pt·Σh = ${r2(phiMnp)} kN·m (Σh = ${r1(sumH)} mm)`);
+  if(!delg) add('pernos', `Rotura de los pernos a tensión (sin palanca)${todos ? ' con cortante' : ''}`, `F.2.10.3.6 (J3-1${todos ? ', J3-3a' : ''}) · ${sis ? 'AISC 358 (6.10-?) φn = 0.90' : 'Guía AISC 4'}`, Mu, phiMnp, 'kN·m',
+    `Pt = ${r2(Pt)} kN, ` + Object.entries(H).filter(([, v]) => v).map(([k, v]) => `${k.replace('h', 'h')} = ${r1(v)}`).join(', ') + ' mm');
+  // 2. Pernos a cortante en la zona de compresión (o en todos)
+  const rv = phB * Fnv * Ab / 1000;
   const bPl = ras ? Infinity : aplast(de - dh / 2, tp, d, pl.Fu).phiRn, bPlI = 2.4 * d * tp * pl.Fu * 0.75 / 1000;
   const bCol = cl ? 0.75 * 2.4 * d * cl.tf * ac.Fu / 1000 : Infinity;
   const rb = Math.min(rv, c.ambos ? Math.min(bPl, bPlI) : bPlI, bCol);
-  add('pernos', `Cortante en los ${nb} pernos de la zona de compresión`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', Vu, nb * rb, 'kN', `φrn = ${r2(rb)} kN por perno (corte ${r2(rv)}, aplastamiento placa ${r2(Math.min(bPl, bPlI))}${cl ? `, ala columna ${r2(bCol)}` : ''})`);
-  if(!nb) av.push('No hay pernos en la zona de compresión para tomar el cortante.');
+  add('pernos', todos ? `Cortante repartido en los ${nAll} pernos` : `Cortante en los ${nb} pernos de la zona de compresión`, 'F.2.10.3.6 y F.2.10.3.10 (J3-1, J3-6)', Vu, (todos ? nAll : nb) * rb, 'kN', `φrn = ${r2(rb)} kN por perno (corte ${r2(rv)}, aplastamiento placa ${r2(Math.min(bPl, bPlI))}${cl ? `, ala columna ${r2(bCol)}` : ''})`);
+  if(!nb && !todos) av.push('No hay pernos en la zona de compresión para tomar el cortante.');
 
   // 3. Placa: líneas de fluencia (placa gruesa: φd·Mpl ≥ 1.11·Mf o 1.11·φMnp)
   const sP = 0.5 * Math.sqrt(bp * g), pfiY = Math.min(pfi, sP);
@@ -330,11 +336,35 @@ function calcTesta(c){
     Yp = de <= sP ? bp / 2 * (a1 / (2 * de) + a2 / pfo + a3 / pfi + a4 / sP) + 2 / g * (a1 * (de + pb / 4) + a2 * (pfo + 3 * pb / 4) + a3 * (pfi + pb / 4) + a4 * (sP + 3 * pb / 4) + pb * pb) + g
                   : bp / 2 * (a1 / sP + a2 / pfo + a3 / pfi + a4 / sP) + 2 / g * (a1 * (sP + pb / 4) + a2 * (pfo + 3 * pb / 4) + a3 * (pfi + pb / 4) + a4 * (sP + 3 * pb / 4) + pb * pb) + g; }
   else Yp = bp / 2 * (h1 * (1 / pfiY + 1 / sP) + h0 / pfo - 0.5) + 2 / g * (h1 * (pfiY + sP));
-  const demPl = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
+  const demPl = delg ? Mu : sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
   const phiMpl = phD * pl.Fy * tp * tp * Yp / 1e6, tpReq = Math.sqrt(demPl * 1e6 / (phD * pl.Fy * Yp));
   pasos.push(`Placa: s = ½√(bp·g) = ${r1(sP)} mm${pfi > sP && !e8 ? ` (pfi se limita a s)` : ''}; Yp = ${Math.round(Yp)} mm; φMpl = ${phD}·Fy·tp²·Yp = ${r2(phiMpl)} kN·m`);
+  if(delg){
+    // Placa delgada (Guía AISC 16, cap. 3): la placa resiste Mu y los pernos se revisan con la fuerza de palanca (Kennedy modificado)
+    pasos.push(`Placa delgada: φMpl = ${r2(phiMpl)} kN·m ≥ Mu; espesor mínimo tp = √(Mu/(φ·Fy·Yp)) = ${r1(tpReq)} mm`);
+    add('placa', 'Placa delgada: flexión por líneas de fluencia', 'Guía AISC 16 §3 · φ = 0.90', demPl, phiMpl, 'kN·m', `Mu contra φ·Fy·tp²·Yp; tp,mín = ${r1(tpReq)} mm`);
+    const TB = { A325:{ 12.7:53, 15.9:85, 19.1:125, 22.2:173, 25.4:227, 28.6:250 }, A490:{ 12.7:67, 15.9:106, 19.1:156, 22.2:218, 25.4:285, 28.6:357 } }[c.grado] || {};
+    const kTb = Object.keys(TB).map(Number).reduce((m, x) => Math.abs(x - d) < Math.abs(m - d) ? x : m, 19.1), Tb = TB[kTb] || 0;
+    const wp = bp / 2 - (dh + 1.6), aIn = 3.682 * (tp / d) ** 3 - 0.085, a = Math.max(1, 25.4 * aIn);
+    const Fp = (tp * tp * pl.Fy * (0.85 * bp / 2 + 0.80 * wp) + Math.PI * d ** 3 * B.Fnt / 8) / (4 * pfiY);      // N
+    const rad = pl.Fy ** 2 - 3 * (Fp / (wp * tp)) ** 2;
+    const Q = rad > 0 ? wp * tp * tp / (4 * a) * Math.sqrt(rad) / 1000 : Pt;                                       // kN por perno
+    const Mq1 = 2 * Math.max(0, Pt - Q) * sumH / 1000, Mq2 = 2 * Tb * sumH / 1000, phMq = 0.75 * Math.max(Mq1, Mq2);
+    pasos.push(`Palanca (Kennedy modificado, Guía AISC 16): w' = bp/2 − (dh + 1.6) = ${r1(wp)} mm; a = 3.682(tp/db)³ − 0.085 = ${r1(a)} mm; F' = [tp²·Fy(0.85bp/2 + 0.80w') + π·db³·Fnt/8]/(4pfi) = ${r2(Fp / 1000)} kN; Qmáx = w'·tp²/(4a)·√(Fy² − 3(F'/(w'tp))²) = ${rad > 0 ? r2(Q) : '— (la placa no alcanza: se toma Q = Pt)'} kN`);
+    pasos.push(`φMq = 0.75·máx[2(Pt − Qmáx)·Σh; 2·Tb·Σh] = 0.75·máx[${r2(Mq1)}; ${r2(Mq2)}] = ${r2(phMq)} kN·m (Tb = ${Tb} kN, pretensión mínima Tabla J3.1)`);
+    add('pernos', `Pernos a tensión con palanca${todos ? ' y cortante' : ''}`, 'Guía AISC 16 §3 (Kennedy modificado) · F.2.10.3.6', Mu, phMq, 'kN·m', `Pt = ${r2(Pt)} kN, Qmáx = ${r2(Q)} kN, Tb = ${Tb} kN`);
+    if(!Tb) av.push('Pernos A307: no tienen pretensión mínima; con placa delgada use A325 o A490.');
+    if(aIn <= 0) av.push('La placa es muy delgada frente al perno (tp/db pequeño): la palanca es muy grande; aumente tp.');
+    av.push('Placa delgada: los pernos trabajan con fuerza de palanca; deben ir pretensionados.');
+  } else {
   pasos.push(`Espesor para comportamiento de placa gruesa: tp,req = √(${sis ? '1.11·Mf' : '1.11·γr·φMnp'}/(${phD}·Fy·Yp)) = ${r1(tpReq)} mm${sis ? '' : ` (γr = ${gr})`}`);
-  add('placa', 'Placa gruesa: flexión por líneas de fluencia', `Guía AISC 4/16${sis ? ' · AISC 358' : ''} · φ = ${phD}`, demPl, phiMpl, 'kN·m', `exige ${sis ? '1.11·Mf' : `1.11·γr·φMnp (γr = ${gr})`}; tp,req = ${r1(tpReq)} mm`);
+  add('placa', 'Placa gruesa: flexión por líneas de fluencia', `Guía AISC 4/16${sis ? ' · AISC 358' : ''} · φ = ${phD}`, demPl, phiMpl, 'kN·m', `exige ${sis ? '1.11·Mf' : `1.11·γr·φMnp (γr = ${gr})`}; tp,req = ${r1(tpReq)} mm`); }
+  if(ras){
+    // Cortante de la placa (pedido de Amo 20-nov): Vu pasa del alma a los pernos por dos planos verticales
+    const hpl = db + 50, nfil = nfR + Math.ceil(nb / 2);
+    add('placa', 'Fluencia por cortante de la placa', 'F.2.10.4.2 (J4-3), φ = 1.00', Vu, 1.0 * 0.6 * pl.Fy * 2 * hpl * tp / 1000, 'kN', `2 planos a cada lado del alma: Agv = 2·${hpl}·tp = ${r1(2 * hpl * tp)} mm²`);
+    const Anv = 2 * (hpl - nfil * dn) * tp;
+    add('placa', 'Rotura por cortante de la placa (por la línea de pernos)', 'F.2.10.4.2 (J4-4), φ = 0.75', Vu, 0.75 * 0.6 * pl.Fu * Anv / 1000, 'kN', `Anv = 2·(${hpl} − ${nfil}·${r1(dn)})·tp = ${r1(Anv)} mm²`); }
   if(!ras){
     add('placa', 'Fluencia por cortante de la extensión', 'F.2.10.4.2 (J4-3)', Ffu / 2, 1.0 * 0.6 * pl.Fy * bp * tp / 1000, 'kN', `Ffu/2; Agv = bp·tp = ${r1(bp * tp)} mm²`);
     const An = (bp - 2 * dn) * tp;
@@ -1117,7 +1147,7 @@ function calcEmpZ(c){
   return fin(ch, req, av, pasos, { pf:{ nom, d, bf, tw, tf }, a, Q });
 }
 
-function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170 }; }
+function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170, placaTipo:'gruesa', cortTodos:false }; }
 
 // ── Nudo: varias vigas que llegan a la misma columna (opción C de Amo, 19-nov) ─────────────
 // Cada conexión se diseña sola; el nudo revisa lo que comparten: zona de panel con las dos vigas del eje fuerte,
