@@ -5,7 +5,7 @@
      interacción biaxial con esfuerzos en los puntos de la sección (H2), combinaciones B.2.4 con presión y succión,
      coeficientes correctos de vigas continuas, deflexión en servicio, peso propio.
    - Madera: Lr mínimo según pendiente, desviación del grano con aviso fuera de tabla, flexión biaxial amplificada,
-     le con tres tramos, opción de diafragma, E0.5/E0.05 para deflexión y Emin solo para estabilidad, deflexión diferida,
+     le con tres tramos, opción de diafragma, E0.5/E0.05 para deflexión y Emin solo para estabilidad, deflexión diferida (1.5 seca / 1.8 húmeda),
      límites de la Tabla G.3.2-1 según cielo raso, Cr solo en Fb (S ≤ 0.61 m), humedad interpolada, Cl continuo.
    - Viento: B.6.5, componentes y revestimiento; edificación cerrada / parcialmente cerrada (GCp de cubiertas, h ≤ 18 m)
      o cubierta libre (el mismo cálculo del Anexo A). Cálculo puro: sin pantalla. */
@@ -269,8 +269,13 @@ function calcHSS(cor, q, combos, srv, ac){
   return { P, mx, my, phiMx, phiMy, peor, vx, vy, Vn, Vt, defl, kgm:P.kgm };
 }
 
-// Límites de deflexión: con cielo raso L/360 (viva o viento) y L/240 (total); sin cielo raso L/240 y L/180
-const limites = (R, cor) => { const cr = !!R.cielo?.aplica; return { V:num(cor.limV, 0) || (cr ? 360 : 240), T:num(cor.limT, 0) || (cr ? 240 : 180), cielo:cr }; };
+// Límites de deflexión (correas METÁLICAS): con cielo raso L/360 (viva o viento) y L/240 (total); sin cielo raso L/240 y L/180
+const limites = (R, cor) => { const cr = !!R.cielo?.aplica; return { V:num(cor.limV, 0) || (cr ? 360 : 240), W:num(cor.limV, 0) || (cr ? 360 : 240), T:num(cor.limT, 0) || (cr ? 240 : 180), cielo:cr }; };
+// Madera (revisado con Amo 20-nov contra la NSR-10, Tabla G.3.2-1, cubiertas inclinadas según el cielo raso):
+// pañete o yeso (drywall) L/360 viva, L/360 viento, L/300 total · otros cielos rasos o sin cielo raso L/300, L/240, L/240
+const cieloYeso = R => !!R.cielo?.aplica && /drywall|yeso|pañete|panete/i.test(R.cielo.tipo || '');
+const limitesMad = (R, cor) => { const y = cieloYeso(R), mv = num(cor.limV, 0);
+  return { V:mv || (y ? 360 : 300), W:mv || (y ? 360 : 240), T:num(cor.limT, 0) || (y ? 300 : 240), cielo:!!R.cielo?.aplica, yeso:y }; };
 
 function revisarMetal(R, cor, ctx){
   const ac = ACEROS[cor.acero] || ACEROS.A36, esL = cor.sec !== 'HSS';
@@ -368,14 +373,15 @@ function revisarMadera(R, cor, ctx){
     return { ...cb, M1, M2, fb1, fb2, CL, Fb1, Fb2, inest, inter, Fv, fv1, fv2 };
   });
   const cF = res.reduce((a, x) => x.inter > a.inter ? x : a), cV1 = res.reduce((a, x) => x.fv1 / x.Fv > a.fv1 / a.Fv ? x : a), cV2 = res.reduce((a, x) => x.fv2 / x.Fv > a.fv2 / a.Fv ? x : a);
-  // Deflexión: E0.5 con acción de conjunto, E0.05 sin ella (modificado por humedad, temperatura e incisiones); deflexión diferida de la carga muerta
-  const Ebase = k.crOk ? m.E05 : m.E005, Ep = Ebase * k.Cm.E * k.Ct.E * k.Cin.E;
-  const Kcr = num(cor.Kcr, 0) > 0 ? num(cor.Kcr) : (num(cor.CHs, 12) <= 19 ? 1.8 : 2.0);
+  // Deflexión (G.3.2.3, revisado con Amo 20-nov): siempre E0.5; E0.05 solo si el diseñador marca servicio severo o riesgo alto
+  // (modificado por humedad, temperatura e incisiones). Diferida (Tabla G.3.2-5): 1.5D + L seca (CH ≤ 19 %), 1.8D + L húmeda.
+  const usa005 = !!cor.E005, Ebase = usa005 ? m.E005 : m.E05, Ep = Ebase * k.Cm.E * k.Ct.E * k.Cin.E;
+  const Kcr = num(cor.Kcr, 0) > 0 ? num(cor.Kcr) : (num(cor.CHs, 12) <= 19 ? 1.5 : 1.8);
   const dl = (n, t) => Math.hypot(ap.cD * n * Lmm ** 4 / (Ep * Ix), ap.cD * t * Lmm ** 4 / (Ep * Iy));
   const dD = dl(q.Dn, ft(q.Dt)), dLr = dl(q.Ln, ft(q.Lt)), dW = dl(q.Wp, 0);
   const tot = [{ nom:`${Kcr}·D + Lr`, v:Kcr * dD + dLr }, { nom:`${Kcr}·D + W`, v:Kcr * dD + dW }, { nom:`${Kcr}·D + 0.75(Lr + W)`, v:Kcr * dD + 0.75 * (dLr + dW) }];
   const dT = tot.reduce((a, x) => x.v > a.v ? x : a);
-  const lim = limites(R, cor);
+  const lim = limitesMad(R, cor);
   const chk = [
     { g:'Flexión', nom:'Flexión biaxial', ref:'G.3.3 / G.5', dem:cF.inter, cap:1, u:'', dc:cF.inter,
       det:cF.inest ? `Combinación ${cF.nom}: fb1 = ${fmt(cF.fb1, 2)} MPa ≥ FbE = ${fmt(FbE, 2)} MPa → la viga es inestable lateralmente.`
@@ -383,8 +389,8 @@ function revisarMadera(R, cor, ctx){
     { g:'Cortante', nom:'Cortante — eje fuerte', ref:'G.3.4', dem:cV1.fv1, cap:cV1.Fv, u:'MPa', dc:cV1.fv1 / cV1.Fv, det:`fv = 1.5·V/(b·d), combinación ${cV1.nom}, F'v = ${fmt(cV1.Fv, 2)} MPa` },
   ];
   if(!diaf) chk.push({ g:'Cortante', nom:'Cortante — eje débil', ref:'G.3.4', dem:cV2.fv2, cap:cV2.Fv, u:'MPa', dc:cV2.fv2 / cV2.Fv, det:`Combinación ${cV2.nom}` });
-  chk.push({ g:'Deflexión', nom:'Deflexión — carga viva Lr', ref:'G.3.2', dem:dLr, cap:Lmm / lim.V, u:'mm', dc:dLr / (Lmm / lim.V), det:`E' = ${fmt(Ep, 0)} MPa, límite L/${lim.V}` });
-  chk.push({ g:'Deflexión', nom:'Deflexión — viento W', ref:'G.3.2', dem:dW, cap:Lmm / lim.V, u:'mm', dc:dW / (Lmm / lim.V), det:`Límite L/${lim.V}` });
+  chk.push({ g:'Deflexión', nom:'Deflexión — carga viva Lr', ref:'G.3.2', dem:dLr, cap:Lmm / lim.V, u:'mm', dc:dLr / (Lmm / lim.V), det:`E' = ${fmt(Ep, 0)} MPa (${usa005 ? 'E0.05, servicio severo' : 'E0.5'}), límite L/${lim.V} (Tabla G.3.2-1, ${lim.yeso ? 'cielo raso de yeso o pañete' : lim.cielo ? 'otros cielos rasos' : 'sin cielo raso'})` });
+  chk.push({ g:'Deflexión', nom:'Deflexión — viento W', ref:'G.3.2', dem:dW, cap:Lmm / lim.W, u:'mm', dc:dW / (Lmm / lim.W), det:`Límite L/${lim.W}` });
   chk.push({ g:'Deflexión', nom:'Deflexión total (con deflexión diferida)', ref:'G.3.2', dem:dT.v, cap:Lmm / lim.T, u:'mm', dc:dT.v / (Lmm / lim.T), det:`${dT.nom}: ΔD = ${fmt(dD, 1)} mm × ${Kcr} (diferida) → ${fmt(dT.v, 1)} mm ≤ L/${lim.T} = ${fmt(Lmm / lim.T, 1)} mm` });
   chk.push({ g:'Estabilidad', nom:'Esbeltez lateral RB ≤ 50', ref:'G.3.3.4', dem:RB, cap:50, u:'', dc:RB / 50, det:`le = ${fmt(le, 0)} mm, RB = √(le·d/b²) = ${fmt(RB, 1)}` });
   if(k.fuera) chk.push({ g:'Material', nom:'Desviación del grano dentro de la Tabla G.2.2-9', ref:'G.2.2.3.7', dem:k.pend, cap:1 / 8, u:'', dc:k.pend * 8, det:`Pendiente BA/AC = ${fmt(k.pend, 3)} > 1/8: fuera de tabla, la pieza no es apta sin ensayo.` });
@@ -393,7 +399,7 @@ function revisarMadera(R, cor, ctx){
   if(k.crPedido && !k.crOk) avisos.push('Se marcó acción de conjunto, pero la separación es mayor de 0.61 m: no se aplica Cr.');
   if(Lmm / d > 20) avisos.push(`Relación l/d = ${fmt(Lmm / d, 1)} > 20: la pieza es muy esbelta para correa (G.3.2.4).`);
   if(diaf) avisos.push('La cubierta (entablado o lámina fijada) toma la componente de la carga a lo largo de la pendiente.');
-  return fin({ tipo:'mad', k, q, combos:res, chk, lim, avisos, props:{ A, Ix, Iy, Sx, Sy }, le, RB, FbE, EminP, Ep, Ebase, Kcr, dD, dLr, dW, arr, txtArr:TXT_ARRIOSTRE[arr], kgm:pp / G * 1000 });
+  return fin({ tipo:'mad', k, q, combos:res, chk, lim, avisos, props:{ A, Ix, Iy, Sx, Sy }, le, RB, FbE, EminP, Ep, Ebase, usa005, Kcr, dD, dLr, dW, arr, txtArr:TXT_ARRIOSTRE[arr], kgm:pp / G * 1000 });
 }
 
 function fin(o){

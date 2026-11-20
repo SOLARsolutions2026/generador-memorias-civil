@@ -221,9 +221,12 @@ function correaHTML(R, c, ctx, ro){
       <h4 class="sub">Sección — ${mat ? 'madera (Título G, esfuerzos admisibles)' : 'acero (Título F, LRFD)'}</h4>${sec}
       <h4 class="sub">Geometría</h4>
       <div class="fg g4">${i('s', 'Separación entre correas s (m)', { h:'Ancho aferente' })}${i('L', 'Luz entre apoyos L (m)', { h:'Si la correa va de muro a muro, es el ancho W' })}${i('alfa', 'Inclinación (°)', { ph:th != null ? `${fR(th, 1)} (del viento)` : '' })}</div>
-      <div class="fg g4">${s('zona', 'Zona de viento de esta correa', [['', `La general (zona ${R.viento.zona})`], ['1', 'Zona 1'], ['2', 'Zona 2'], ['3', 'Zona 3']])}${i('limV', 'Deflexión viva / viento: L /', { ph:R.cielo.aplica ? '360' : '240' })}${i('limT', 'Deflexión total: L /', { ph:R.cielo.aplica ? '240' : '180' })}</div>
+      <div class="fg g4">${s('zona', 'Zona de viento de esta correa', [['', `La general (zona ${R.viento.zona})`], ['1', 'Zona 1'], ['2', 'Zona 2'], ['3', 'Zona 3']])}${(() => { const y = R.cielo.aplica && /drywall|yeso|pañete/i.test(R.cielo.tipo || '');
+        return mat ? `${i('limV', 'Deflexión viva / viento: L /', { ph:y ? '360 / 360' : '300 / 240', h:'Tabla G.3.2-1' })}${i('limT', 'Deflexión total: L /', { ph:y ? '300' : '240', h:y ? 'Cielo raso de yeso o pañete' : R.cielo.aplica ? 'Otros cielos rasos' : 'Sin cielo raso' })}`
+          : `${i('limV', 'Deflexión viva / viento: L /', { ph:R.cielo.aplica ? '360' : '240' })}${i('limT', 'Deflexión total: L /', { ph:R.cielo.aplica ? '240' : '180' })}`; })()}</div>
       ${mat ? `<h4 class="sub">Condiciones de servicio — coeficientes G.2.2.3</h4>
-      <div class="fg g4">${i('CHc', 'Humedad en la construcción (%)')}${i('CHs', 'Humedad en servicio (%)')}${i('temp', 'Temperatura (°C)')}${i('Kcr', 'Factor de deflexión diferida', { ph:Correas.num(c.CHs, 12) <= 19 ? '1.8 (seca)' : '2.0 (húmeda)', h:'Tabla G.3.2-5 (por confirmar con la norma)' })}</div>
+      <div class="fg g4">${i('CHc', 'Humedad en la construcción (%)')}${i('CHs', 'Humedad en servicio (%)')}${i('temp', 'Temperatura (°C)')}${i('Kcr', 'Factor de deflexión diferida', { ph:Correas.num(c.CHs, 12) <= 19 ? '1.5 (seca)' : '1.8 (húmeda)', h:'Tabla G.3.2-5: 1.5D + L seca · 1.8D + L húmeda' })}</div>
+      ${ch('E005', 'Servicio severo o riesgo alto: calcular la deflexión con E0.05', 'G.3.2.3: la norma usa E0.5; el E0.05 queda a juicio del diseñador')}
       <div class="fg g4">${i('lu', 'Longitud no arriostrada lu (m)', { ph:'= L', h:'Distancia entre puntos que impiden el volcamiento lateral' })}</div>
 ` : ''}
     </div><div class="rv-dib">${svgSecCorrea(c)}<div class="hint" style="text-align:center">${esc(nomSecCor(c))}</div></div></div>
@@ -331,7 +334,7 @@ function pasoHTML(R, c, r){
       <tr><td>Cin / Cr (solo Fb)</td><td class="c">${fR(k.Cin.Fb, 2)} / ${fR(k.Cr, 2)}</td><td>CDG (pendiente ${fR(k.pend, 3)})</td><td class="c">${fR(k.cdgB, 2)}</td></tr>
       <tr><td>CF (eje fuerte / débil)</td><td class="c">${fR(k.CFx, 2)} / ${fR(k.CFy, 2)}</td><td>Cl / Cfu</td><td class="c">${fR(k.Cl, 3)} / ${fR(k.Cfu, 2)}</td></tr>
       <tr><td>le / RB</td><td class="c">${fR(r.le, 0)} mm / ${fR(r.RB, 1)}</td><td>E'min / FbE</td><td class="c">${fR(r.EminP, 0)} / ${fR(r.FbE, 2)} MPa</td></tr>
-      <tr><td>E' para deflexión</td><td class="c">${fR(r.Ep, 0)} MPa (${r.k.crOk ? 'E0.5' : 'E0.05'})</td><td>Deflexión diferida</td><td class="c">× ${r.Kcr}</td></tr></table>`; }
+      <tr><td>E' para deflexión</td><td class="c">${fR(r.Ep, 0)} MPa (${r.usa005 ? 'E0.05' : 'E0.5'})</td><td>Deflexión diferida</td><td class="c">× ${r.Kcr}</td></tr></table>`; }
   const det = `<h4>Desarrollo de cada verificación</h4><ol class="rv-det">${r.chk.map(x => `<li><b>${esc(x.nom)}</b> (${esc(x.ref)}): ${esc(x.det)} → D/C = ${fR(x.dc, 3)}, ${x.ok ? 'cumple' : 'no cumple'}.</li>`).join('')}</ol>`;
   return cargas + combos + props + det;
 }
