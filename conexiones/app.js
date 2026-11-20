@@ -311,7 +311,13 @@ function seccionesDe(c){
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'a', 'Desfase del corte a [mm]', { h:'Tramo horizontal del corte en Z, en el eje del alma' }))],
     ['sold', 'Soldadura', () => c.union === 'pjp' ? `penetración parcial · E alas ${c.Ef || '—'} · alma ${c.Ew || '—'} mm · ${c.electrodo}` : 'penetración completa en alas y alma',
       g3(campo(c, 'union', 'Tipo', { sel:[['cjp', 'Penetración completa'], ['pjp', 'Penetración parcial']] }),
-        ...(c.union === 'pjp' ? [campo(c, 'Ef', 'Garganta efectiva en alas E [mm]', { h:'Vacío = tf/2' }), campo(c, 'Ew', 'Garganta efectiva en el alma E [mm]', { h:'Vacío = tw/2' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })] : []))] ];
+        ...(c.union === 'pjp' ? [campo(c, 'Ef', 'Garganta efectiva en alas E [mm]', { h:'Vacío = tf/2' }), campo(c, 'Ew', 'Garganta efectiva en el alma E [mm]', { h:'Vacío = tw/2' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })] : []))],
+    ['rat', 'Ratonera y cortante en el alma', () => `ratonera ${c.hRat || 'mín.'} × ${c.Lrat || 'mín.'} mm · ${c.vMedia === 'mitad' ? 'V2/2 en la media alma' : 'V2 completo en la media alma'}`,
+      g3(campo(c, 'hRat', 'Alto de la ratonera [mm]', { h:'Vacío = máx(tw; 19 mm)' }), campo(c, 'Lrat', 'Largo de la ratonera [mm]', { h:'Vacío = máx(1.5tw; 38 mm)' }),
+        campo(c, 'vMedia', 'Cortante que pasa por la media alma cortada', { sel:[['todo', 'V2 completo (conservador)'], ['mitad', 'V2/2 (la otra mitad sigue entera)']] }))],
+    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · empalme a ${c.xEmp || '—'} mm de la cara de la columna` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))] ];
   const RIGS = { auto:'Automático (las diseña si hacen falta)', si:'Sí, siempre', no:'No poner' }, tub = c.miembro === 'tubo';
   if(c.tipo === 'soldada') return [
     ['miem', 'Miembro soldado', () => c.miembro === 'tubo' ? `Tubo ${c.H}×${c.B}×${c.tt} mm · ${c.aceroViga}` : `${c.viga} · ${c.aceroViga}`,
@@ -825,11 +831,18 @@ function dibEmpZ(c, r){
   const x1 = -a / 2, x2 = a / 2;
   let h = `<rect x="${X(-Lt / 2)}" y="${Y(0)}" width="${Lt * k}" height="${p.d * k}" class="vg"/><rect x="${X(-Lt / 2)}" y="${Y(0)}" width="${Lt * k}" height="${p.tf * k}" fill="#475569"/><rect x="${X(-Lt / 2)}" y="${Y(p.d - p.tf)}" width="${Lt * k}" height="${p.tf * k}" fill="#475569"/>
     <path d="M${X(x1)} ${Y(-6)} V${Y(p.d / 2)} H${X(x2)} V${Y(p.d + 6)}" fill="none" stroke="#b45309" stroke-width="3.2"/>
+    ${(() => { const g = r.geo, hR = g.hRat || 19, LR = g.Lrat || 38, rr = Math.min(hR, LR) * k / 2, bv = Math.max(9, p.tf * k * 1.4);
+      // ratoneras: en el alma junto al ala cortada, del lado de la pieza que lleva el alma (pedido de Amo 20-nov) · bisel de las alas (CJP)
+      const rat = (x0, y0) => `<rect x="${X(x0)}" y="${Y(y0)}" width="${LR * k}" height="${hR * k}" rx="${rr}" fill="#fff" stroke="#1e3a8a" stroke-width="1.2"/>`;
+      const bis = (x, y, sg) => g.cjp ? `<path d="M${X(x) - bv * 0.6} ${y} L${X(x)} ${y + sg * bv} L${X(x) + bv * 0.6} ${y} Z" fill="#fde68a" stroke="#b45309"/>` : '';
+      return rat(x1, p.tf) + rat(x2 - LR, p.d - p.tf - hR) + bis(x1, Y(0), 1) + bis(x2, Y(p.d), -1)
+        + `<line x1="${X(x1 + LR)}" y1="${Y(p.tf + hR / 2)}" x2="${X(x1 + LR) + 40}" y2="${Y(p.tf + hR / 2) - 22}" stroke="#1e3a8a"/><text x="${X(x1 + LR) + 42}" y="${Y(p.tf + hR / 2) - 24}" class="lbl" fill="#1e3a8a">ratonera ${hR} × ${LR}</text>`
+        + (g.cjp ? `<text x="${X(x2) + 10}" y="${Y(p.d) + 16}" class="lbl" fill="#b45309">bisel de las alas (CJP)</text>` : ''); })()}
     <text x="${X(-Lt / 4 - 30)}" y="${Y(p.d / 2) + 3}" class="lbl" text-anchor="middle">tramo 1</text><text x="${X(Lt / 4 + 30)}" y="${Y(p.d / 2) + 3}" class="lbl" text-anchor="middle">tramo 2</text>
     ${cotaH(Y(p.d) + 18, X(x1), X(x2), `a = ${a}`)}${cotaV(X(-Lt / 2) - 4, Y(0), Y(p.d), `d ${p.d}`)}
     <text x="${X(-Lt / 2)}" y="${Y(-14)}" class="lbl">${esc(p.nom)} · ${c.union === 'pjp' ? 'penetración parcial' : 'penetración completa'}</text>`;
   return `<svg viewBox="0 0 ${X(Lt / 2) + 20} ${Y(p.d) + 40}" class="dsvg" role="img" aria-label="Empalme en Z">${h}</svg>
-    <div class="hint" style="text-align:center">Elevación · en naranja la línea de corte y soldadura en Z (ala superior, eje del alma en la longitud a, ala inferior)</div>`;
+    <div class="hint" style="text-align:center">Elevación · en naranja la línea de corte y soldadura en Z (ala superior, eje del alma en la longitud a, ala inferior) · ratoneras junto a las alas cortadas${r.geo.cjp ? ' · bisel de las alas para penetración completa' : ''}</div>`;
 }
 function dibTesta(c, r){
   const g = r.geo, vg = g.vg, cl = g.cl, db = vg.d, tf = vg.tf, pfo = +c.pfo, pfi = +c.pfi, de = +c.de, tp = +c.tp, bp = +c.bp, gg = +c.g;

@@ -1403,7 +1403,9 @@ function calcSoldada(c){
 // Cada corte vertical lleva solo medio alma → el cortante V2 pasa por media alma; la soldadura longitudinal del alma toma el flujo V2·Q/I en la longitud a.
 function defaultsEmpZ(){
   return { tipo:'empZ', nom:'', desc:'', P:0, Vu:60, V3:0, T:0, M2:0, Mu:40, viga:'IPE 300', aceroViga:'A572 Gr 50', a:150,
-    union:'cjp', Ef:'', Ew:'', electrodo:'E70XX' };
+    union:'cjp', Ef:'', Ew:'', electrodo:'E70XX',
+    // Revisión con Amo (20-nov): ratonera en el cálculo, reparto del cortante en la media alma, sismo
+    hRat:'', Lrat:'', vMedia:'todo', sismo:'no', xEmp:'' };
 }
 function calcEmpZ(c){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch);
@@ -1412,6 +1414,10 @@ function calcEmpZ(c){
   const [nom, , d, bf, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy] = pf, ac = ACEROS[c.aceroViga], FEXX = ELECTRODOS[c.electrodo];
   const cjp = c.union !== 'pjp', Ef = cjp ? tf : Math.min(nz(c.Ef) || tf / 2, tf), Ew = cjp ? tw : Math.min(nz(c.Ew) || tw / 2, tw);
   const hw2 = d / 2 - tf, Af = bf * tf;
+  // Ratonera (agujero de acceso F.2.10.1.6 / J1.6): largo ≥ máx(1.5tw; 38) mm, alto ≥ máx(tw; 19) mm; vacío = mínimos
+  const hRm = Math.max(tw, 19), LRm = Math.max(1.5 * tw, 38), hRat = nz(c.hRat) > 0 ? +c.hRat : Math.ceil(hRm), Lrat = nz(c.Lrat) > 0 ? +c.Lrat : Math.ceil(LRm);
+  const hwN = Math.max(hw2 - hRat, 1);                               // media alma que queda en el corte vertical
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '', mitad = c.vMedia === 'mitad';
   const Q = Af * (d - tf) / 2 + tw * hw2 * hw2 / 2;                 // primer momento de media sección respecto al eje neutro [mm³]
   pasos.push(`${nom} (${c.aceroViga}): d = ${d}, bf = ${bf}, tf = ${tf}, tw = ${tw} mm, A = ${Math.round(A)} mm², Ix = ${(Ix / 1e6).toFixed(2)}·10⁶ mm⁴`);
   pasos.push(`Corte en Z con desfase a = ${a} mm · soldadura ${cjp ? 'de penetración completa (resistencia del metal base)' : `de penetración parcial: garganta efectiva alas ${r1(Ef)} mm, alma ${r1(Ew)} mm`}`);
@@ -1423,9 +1429,12 @@ function calcEmpZ(c){
   add('soldadura', 'Ala cortada: esfuerzo normal por M3, P y M2', cjp ? 'F.2.10.2 Tabla J2.5 (CJP = metal base, φ 0.90)' : 'F.2.10.2 Tabla J2.5 (PJP, φ 0.80·0.6FEXX)', fAla, capAla, 'MPa', `f = Ff/(bf·E) + (M2/2)/(E·bf²/6)`);
   const vAla = (Math.abs(V3) / 2 + Math.abs(T) * 1000 / (d - tf)) * 1000 / (bf * Ef);
   add('soldadura', 'Ala cortada: cortante lateral (V3/2 + T/(d − tf))', cjp ? 'F.2.10.4.2 (J4-3), φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', vAla, cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX, 'MPa', '');
-  // 2. Media alma en el corte vertical: V2
-  const vWeb = Math.abs(V2) * 1000 / (Ew * hw2);
-  add('alma', 'Cortante V2 por la media alma del corte', cjp ? 'F.2.7.2 / J4-3 sobre d/2 − tf, φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', vWeb, cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX, 'MPa', `área = ${r1(Ew)} × ${r1(hw2)} mm`);
+  // 2. Media alma en el corte vertical: V2 (sin la altura de la ratonera)
+  const Vw = mitad ? Math.abs(V2) / 2 : Math.abs(V2);
+  pasos.push(`Ratonera junto al ala en cada corte: alto ${hRat} mm × largo ${Lrat} mm (mínimos J1.6: ${r1(hRm)} × ${r1(LRm)} mm) → media alma que queda en el corte = d/2 − tf − alto = ${r1(hwN)} mm`);
+  pasos.push(mitad ? `Cortante en la media alma cortada = V2/2 = ${r2(Vw)} kN (la otra mitad del alma sigue entera y toma la otra parte)` : `Cortante en la media alma cortada = V2 completo = ${r2(Vw)} kN (conservador)`);
+  const vWeb = Vw * 1000 / (Ew * hwN);
+  add('alma', `Cortante ${mitad ? 'V2/2' : 'V2'} por la media alma del corte (sin la ratonera)`, cjp ? 'F.2.7.2 / J4-3 sobre d/2 − tf − ratonera, φ 1.0' : 'Tabla J2.5 (PJP corte, φ 0.75)', vWeb, cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX, 'MPa', `área = ${r1(Ew)} × ${r1(hwN)} mm`);
   // 3. Soldadura longitudinal del alma
   const H = Math.abs(V2) * Q / Ix * a;                               // kN
   const capH = cjp ? 1.0 * 0.6 * ac.Fy * tw * a / 1000 : 0.75 * 0.6 * FEXX * Ew * a / 1000;
@@ -1436,14 +1445,44 @@ function calcEmpZ(c){
   const inter = pr >= 0.2 ? pr + 8 / 9 * (Math.abs(M3) / Mcx + Math.abs(M2) / Mcy) : pr / 2 + Math.abs(M3) / Mcx + Math.abs(M2) / Mcy;
   add('viga', 'Sección del perfil en el empalme: axial + flexión en ambos ejes', 'F.2.8.1 (H1-1a/b), sin pandeo', inter, 1, '', `φPn ${r2(Pc)} kN, φMn3 ${r2(Mcx)}, φMn2 ${r2(Mcy)} kN·m`);
   // Requisitos
-  req.push(['Desfase a ≥ máx(d/2; 100 mm) (recomendado)', a >= Math.max(d / 2, 100) - 1e-6, `${a} ≥ ${Math.max(d / 2, 100)} mm`]);
-  if(!cjp) { const mE = t => t <= 6 ? 3 : t <= 13 ? 5 : t <= 19 ? 6 : t <= 38 ? 8 : 10;
+  const aMin = Math.max(d / 2, 100);
+  req.push(['Desfase a ≥ máx(d/2; 100 mm) (recomendado)', a >= aMin - 1e-6, `${a} ≥ ${aMin} mm`]);
+  req.push(['Ratonera: alto ≥ máx(tw; 19 mm) y largo ≥ máx(1.5tw; 38 mm), bordes redondeados (F.2.10.1.6 / J1.6)', hRat >= hRm - 1e-6 && Lrat >= LRm - 1e-6, `${hRat} × ${Lrat} ≥ ${r1(hRm)} × ${r1(LRm)} mm`]);
+  if(sis){
+    pasos.push(`Sismo ${sis}: el empalme debe quedar fuera de la zona protegida de la viga (rótula plástica) y sus soldaduras de las alas son de demanda crítica (AISC 341 A3.4b, NSR-10 F.3).`);
+    req.push([`Sismo ${sis}: soldadura de penetración completa en alas y alma`, cjp, cjp ? 'CJP' : 'con penetración parcial no se permite']);
+    const xE = nz(c.xEmp);
+    req.push([`Sismo ${sis}: empalme fuera de la zona protegida (a más de d de la cara de la columna, o más allá de Sh + d/2 de la conexión)`, xE > 0 ? xE >= d - 1e-6 : true, xE > 0 ? `${xE} ≥ ${d} mm` : 'escriba la distancia a la cara de la columna; si no, indicar en planos']);
+    req.push(['Sismo: soldaduras de demanda crítica — ultrasonido 100 %, respaldo retirado y filete de refuerzo en la raíz (AWS D1.8)', true, 'indicar en planos']);
+    av.push('Sismo: si el empalme queda cerca de la rótula, revíselo con las fuerzas que llegan cuando la viga plastifica (Mpr), no solo con las del modelo.');
+  }
+  const mE = t => t <= 6 ? 3 : t <= 13 ? 5 : t <= 19 ? 6 : t <= 38 ? 8 : 10;
+  if(!cjp) {
     req.push(['Garganta efectiva mínima de penetración parcial (Tabla F.2.10.2-3)', Ef >= mE(tf) && Ew >= mE(tw), `alas ${r1(Ef)} ≥ ${mE(tf)}, alma ${r1(Ew)} ≥ ${mE(tw)} mm`]); }
   req.push(['Soldadura precalificada con bisel y respaldo, inspección por ultrasonido de las alas', true, 'indicar en planos']);
   req.push(['Agujero de acceso (ratonera) en el alma junto a las alas', true, 'AWS D1.1 / F.2.10.1.6']);
   if(Math.abs(T) > 0) av.push('La torsión se reparte como cortante lateral en las alas; el alabeo no se revisa.');
-  if(!cjp) av.push('Penetración parcial: no se recomienda en empalmes de vigas sometidas a fatiga o a sismo con disipación (DES/DMO).');
-  return fin(ch, req, av, pasos, { pf:{ nom, d, bf, tw, tf }, a, Q });
+  if(!cjp && !sis) av.push('Penetración parcial: no se recomienda en empalmes de vigas sometidas a fatiga o a sismo con disipación (DES/DMO).');
+  const R = fin(ch, req, av, pasos, { pf:{ nom, d, bf, tw, tf }, a, Q, hRat, Lrat, cjp });
+  // 💡 gargantas mínimas (PJP) que cumplen, o pasar a CJP; desfase mínimo recomendado
+  if(!c._sinSug && (!R.ok || a < aMin)){
+    const dif = {}, txts = [], gMal = !cjp && (Ef < mE(tf) || Ew < mE(tw));
+    if(!cjp && (R.max > 1 || gMal)){
+      if(sis){ dif.union = 'cjp'; txts.push('penetración completa (sismo)'); }
+      else { let best = null;
+        for(let ef = mE(tf); ef <= tf + 1e-6 && !best; ef += 1) for(let ew = mE(tw); ew <= tw + 1e-6; ew += 1){
+          const t = calcEmpZ({ ...c, Ef:ef, Ew:ew, a:Math.max(a, aMin), _sinSug:true }); if(!t.error && t.max <= 1){ best = { ef, ew }; break; } }
+        if(best){ dif.Ef = best.ef; dif.Ew = best.ew; txts.push(`garganta ${best.ef} mm en las alas y ${best.ew} mm en el alma`); }
+        else { const t = calcEmpZ({ ...c, union:'cjp', a:Math.max(a, aMin), _sinSug:true }); if(t.max <= 1){ dif.union = 'cjp'; txts.push('penetración completa'); } } } }
+    else if(sis && !cjp){ dif.union = 'cjp'; txts.push('penetración completa (sismo)'); }
+    if(a < aMin){ dif.a = aMin; txts.push(`desfase a = ${aMin} mm`); }
+    if(txts.length){ const t = calcEmpZ({ ...c, ...dif, _sinSug:true });
+      R.sug = { tipo:'sold', ok:true, ...dif, txt:`💡 Usar ${txts.join(' y ')}${t.max > 1 ? ' (aún falta: la viga o el cortante no alcanzan)' : ''}` }; }
+    if(!mitad && vWeb > (cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX) && vWeb / 2 <= (cjp ? 0.6 * ac.Fy : 0.75 * 0.6 * FEXX))
+      R.av.push('El cortante V2 completo no pasa por la media alma cortada, pero la mitad sí: si acepta que la otra mitad del alma (entera) toma su parte, escoja «V2/2» en el reparto del cortante.');
+    else if(!txts.length && R.max > 1) R.av.push('Con penetración completa tampoco alcanza: la sección de la viga no resiste estas fuerzas en el empalme (cambie el perfil o mueva el empalme a una zona con menos momento).');
+  }
+  return R;
 }
 
 function defaultsRas(){ return { ...defaultsTesta(), tipo:'ras', Mu:40, filas:2, pb:75, pfi:45, tp:22.2, bp:170, placaTipo:'gruesa', cortTodos:false }; }
