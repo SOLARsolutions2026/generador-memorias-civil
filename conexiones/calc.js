@@ -511,7 +511,7 @@ function calcTesta(c){
       // a ras: la placa queda a la altura del ala de la viga y la fila interior a psi = pfi + tf/2 − ts/2 de ella
       const ps = Math.max(ras ? pfi + tbf / 2 - ts / 2 : (cc - ts) / 2, 1);
       let YcS;
-      if(e8) YcS = cl.bf / 2 * (H.h1 / sC + H.h2 / ps + H.h3 / ps + H.h4 / sC) + 2 / g * (H.h1 * (sC + pb / 4) + H.h2 * (ps + 3 * pb / 4) + H.h3 * (ps + pb / 4) + H.h4 * (sC + 3 * pb / 4) + pb * pb) + g;   // por confirmar
+      if(e8) YcS = cl.bf / 2 * (H.h1 / sC + H.h2 / ps + H.h3 / ps + H.h4 / sC) + 2 / g * (H.h1 * (sC + pb / 4) + H.h2 * (ps + 3 * pb / 4) + H.h3 * (ps + pb / 4) + H.h4 * (sC + 3 * pb / 4) + pb * pb) + g;   // AISC 358-22 Tabla 6.6 rigidizada (8ES), confirmada 20-nov (el término final es pb², por unidades)
       else if(ras) YcS = nfR === 1 ? cl.bf / 2 * (h1 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps))
         : cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h2 / sC) + 2 / g * (h1 * (ps + 3 * pb / 4) + h2 * (sC + pb / 4) + pb * pb / 2) + g / 2;   // Guía AISC 16, por confirmar
       else YcS = cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h0 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps) + h0 * (sC + ps));
