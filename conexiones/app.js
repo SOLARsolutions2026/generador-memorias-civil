@@ -339,10 +339,14 @@ function seccionesDe(c){
   if(c.tipo === 'empalme') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga} · separación ${c.gap} mm`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'gap', 'Separación entre tramos [mm]'))],
     ['alas', 'Cubrejuntas de las alas', () => `PL ${c.bpf} × ${c.tpf} mm · ${2 * c.nf} pernos por lado · s ${c.sf} · g ${c.gf}`,
-      g3(campo(c, 'bpf', 'Ancho bpf [mm]'), campo(c, 'tpf', 'Espesor tpf [mm]'), campo(c, 'aceroPl', 'Acero de las platinas', { sel:SEL_ACERO }), campo(c, 'nf', 'Filas por lado (2 pernos c/u)'), campo(c, 'sf', 'Separación sf [mm]'), campo(c, 'gf', 'Gramil gf [mm]'), campo(c, 'Lef', 'Borde Lef [mm]'))],
+      g3(campo(c, 'bpf', 'Ancho bpf [mm]'), campo(c, 'tpf', 'Espesor tpf [mm]'), campo(c, 'aceroPl', 'Acero de las platinas', { sel:SEL_ACERO }), campo(c, 'nf', 'Filas por lado (2 pernos c/u)'), campo(c, 'sf', 'Separación sf [mm]'), campo(c, 'gf', 'Gramil gf [mm]'), campo(c, 'Lef', 'Borde Lef [mm]'))
+      + ck('interior', 'Agregar cubrejuntas interiores (una a cada lado del alma, por dentro del ala): los pernos del ala trabajan en doble cortante')
+      + (c.interior ? g3(campo(c, 'tpi', 'Espesor interiores tpi [mm]'), campo(c, 'bpi', 'Ancho de cada interior bpi [mm]', { h:'Vacío = el que cabe entre el radio y el borde del ala' })) : '')],
     ['alma', 'Cubrejuntas del alma (2)', () => `PL ${c.hpw} × ${c.tpw} mm · ${c.nw} pernos por lado · s ${c.sw}`,
       g3(campo(c, 'hpw', 'Alto hpw [mm]'), campo(c, 'tpw', 'Espesor tpw [mm]'), campo(c, 'nw', 'Pernos por lado nw'), campo(c, 'sw', 'Separación sw [mm]'), campo(c, 'Lew', 'Borde vertical Lew [mm]'), campo(c, 'Lehw', 'Junta a los pernos Lehw [mm]'))],
-    ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}`, g3(...pernosTipo)] ];
+    ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}${c.desliz ? ` · deslizamiento crítico clase ${c.claseSup || 'A'}` : ''}`, g3(...pernosTipo)
+      + ck('desliz', 'Pernos de deslizamiento crítico (J3-8): para cuando el momento cambia de sentido o la junta no se puede mover')
+      + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')] ];
   if(c.tipo === 'cartela') return [
     ['diag', 'Diagonal', () => `${+c.nL === 1 ? 'L' : '2L'} ${c.bL}×${c.bL}×${c.tL} mm · ${c.aceroL}`,
       g3(campo(c, 'nL', 'Angulares', { sel:[['1', '1 angular'], ['2', '2 angulares (espalda con espalda)']] }), campo(c, 'bL', 'Ala b [mm]'), campo(c, 'tL', 'Espesor t [mm]'), campo(c, 'aceroL', 'Acero', { sel:SEL_ACERO }))],
@@ -488,7 +492,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };
@@ -500,7 +504,7 @@ function renderEditor(){
 // «Aplicar platina de rigidez» del asiento (sugerencia del cálculo)
 document.addEventListener('click', e => { const b = e.target.closest('[data-apsug]'); if(!b || !S.p) return;
   const c = S.p.datos.con.find(x => x.id === S.sel); if(!c) return; const r = Conex.calc(c); if(!r.sug) return;
-  if(r.sug.tipo === 'sold'){ const { tipo, ok, max, txt, ...v } = r.sug; Object.assign(c, v); renderEditor(); guardar(); toast(v.union === 'cjp' ? 'Cambiado a penetración completa' : 'Soldadura sugerida aplicada'); return; }
+  if(r.sug.tipo === 'sold'){ const { tipo, ok, max, txt, ...v } = r.sug; Object.assign(c, v); renderEditor(); guardar(); toast(v.union === 'cjp' ? 'Cambiado a penetración completa' : 'Sugerencia aplicada'); return; }
   const { max, ok, peso, ...v } = r.sug; Object.assign(c, v, { rig:true, aceroRig:c.aceroRig || c.aceroAng, electrodo:c.electrodo || 'E70XX' }); renderEditor(); guardar(); toast('Platina de rigidez aplicada'); });
 function resHTML(c, r){
   if(r.error) return `<div class="note">${esc(r.error)}</div>`;
@@ -720,6 +724,8 @@ function dibEmpalme(c, r){
   let h = `<rect x="${X(-Wt / 2 + 10)}" y="${Y(0)}" width="${(Wt / 2 - 10 - gap / 2) * k}" height="${vg.d * k}" class="vg"/><rect x="${X(gap / 2)}" y="${Y(0)}" width="${(Wt / 2 - 10 - gap / 2) * k}" height="${vg.d * k}" class="vg"/>
     <rect x="${X(-Lpf / 2)}" y="${Y(-tpf)}" width="${Lpf * k}" height="${tpf * k}" class="pl"/><rect x="${X(-Lpf / 2)}" y="${Y(vg.d)}" width="${Lpf * k}" height="${tpf * k}" class="pl"/>
     <rect x="${X(-Lpw / 2)}" y="${Y((vg.d - hpw) / 2)}" width="${Lpw * k}" height="${hpw * k}" class="pl"/>`;
+  if(c.interior){ const ti = +c.tpi || 10;      // cubrejuntas interiores, debajo del ala superior y encima del ala inferior
+    h += `<rect x="${X(-Lpf / 2)}" y="${Y(vg.tf)}" width="${Lpf * k}" height="${ti * k}" class="pl"/><rect x="${X(-Lpf / 2)}" y="${Y(vg.d - vg.tf - ti)}" width="${Lpf * k}" height="${ti * k}" class="pl"/>`; }
   for(const sg of [-1, 1]) for(let i = 0; i < nf; i++){ const x = sg * (gap / 2 + Lef + i * sf);
     h += `<line x1="${X(x)}" y1="${Y(-tpf - 6)}" x2="${X(x)}" y2="${Y(vg.tf + 6)}" class="bl"/><line x1="${X(x)}" y1="${Y(vg.d - vg.tf - 6)}" x2="${X(x)}" y2="${Y(vg.d + tpf + 6)}" class="bl"/>`; }
   for(const sg of [-1, 1]) for(let i = 0; i < nw; i++) h += `<circle cx="${X(sg * (gap / 2 + Lehw))}" cy="${Y((vg.d - hpw) / 2 + Lew + i * sw)}" r="${Math.max(3, r.geo.dh / 2 * k)}" class="bolt"/>`;
