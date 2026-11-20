@@ -337,7 +337,8 @@ function seccionesDe(c){
     ...(sold ? [] : [['pern', 'Pernos al soporte', () => `${2 * c.filas} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g}${c.cizalla ? ' · cizalla' : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas (2 pernos por fila)'), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'ev', 'Del talón a la fila superior [mm]'))]]) ]; }
   if(c.tipo === 'empalme') return [
-    ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga} · separación ${c.gap} mm`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'gap', 'Separación entre tramos [mm]'))],
+    ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga} · separación ${c.gap} mm${c.resComp ? ' · a resistencia completa' : ''}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'gap', 'Separación entre tramos [mm]'))
+      + ck('resComp', 'Diseñar a resistencia completa: con lo máximo que la viga resiste en el empalme (φMn y φVn), no con las cargas del modelo')],
     ['alas', 'Cubrejuntas de las alas', () => `PL ${c.bpf} × ${c.tpf} mm · ${2 * c.nf} pernos por lado · s ${c.sf} · g ${c.gf}`,
       g3(campo(c, 'bpf', 'Ancho bpf [mm]'), campo(c, 'tpf', 'Espesor tpf [mm]'), campo(c, 'aceroPl', 'Acero de las platinas', { sel:SEL_ACERO }), campo(c, 'nf', 'Filas por lado (2 pernos c/u)'), campo(c, 'sf', 'Separación sf [mm]'), campo(c, 'gf', 'Gramil gf [mm]'), campo(c, 'Lef', 'Borde Lef [mm]'))
       + ck('interior', 'Agregar cubrejuntas interiores (una a cada lado del alma, por dentro del ala): los pernos del ala trabajan en doble cortante')
@@ -492,7 +493,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
-      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
+      if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }
       re(); };

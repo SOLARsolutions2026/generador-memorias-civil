@@ -780,17 +780,25 @@ function defaultsEmpalme(){
     tpw:8, hpw:210, nw:3, sw:65, Lew:38, Lehw:40,
     d:19.1, grado:'A325', rosca:'N',
     interior:false, tpi:10, bpi:'',                 // cubrejuntas interiores de las alas (pedido de Amo 20-nov)
-    desliz:false, claseSup:'A' };                    // pernos de deslizamiento crítico (J3-8)
+    desliz:false, claseSup:'A',                      // pernos de deslizamiento crítico (J3-8)
+    resComp:false };                                 // empalme a resistencia completa de la viga
 }
 // Pretensión mínima Tb [kN] (Tabla J3.1)
 const PRETEN = { A325:{ 12.7:53, 15.9:85, 19.1:125, 22.2:173, 25.4:227, 28.6:250 }, A490:{ 12.7:67, 15.9:106, 19.1:156, 22.2:218, 25.4:285, 28.6:357 } };
 const pretension = (grado, d) => { const T = PRETEN[grado] || {}; const k = Object.keys(T).map(Number).reduce((m, x) => Math.abs(x - d) < Math.abs(m - d) ? x : m, 19.1); return T[k] || 0; };
 function calcEmpalme(c, sinSug){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch);
-  const Mu = Math.abs(+c.Mu || 0), V = Math.abs(+c.Vu || 0), d = +c.d, gap = +c.gap || 0;
+  let Mu = Math.abs(+c.Mu || 0), V = Math.abs(+c.Vu || 0); const d = +c.d, gap = +c.gap || 0;
   const vg = perfilX(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
   const pl = ACEROS[c.aceroPl], ac = ACEROS[c.aceroViga];
+  // Resistencia completa (pedido de Amo 20-nov): el empalme se diseña para lo máximo que la viga puede llevar en esa sección
+  const dnA = anchoNeto(d), AfgA = vg.bf * vg.tf, AfnA = (vg.bf - 2 * dnA) * vg.tf, YtA = ac.Fy / ac.Fu <= 0.8 ? 1.0 : 1.1;
+  const phMp = 0.9 * ac.Fy * vg.Zx / 1e6, phMf13 = ac.Fu * AfnA < YtA * ac.Fy * AfgA ? 0.9 * ac.Fu * AfnA / AfgA * vg.Sx / 1e6 : Infinity;
+  const hw = vg.d - 2 * vg.tf - 2 * (vg.r || 0), phiV = hw / vg.tw <= 2.24 * Math.sqrt(200000 / ac.Fy) ? 1.0 : 0.9, phVn = phiV * 0.6 * ac.Fy * vg.d * vg.tw / 1000;
+  const MuM = Mu, VM = V;
+  if(c.resComp){ Mu = Math.min(phMp, phMf13); V = phVn; }
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d);
+  if(c.resComp) pasos.push(`Empalme a resistencia completa: se diseña con lo máximo que la viga puede llevar en la sección del empalme. Momento: mín(φMp = 0.9·Fy·Zx = ${r2(phMp)}; ${isFinite(phMf13) ? `φMn por los agujeros del ala (F13-1) = ${r2(phMf13)}` : 'los agujeros no reducen (F13.1)'}) = ${r2(Mu)} kN·m (del modelo ${r2(MuM)}). Cortante: φVn = ${phiV}·0.6·Fy·d·tw = ${r2(V)} kN (del modelo ${r2(VM)}).`);
   // Alas: cubrejunta exterior y, si se pide, dos interiores (una a cada lado del alma) → pernos en doble cortante
   const tpf = +c.tpf, bpf = +c.bpf, nf = Math.max(1, Math.round(+c.nf)), sf = +c.sf, gf = +c.gf, Lef = +c.Lef, nbF = 2 * nf;      // 2 columnas por lado
   const inter = !!c.interior, tpi = +c.tpi || 0, x0I = vg.tw / 2 + (vg.r || 0) + 3;
@@ -840,7 +848,8 @@ function calcEmpalme(c, sinSug){
   const agvF = 2 * (Lef + (nf - 1) * sf) * vg.tf, anvF = agvF - 2 * (nf - 0.5) * dn * vg.tf, antF = 2 * ((vg.bf - gf) / 2 - dn / 2) * vg.tf;
   add('alas', 'Ala de la viga: bloque de cortante', 'F.2.10.4.3 (J4-5)', Ff, bloqueRn(ac.Fy, ac.Fu, agvF, anvF, antF), 'kN', `hacia los bordes del ala`);
   const Afg = vg.bf * vg.tf, Afn = (vg.bf - 2 * dn) * vg.tf, Yt = ac.Fy / ac.Fu <= 0.8 ? 1.0 : 1.1;
-  if(ac.Fu * Afn < Yt * ac.Fy * Afg){ const Mn = ac.Fu * Afn / Afg * vg.Sx / 1e6;
+  if(c.resComp) pasos.push('Con resistencia completa el momento de diseño ya es el que permite la sección con agujeros (F13-1); no se repite el chequeo de la viga.');
+  else if(ac.Fu * Afn < Yt * ac.Fy * Afg){ const Mn = ac.Fu * Afn / Afg * vg.Sx / 1e6;
     add('viga', 'Viga: rotura del ala en tensión por los agujeros', 'F.2.6.13.1 (F13-1)', Mu, 0.9 * Mn, 'kN·m', `Fu·Afn < Yt·Fy·Afg → Mn = Fu·Afn/Afg·Sx`); }
   else pasos.push(`Ala en tensión: Fu·Afn = ${r1(ac.Fu * Afn / 1000)} ≥ Yt·Fy·Afg = ${r1(Yt * ac.Fy * Afg / 1000)} kN → no reduce la resistencia (F13.1)`);
   // Alma
@@ -856,7 +865,10 @@ function calcEmpalme(c, sinSug){
   add('almaPl', 'Cubrejuntas del alma: rotura por cortante (2)', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * pl.Fu * 2 * (hpw - nw * dn) * tpw / 1000, 'kN', '');
   const Mw = V * ew / 1000, Zw = 2 * tpw * hpw * hpw / 4;
   add('almaPl', 'Cubrejuntas del alma: flexión por la excentricidad', 'F.2.6 · φb = 0.90', Mw, 0.9 * pl.Fy * Zw / 1e6, 'kN·m', `Mu = Vu·e = ${r3(Mw)} kN·m`);
-  add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1)', V, 0.6 * ac.Fy * vg.d * vg.tw / 1000, 'kN', '');
+  if(!c.resComp) add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1)', V, phVn, 'kN', `φv = ${phiV}`);
+  // Bloque de cortante de las cubrejuntas del alma (pedido de Amo 20-nov): se arranca la parte entre la línea de pernos y el borde vertical
+  { const agv = (Lew + (nw - 1) * sw) * tpw, anv = agv - (nw - 0.5) * dn * tpw, ant = (Lew - dn / 2) * tpw;
+    add('almaPl', 'Cubrejuntas del alma: bloque de cortante (2)', 'F.2.10.4.3 (J4-5)', V, 2 * bloqueRn(pl.Fy, pl.Fu, agv, anv, ant), 'kN', `por placa: Agv = ${r1(agv)}, Anv = ${r1(anv)}, Ant = ${r1(ant)} mm²`); }
   req.push(['Cubrejunta del ala bpf ≤ bf de la viga', bpf <= vg.bf + 1e-6, `${bpf} ≤ ${vg.bf} mm`]);
   req.push(['Bordes de la cubrejunta del ala (bpf − gf)/2 y Lef ≥ mín.', Math.min((bpf - gf) / 2, Lef) >= bm, `${r1(Math.min((bpf - gf) / 2, Lef))} ≥ ${bm} mm`]);
   req.push(['Cubrejunta del alma cabe entre las alas: hpw ≤ T', hpw <= vg.T + 1e-6, `${hpw} ≤ ${r1(vg.T)} mm`]);
@@ -865,19 +877,27 @@ function calcEmpalme(c, sinSug){
   req.push([c.desliz ? `Pernos de deslizamiento crítico, superficies clase ${c.claseSup === 'B' ? 'B' : 'A'} (sin pintura en las caras de contacto)` : 'Pernos pretensionados (empalme a momento)', true, 'indicar en planos']);
   if(c.desliz && c.grado === 'A307') req.push(['Deslizamiento crítico requiere A325 o A490', false, 'A307']);
   const R = fin(ch, req, av, pasos, { vg, dh, Ff, ic, inter, bpi, tpi });
-  // 💡 Sugerencia (pedido de Amo 20-nov): menos pernos y cubrejuntas más delgadas que cumplan, sin cambiar diámetro ni anchos
+  // 💡 Sugerencia (pedido de Amo 20-nov): menos pernos y cubrejuntas más delgadas que cumplan; alas y alma se buscan por separado
   if(!sinSug){
-    const ESP = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4], tryC = o => { const r = calcEmpalme({ ...c, ...o }, true); return !r.error && r.max <= 1 && !r.req.some(x => !x[1]) ? r : null; };
+    const ESP = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4];
+    const esAla = x => x.grupo === 'alas' || /un ala/.test(x.nombre), esAlma = x => x.grupo === 'almaPl' || /del alma/.test(x.nombre);
+    const okParte = (o, parte) => { const r = calcEmpalme({ ...c, ...o }, true); if(r.error) return false;
+      const f = parte === 'ala' ? esAla : esAlma, rq = parte === 'ala' ? (t => /ala/.test(t) && !/alma/.test(t)) : (t => /alma/.test(t));
+      return r.ch.filter(f).every(x => x.ratio <= 1) && r.req.filter(x => rq(x[0])).every(x => x[1]); };
     let best = null; const gfMin = inter ? Math.ceil(2 * (x0I + bm) / 5) * 5 : 0, base = {};
     if(gfMin > gf && gfMin <= vg.bf - 2 * bm){ base.gf = gfMin; if((bpf - gfMin) / 2 < bm) base.bpf = Math.min(vg.bf, Math.ceil((gfMin + 2 * bm) / 5) * 5); }
-    for(let nfS = 1; nfS <= 6 && !best; nfS++) for(const t of ESP){ const o = { ...base, nf:nfS, tpf:t }; if(tryC(o)){ best = o; break; } }
-    if(best){ let bw = null; for(let nwS = 2; nwS <= 8 && !bw; nwS++) for(const t of ESP.filter(x => x <= 12.7)){ const o = { ...best, nw:nwS, tpw:t }; if(tryC(o)){ bw = o; break; } }
-      if(bw) best = bw;
-      const cambia = Object.keys(best).some(k => +best[k] !== +c[k]);
-      if(cambia) R.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar ${best.nf} filas por lado en las alas con cubrejunta de ${best.tpf} mm${best.gf ? ` (gramil ${best.gf} mm${best.bpf ? `, ancho ${best.bpf} mm` : ''})` : ''}${best.nw ? ` y ${best.nw} pernos por lado en el alma con cubrejuntas de ${best.tpw} mm` : ''}` };
-    } else if(R.ch.some(x => x.grupo === 'viga' && x.ratio > 1)) R.av.push('La viga misma no resiste las fuerzas en la zona del empalme (ver «Viga»): no hay cubrejuntas que lo arreglen; revise el perfil o mueva el empalme.');
-    else if(inter) R.av.push(`El ala de la viga (${vg.bf} mm) es angosta para cubrejuntas interiores con pernos de ${d} mm: los pernos no caben con los bordes mínimos a cada lado del alma. Use pernos más pequeños o solo la cubrejunta exterior.`);
-    else R.av.push('Con el diámetro y los anchos actuales no se encontró una combinación que cumpla (hasta 6 filas y 25.4 mm): aumente el diámetro de los pernos o use cubrejuntas interiores.');
+    for(let nfS = 1; nfS <= 6 && !best; nfS++) for(const t of ESP){ const o = { ...base, nf:nfS, tpf:t }; if(okParte(o, 'ala')){ best = o; break; } }
+    const hpwMax = Math.floor(vg.T / 5) * 5, swMin = Math.ceil(2.67 * d / 5) * 5;
+    let bw = null;
+    for(const geo of [{}, { hpw:hpwMax }, { hpw:hpwMax, sw:swMin }]){ for(let nwS = 2; nwS <= 8 && !bw; nwS++) for(const t of ESP.filter(x => x <= 12.7)){ const o = { ...geo, nw:nwS, tpw:t }; if(okParte(o, 'alma')){ bw = o; break; } } if(bw) break; }
+    const todo = { ...(best || {}), ...(bw || {}) }, cambia = Object.keys(todo).some(k => +todo[k] !== +c[k]);
+    if(cambia){ const t1 = best ? `${best.nf} filas por lado en las alas con cubrejunta de ${best.tpf} mm${best.gf ? ` (gramil ${best.gf} mm${best.bpf ? `, ancho ${best.bpf} mm` : ''})` : ''}` : '';
+      const t2 = bw ? `${bw.nw} pernos por lado en el alma con cubrejuntas de ${bw.tpw} mm${bw.hpw ? ` de ${bw.hpw} mm de alto` : ''}${bw.sw ? ` y separación ${bw.sw} mm` : ''}` : '';
+      R.sug = { tipo:'sold', ok:true, ...todo, txt:`💡 Usar ${[t1, t2].filter(Boolean).join(' y ')}` }; }
+    if(!best){ if(R.ch.some(x => x.grupo === 'viga' && x.ratio > 1)) R.av.push('La viga misma no resiste las fuerzas en la zona del empalme (ver «Viga»): no hay cubrejuntas que lo arreglen; revise el perfil o mueva el empalme.');
+      else if(inter) R.av.push(`El ala de la viga (${vg.bf} mm) es angosta para cubrejuntas interiores con pernos de ${d} mm: los pernos no caben con los bordes mínimos a cada lado del alma. Use pernos más pequeños o solo la cubrejunta exterior.`);
+      else R.av.push('Alas: con el diámetro y los anchos actuales no se encontró una combinación que cumpla (hasta 6 filas y 25.4 mm): aumente el diámetro de los pernos o use cubrejuntas interiores.'); }
+    if(!bw) R.av.push(`Alma: con una sola columna de pernos de ${d} mm por lado no se alcanza${c.resComp ? ' la resistencia completa a cortante de la viga' : ' el cortante'} (cabe hasta ${Math.floor((hpwMax - 2 * c.Lew) / swMin) + 1} pernos en ${hpwMax} mm): use pernos más grandes o menos cortante de diseño.`);
   }
   return R;
 }
