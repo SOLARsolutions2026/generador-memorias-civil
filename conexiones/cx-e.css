@@ -112,3 +112,8 @@
 .cxE .dib{position:static;max-width:620px;margin:0 auto 4px}
 .cx-gal .e-tc svg{width:100%;max-height:64px}
 .cx-une .chip.rig{border-color:#b91c1c;color:#991b1b;background:#fef2f2}
+
+/* Rigidez y clasificación (20-nov) */
+.rig-box{border:1px solid #c7d2fe;background:#f5f7ff;border-radius:10px;padding:8px 12px;margin:0 0 10px}
+.rig-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.rig-hd .hint{margin-left:auto;font-size:11px}
+.rig-l{margin:6px 0 2px;padding-left:18px;font-size:12.5px;line-height:1.5}

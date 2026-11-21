@@ -344,7 +344,7 @@ function topologia(texto){
   const tRel = Object.keys(T).find(n => /^FRAME RELEASE ASSIGNMENTS 1/i.test(n)), tPar = Object.keys(T).find(n => /^FRAME RELEASE ASSIGNMENTS 2/i.test(n));
   const si = v => /^(yes|y|si|sí|true)$/i.test(String(v ?? '').trim());
   const rel = {}; for(const r of T[tRel] || []) rel[r.Frame] = { i:si(r.M3I) ? 'lib' : 'emp', j:si(r.M3J) ? 'lib' : 'emp', pf:si(r.PartialFix) };
-  for(const r of T[tPar] || []){ const o = rel[r.Frame] = rel[r.Frame] || { i:'emp', j:'emp' }; if(num(r.M3I) > 0) o.i = 'parc'; if(num(r.M3J) > 0) o.j = 'parc'; }
+  for(const r of T[tPar] || []){ const o = rel[r.Frame] = rel[r.Frame] || { i:'emp', j:'emp' }; if(num(r.M3I) > 0){ o.i = 'parc'; o.ki = num(r.M3I); } if(num(r.M3J) > 0){ o.j = 'parc'; o.kj = num(r.M3J); } }
   // Sin la tabla de liberaciones (no se exportó o no hay ninguna) se deduce de las fuerzas: |M3| ≈ 0 en todas las combinaciones = articulado
   const Lf = {}; for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ]; Lf[r.Frame] = a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0; }
   const mE = {}; for(const r of T['ELEMENT FORCES - FRAMES'] || []){ const st = num(r.Station), L = Lf[r.Frame], m = Math.abs(num(r.M3));
@@ -355,7 +355,10 @@ function topologia(texto){
   const out = {};
   for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ], q = rel[r.Frame];
     out[r.Frame] = { i:r.JointI, j:r.JointJ, L:Lf[r.Frame], g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b),
-      ri:q ? q.i : tRel ? 'emp' : ded(r.Frame, 'i'), rj:q ? q.j : tRel ? 'emp' : ded(r.Frame, 'j'), rDed:!tRel }; }
+      ri:q ? q.i : tRel ? 'emp' : ded(r.Frame, 'i'), rj:q ? q.j : tRel ? 'emp' : ded(r.Frame, 'j'), rDed:!tRel, ki:q?.ki, kj:q?.kj }; }
+  // Apoyos (para la placa base): rotaciones restringidas en el nudo
+  const si2 = v => /^(yes|y|si|sí|true)$/i.test(String(v ?? '').trim());
+  Object.defineProperty(out, '_apoyos', { value:Object.fromEntries((T['JOINT RESTRAINT ASSIGNMENTS'] || []).map(r => [r.Joint, { R1:si2(r.R1), R2:si2(r.R2), R3:si2(r.R3) }])), enumerable:false });
   return out;
 }
 

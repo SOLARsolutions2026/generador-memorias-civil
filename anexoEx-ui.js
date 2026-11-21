@@ -84,7 +84,7 @@ function filasCx(c, D, ctx){
 }
 // Datos de la conexión con los perfiles del Anexo D (lo que tiene candado)
 const CX_LOCK = {};
-function entradaCx(c, D){
+function entradaCx(c, D, T){
   const z = { ...c }, lock = new Set(), avisos = [];
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), sd = de ? secDe(de) : null, sa = a ? secDe(a) : null;
   const ponI = (k, kA, el, s) => { if(el && s?.tipo === 'I'){ z[k] = el.perfil; z[kA] = el.acero || z[kA]; lock.add(k); lock.add(kA); return true; } return false; };
@@ -107,11 +107,19 @@ function entradaCx(c, D){
     const p = pedDe(D, c.eA), oy = c.ori !== 'x';
     if(p){ z.Lp = numE(oy ? p.h : p.b); z.Wp = numE(oy ? p.b : p.h); z.ha = numE(p.Hp) * 1000; z.fc = numE(p.fc); ['Lp', 'Wp', 'ha', 'fc'].forEach(k => lock.add(k)); }
   }
+  // Longitud para clasificar la rigidez (K = Sj·L/EI): la del modelo (la menor de los extremos escogidos, del lado seguro para llamarla rígida)
+  if(T){
+    if(['testa', 'ras', 'soldada'].includes(c.tipo)){ const off = new Set((c.nudosOff || []).map(String)), Ls = extremosCx(c, D, T).filter(x => !off.has(String(x.j))).map(x => T[x.F]?.L).filter(x => x > 0);
+      if(Ls.length){ z.Lviga = +Math.min(...Ls).toFixed(3); lock.add('Lviga'); } }
+    if(c.tipo === 'base'){ const p = pedDe(D, c.eA), de = metDe(D, c.eDe), ns = new Set((p?.nudos || []).map(String));
+      const Ls = de?.grupo ? Object.values(T).filter(f => f.g === de.grupo && (ns.has(String(f.i)) || ns.has(String(f.j)))).map(f => f.L) : [];
+      if(Ls.length){ z.Lcol = +Math.min(...Ls).toFixed(3); lock.add('Lcol'); } }
+  }
   return { z, lock, avisos };
 }
 // Cálculo con todas las filas: se guarda la fila que controla y el resultado completo con ella (con su 💡)
 function calcCx(c, D, ctx){
-  const { z, avisos } = entradaCx(c, D), filas = filasCx(c, D, ctx);
+  const { z, avisos } = entradaCx(c, D, ctx.T), filas = filasCx(c, D, ctx);
   if(!filas.length){ const e = c.tipo === 'base' ? 'Sin reacciones: escoja el pedestal (con sus nudos) y revise el archivo del modelo.' : !metDe(D, c.eDe) ? 'Escoja los elementos que une (Anexo D).'
       : CX_EMP.includes(c.tipo) ? 'El perfil no tiene fuerzas del modelo.' : 'No hay extremos con fuerzas: revise qué une, los nudos o escriba las cargas a mano.';
     c.res = { ok:false, error:e }; return { ok:false, error:e }; }
@@ -131,9 +139,47 @@ function calcCx(c, D, ctx){
   R.av = [...avisos.filter(a => !a.startsWith('NO USAR')), ...(R.av || [])];
   const ratio = isFinite(R.max) ? R.max : 99;
   c.res = { ok:true, ratio:+ratio.toFixed(3), cumple:!!R.ok, fecha:new Date().toISOString() };
-  return { ok:true, tipo:'cx', R, inp, ratio, cumple:!!R.ok, _filas:filas, ctrl:peor, avisos:R.av, rojo };
+  const X = { ok:true, tipo:'cx', R, inp, ratio, cumple:!!R.ok, _filas:filas, ctrl:peor, avisos:R.av, rojo };
+  X.comp = compRig(c, D, X, ctx.T);
+  if(R.rigid) c.res.rig = { Sj:isFinite(R.rigid.Sj) ? Math.round(R.rigid.Sj) : null, K:R.rigid.K != null && isFinite(R.rigid.K) ? +R.rigid.K.toFixed(2) : R.rigid.K === Infinity ? 999 : null, clase:R.rigid.clase, modelo:X.comp?.tono || null };
+  return X;
 }
 
+
+// Rigidez de la conexión frente a cómo está modelado el nudo (pedido de Amo 20-nov: «el modelo se acercaría más a lo real»)
+function compRig(c, D, X, T){
+  const g = X?.R?.rigid; if(!g || !T || !g.clase || g.tipo === 'cortante') return null;
+  const nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[g.clase], res = isFinite(g.Sj) && g.Sj > 0 ? Math.round(g.Sj / g.eta) : null;
+  const fmt = v => Math.round(v).toLocaleString('es-CO');
+  if(g.tipo === 'base'){
+    const p = pedDe(D, c.eA), ap = T._apoyos || {}; const est = (p?.nudos || []).map(j => { const a = ap[j]; return a ? (a.R1 && a.R2 ? 'emp' : !a.R1 && !a.R2 ? 'lib' : 'parc') : '?'; });
+    if(!est.length || est.every(e => e === '?')) return null;
+    const m = est.includes('emp') ? 'emp' : est.includes('lib') ? 'lib' : 'parc';
+    if(g.clase === 'rigida' && m === 'emp') return { tono:'ok', txt:`La base es rígida (K = ${fx(g.K, 1)}) y en el modelo está empotrada: coherente.` };
+    if(g.clase === 'art' && m === 'lib') return { tono:'ok', txt:'La base es articulada y en el modelo está articulada: coherente.' };
+    return { tono:'amber', txt:`La base es ${nom} (K = ${fx(g.K, 1)}), pero en el modelo el apoyo está ${m === 'emp' ? 'empotrado' : m === 'lib' ? 'articulado' : 'con algunas rotaciones libres'}. Para acercar el modelo a la realidad ${g.clase === 'semi' && res ? `use en ese apoyo un resorte a rotación (Assign → Joint → Springs, R2/R3) de ${fmt(res)} kN·m/rad (Sj,ini/η, η = 3)` : g.clase === 'rigida' ? 'empotre el apoyo' : 'libere las rotaciones del apoyo'}.` };
+  }
+  const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
+  if(!ext.length) return null;
+  const est = ext.map(x => ({ x, r:relExt(T, x), k:x.e === 'i' ? T[x.F]?.ki : T[x.F]?.kj }));
+  const nud = f => { const l = [...new Set(est.filter(f).map(e => e.x.j))]; return !l.length ? '' : (l.length > 1 ? 'los nudos ' : 'el nudo ') + l.join(', '); };
+  if(g.clase === 'rigida'){ const malos = nud(e => e.r !== 'emp');
+    return malos ? { tono:'amber', txt:`La conexión es rígida (K = ${fx(g.K, 1)}), pero en ${malos} el modelo no la tiene empotrada. Quite la liberación (release / partial fixity) de ese extremo.` }
+      : { tono:'ok', txt:`La conexión es rígida (K = ${fx(g.K, 1)} ≥ 20) y en el modelo los extremos están empotrados: coherente.` }; }
+  if(g.clase === 'semi'){
+    const emp = nud(e => e.r === 'emp'), lib = nud(e => e.r === 'lib'), lejos = nud(e => e.r === 'parc' && res && Math.abs(e.k - res) / res > 0.3), bien = nud(e => e.r === 'parc' && res && Math.abs(e.k - res) / res <= 0.3);
+    const t = [];
+    if(emp) t.push(`en ${emp} el modelo la tiene empotrada`);
+    if(lib) t.push(`en ${lib} el modelo la tiene articulada`);
+    if(lejos) t.push(`en ${lejos} el resorte del modelo difiere más de 30 %`);
+    if(!t.length) return { tono:'ok', txt:`La conexión es semirrígida (K = ${fx(g.K, 1)}) y el resorte del modelo en ${bien} está cerca de Sj,ini/η = ${fmt(res)} kN·m/rad: coherente.` };
+    return { tono:'amber', txt:`La conexión es semirrígida (K = ${fx(g.K, 1)}), pero ${t.join('; ')}. Para acercar el modelo a la realidad asigne en ese extremo de la viga Partial Fixity M3 = ${fmt(res)} kN·m/rad (Assign → Frame → Releases/Partial Fixity: marque M33 y escriba el resorte), vuelva a correr y suba el archivo.` };
+  }
+  const emp = nud(e => e.r !== 'lib');
+  return emp ? { tono:'amber', txt:`La conexión es prácticamente articulada (K = ${fx(g.K, 2)} ≤ 2), pero en ${emp} el modelo no la tiene liberada: libere M3 en ese extremo o use una conexión más rígida.` } : { tono:'ok', txt:'La conexión es articulada y en el modelo el extremo está liberado: coherente.' };
+}
+const compRigHTML = (o, imp) => !o ? '' : imp ? `<p class="ax-nota"><b>Modelo:</b> ${esc(o.txt)}</p>`
+  : `<div class="note ${o.tono === 'ok' ? '' : 'amber'}" style="margin-bottom:10px">${o.tono === 'ok' ? '✓ ' : '⚠ '}${esc(o.txt)}</div>`;
 // ─── Galería y creación ───
 function galCxHTML(){
   const ver = S.m.tipo === 'verificacion' && S.m.anexos?.her ? S.m.anexos.her : null;
@@ -230,7 +276,7 @@ function pintarCx(c, D){
   const ctx = _cxCtx, X = ctx ? calcE(c, D, ctx) : null;
   $('#cxUne').innerHTML = uneHTML(c, D, ctx ? ctx.T || {} : null);
   enlazaUne(c, D, $('#cxUne'), (soloTexto) => { guardarMemoria(); if(soloTexto) debCx(c, D); else pintarCx(c, D); });
-  const { z, lock } = entradaCx(c, D);
+  const { z, lock } = entradaCx(c, D, ctx?.T);
   $('#cxLock').innerHTML = lock.size ? `<div class="cx-lock">${[['viga', 'Viga'], ['columna', 'Columna'], ['tSop', 'Soporte t'], ['Lp', 'Pedestal N'], ['Wp', 'Pedestal B'], ['fc', "f'c"], ['Bt', 'Tubo B'], ['tt', 'Tubo t'], ['H', 'Tubo H']].filter(([k]) => lock.has(k) && z[k] !== '' && z[k] != null).map(([k, t]) => `<span>${t} <b>${esc(z[k])}</b> 🔒</span>`).join('')}<span class="hint" style="background:none">del Anexo D (se cambian allá)</span></div>` : '';
   $('#cxCarg').innerHTML = cargasCxHTML(c, X);
   // secciones de datos (las de la app de conexiones) con los valores del Anexo D
@@ -241,7 +287,7 @@ function pintarCx(c, D){
   $$('#form [data-k]').forEach(el => { if(lock.has(el.dataset.k)){ el.disabled = true; el.dataset.lock = '1'; el.title = 'Viene del Anexo D'; } });
   const R = X?.ok ? X.R : null;
   $('#dib').innerHTML = R && !R.error ? ConUI.dibujo(inp, R) : '';
-  box.innerHTML = !X ? '<p class="muted">Calculando…</p>' : !X.ok ? `<div class="note amber">${esc(X.error)}</div>` : (X.rojo || []).map(a => `<div class="note" style="margin-bottom:10px;border-left:4px solid #b91c1c;background:#fef2f2;color:#991b1b"><b>⚠ ${esc(a)}</b></div>`).join('') + ConUI.resHTML(inp, R) + (X.ctrl && !X.ctrl._man ? `<p class="hint" style="margin-top:6px">Fila que controla: ${esc(X.ctrl._t || '')}</p>` : '');
+  box.innerHTML = !X ? '<p class="muted">Calculando…</p>' : !X.ok ? `<div class="note amber">${esc(X.error)}</div>` : (X.rojo || []).map(a => `<div class="note" style="margin-bottom:10px;border-left:4px solid #b91c1c;background:#fef2f2;color:#991b1b"><b>⚠ ${esc(a)}</b></div>`).join('') + compRigHTML(X.comp) + ConUI.resHTML(inp, R) + (X.ctrl && !X.ctrl._man ? `<p class="hint" style="margin-top:6px">Fila que controla: ${esc(X.ctrl._t || '')}</p>` : '');
   if($('#eTag')) $('#eTag').textContent = etiquetaE(c, D);
   const li = document.querySelector(`[data-sele="${c.id}"]`); if(li){ const p = li.querySelector('.pill'); if(p) p.outerHTML = pillRes(c.res); const l = li.querySelector('.e-lbl'); if(l) l.textContent = etiquetaE(c, D); }
   activarCx(c, D); pintarListo();
@@ -284,7 +330,7 @@ function cxPrintSec(c, X, D, num){
     <div class="ax-mapas"><figure style="grid-column:1/-1">${ConUI.dibujo(inp, R)}</figure></div>
     ${ConUI.datosPrint(inp).replace('<table class="t kv">', '<table class="ax-kv">').replace(/<tr><th>/g, '<tr><td>').replace(/<\/th><td>/g, '</td><td>').replace(/<tr><td>Cargas<\/td><td>[^<]*<\/td><\/tr>/, '')}
     <table class="ax-kv"><tr><td>Cargas</td><td>${carg}</td></tr></table>
-    ${(X.rojo || []).map(a => `<p class="ax-nota"><b>${esc(a)}</b></p>`).join('')}${ConUI.chequeosHTML(R)}${R.av.length ? `<p class="ax-nota"><b>Observaciones:</b> ${R.av.map(esc).join(' ')}</p>` : ''}
+    ${(X.rojo || []).map(a => `<p class="ax-nota"><b>${esc(a)}</b></p>`).join('')}${ConUI.rigHTML(R, true)}${compRigHTML(X.comp, true)}${ConUI.chequeosHTML(R)}${R.av.length ? `<p class="ax-nota"><b>Observaciones:</b> ${R.av.map(esc).join(' ')}</p>` : ''}
     <h4>Requisitos de geometría y detallado</h4>${ConUI.reqHTML(R)}
     <div class="ax-box">Relación máxima = ${fx(X.ratio, 3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>
     <h4>Cálculo</h4><div class="calc">${R.pasos.map(esc).join('<br/>')}</div></section>`;
@@ -292,5 +338,14 @@ function cxPrintSec(c, X, D, num){
 function descCx(c, D, X){
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), n = cxNombre(c.tipo).toLowerCase();
   const nud = X?._filas ? [...new Set(X._filas.map(f => f._j).filter(Boolean))] : [];
-  return `Esta conexión es una ${n}${de ? ` del elemento ${de.nom} (${nomSec(de)})` : ''}${a ? ` a ${a.nom} (${nomSec(a)})` : ''}${c.tipo === 'base' && pedDe(D, c.eA) ? ` sobre el pedestal ${pedDe(D, c.eA).nom}` : ''}${nud.length ? `, en los nudos ${nud.join(', ')} del modelo` : ''}. Se revisó con ${X?._filas?.length || 0} combinación(es) de resistencia; controla ${X?.ctrl?._t || 'la carga escrita'}.`;
+  return `Esta conexión es una ${n}${de ? ` del elemento ${de.nom} (${nomSec(de)})` : ''}${a ? ` a ${a.nom} (${nomSec(a)})` : ''}${c.tipo === 'base' && pedDe(D, c.eA) ? ` sobre el pedestal ${pedDe(D, c.eA).nom}` : ''}${nud.length ? `, en los nudos ${nud.join(', ')} del modelo` : ''}. Se revisó con ${X?._filas?.length || 0} combinación(es) de resistencia; controla ${X?.ctrl?._t || 'la carga escrita'}.${rigTxt(X)}`;
+}
+
+// Texto de la rigidez para la memoria general (pedido de Amo: citar el método)
+function rigTxt(X){
+  const g = X?.R?.rigid; if(!g) return '';
+  if(g.tipo === 'cortante') return g.clase === 'art' ? ' Es una conexión simple: se clasifica como articulada por sus requisitos de detallado (AISC 360-10 B3.6a; Manual AISC parte 10) y se modela con M3 liberado.' : '';
+  const nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[g.clase];
+  const Sj = isFinite(g.Sj) ? `${Math.round(g.Sj).toLocaleString('es-CO')} kN·m/rad` : 'muy alta (se considera infinita)';
+  return ` Su rigidez inicial a rotación es Sj,ini = ${Sj}, calculada con el método de los componentes de la norma europea EN 1993-1-8, numeral 6.3, porque el Reglamento NSR-10 (Título F.2, basado en AISC 360-10, sección B3.6) exige clasificar las conexiones por su rigidez pero no da fórmulas para calcularla.${g.K != null ? ` Con K = Sj·L/(E·I) = ${isFinite(g.K) ? fx(g.K, 1) : '∞'} la conexión se clasifica como ${nom} según el comentario de la sección B3.6 del AISC 360-10 (rígida si K ≥ 20, articulada si K ≤ 2).` : ''}${g.clase === 'semi' && isFinite(g.Sj) ? ` En el modelo estructural se representa con un resorte a rotación de Sj,ini/η = ${Math.round(g.Sj / g.eta).toLocaleString('es-CO')} kN·m/rad (EN 1993-1-8, numeral 5.1.2, η = ${g.eta}).` : ''}${X.comp && X.comp.tono === 'ok' ? ' ' + X.comp.txt : ''}`;
 }

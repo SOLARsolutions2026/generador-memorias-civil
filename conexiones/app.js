@@ -9,7 +9,7 @@ const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [..
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const S = { user:null, rol:null, cfg:{}, perfiles:[], lista:[], p:null, sel:null, q:'' };
 const f2 = (x, d = 2) => x == null || !isFinite(x) ? '—' : (+x).toLocaleString('es-CO', { minimumFractionDigits:d, maximumFractionDigits:d });
-const { NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint } = ConUI;   // piezas compartidas con el Anexo E (ui-con.js)
+const { rigHTML, NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint } = ConUI;   // piezas compartidas con el Anexo E (ui-con.js)
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const fmtFecha = s => s ? new Date(s.length === 10 ? s + 'T12:00' : s).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 function toast(m, ms = 2600){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, ms); }
@@ -326,7 +326,7 @@ async function imprimir(){
   p.datos.con.forEach((c, i) => { const r = Conex.calc(c); if(r.error) return;
     h += `<section class="cx"><h2>${i + 2}. ${esc(c.nom)} — ${esc(NOMBRES[c.tipo])}</h2>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}
       <div class="cx-row"><div class="dib">${dibujo(c, r)}</div><div>${datosPrint(c)}</div></div>
-      <h3>Chequeos</h3>${chequeosHTML(r)}${r.av.length ? `<p><b>Observaciones:</b> ${r.av.map(esc).join(' ')}</p>` : ''}<h3>Requisitos de geometría y detallado</h3>${reqHTML(r)}<h3>Cálculo</h3><div class="calc">${r.pasos.map(esc).join('<br/>')}</div>
+      ${r.rigid ? `<h3>Rigidez y clasificación</h3>${rigHTML(r, true)}` : ''}<h3>Chequeos</h3>${chequeosHTML(r)}${r.av.length ? `<p><b>Observaciones:</b> ${r.av.map(esc).join(' ')}</p>` : ''}<h3>Requisitos de geometría y detallado</h3>${reqHTML(r)}<h3>Cálculo</h3><div class="calc">${r.pasos.map(esc).join('<br/>')}</div>
       <p><b>Conclusión:</b> ${r.ok ? `la conexión cumple; relación demanda/capacidad máxima ${f2(r.max, 3)}.` : `la conexión NO cumple (relación máxima ${f2(r.max, 3)}${r.req.some(x => !x[1]) ? ' o hay requisitos de detallado sin cumplir' : ''}).`}</p></section>`; });
   // Nudos de columna (opción C de Amo, 19-nov)
   let sec = p.datos.con.filter(c => !Conex.calc(c).error).length + 2;

@@ -1878,12 +1878,130 @@ function ajustarNudo(n, lista){
   });
   return k;
 }
+
+// ── Rigidez a rotación y clasificación (pedido de Amo 20-nov) ─────────────
+// La NSR-10 F.2 (AISC 360-10 B3.6) pide clasificar las conexiones por su rigidez pero no da fórmulas para calcularla:
+// se usa el método de los componentes de EN 1993-1-8 §6.3 (Sj,ini = E·z²/Σ(1/ki)) y la clasificación del AISC 360-10
+// (comentario B3.6): K = Ks·L/(E·I) ≥ 20 rígida (FR), ≤ 2 articulada (simple), en medio semirrígida (PR).
+// Resorte para el modelo: Sj = Sj,ini/η (EN 1993-1-8 §5.1.2, Tabla 5.2: η = 2 viga–columna, 3 placa base).
+const REF_RIG = 'EN 1993-1-8 §6.3 (método de los componentes) · clasificación AISC 360-10 B3.6';
+function inerciaPerfil(nom){ const P = (G.PERFILES_LAM || []).find(x => x[0] === nom); return P ? P[8] : null; }
+const inerciaTubo = (H, B, t) => (B * H ** 3 - (B - 2 * t) * (H - 2 * t) ** 3) / 12;
+function clasificaRig(Sj, L, I, E){   // Sj [N·mm/rad], L [mm], I [mm⁴]
+  if(!(L > 0) || !(I > 0)) return { K:null, clase:null };
+  if(!isFinite(Sj)) return { K:Infinity, clase:'rigida' };
+  const K = Sj * L / (E * I); return { K, clase:K >= 20 ? 'rigida' : K <= 2 ? 'art' : 'semi' };
+}
+const inv = k => !isFinite(k) || k <= 0 ? (k <= 0 ? Infinity : 0) : 1 / k;
+function rigidez(c, R){
+  const E = 200000, pasos = [], notas = [], comps = [];
+  const kc = (n, k, f) => { comps.push({ n, k, f }); return k; };
+  const out = (o) => ({ ref:REF_RIG, pasos, notas, comps, ...o });
+  // Conexiones a cortante: articuladas por detallado (no hay fórmula de rigidez en EN 1993-1-8 ni en el AISC)
+  if(['aleta', 'angular', 'testaV', 'asiento'].includes(c.tipo)){
+    const okDet = !(R.req || []).some(q => !q[1]);
+    return out({ tipo:'cortante', clase:okDet ? 'art' : null, Sj:0,
+      notas:[okDet ? 'Conexión simple (AISC 360-10 B3.6a; Manual AISC parte 10): su capacidad de rotación la dan los requisitos de detallado, que se cumplen. Se modela articulada (M3 liberado).'
+        : 'Conexión simple: no cumple todos los requisitos de detallado, así que no se garantiza que gire como articulada. Revise los requisitos.'] });
+  }
+  const Lm = +c.Lviga > 0 ? +c.Lviga * 1000 : null;
+  if(c.tipo === 'testa' || c.tipo === 'ras'){
+    const g = R.geo || {}, vg = g.vg, cl = g.cl, H = g.H || {}; if(!vg) return null;
+    const d = +c.d, tp = +c.tp, bp = +c.bp, gg = +c.g, pfo = +c.pfo, de = +c.de, wA = +c.wAlma || 0, wF = c.soldAla === 'cjp' ? 0 : (+c.wAla || 0);
+    const As = 0.76 * Math.PI * d * d / 4, tfc = cl ? cl.tf : 0;
+    const Lb = tp + (cl ? tfc : tp) + 8 + 0.8 * d, k10 = 1.6 * As / Lb;
+    const m = Math.max(gg / 2 - vg.tw / 2 - 0.8 * wA, 0.5 * d), ep = (bp - gg) / 2, mx = Math.max(pfo - 0.8 * wF, 0.5 * d), ex = de;
+    const mc = cl ? Math.max(gg / 2 - cl.tw / 2 - 0.8 * (cl.r || 0), 0.5 * d) : 0, ec = cl ? (cl.bf - gg) / 2 : 0, dc = cl ? cl.d - 2 * (cl.tf + (cl.r || 0)) : 0;
+    const rigC = !!g.rig;   // placas de continuidad en la columna
+    const filas = Object.entries(H).filter(([, h]) => h > 0).map(([k, h]) => ({ k, h }));
+    const ext = k => !c.tipo.startsWith('ras') && (k === 'h0' || (g.e8 && (k === 'h1' || k === 'h2')));
+    pasos.push(`Pernos: As ≈ 0.76·π·d²/4 = ${r1(As)} mm²; Lb = tp + tfc + arandelas + ½(cabeza + tuerca) ≈ ${r1(Lb)} mm → k10 = 1.6·As/Lb = ${r2(k10)} mm (por fila de 2 pernos)`);
+    pasos.push(`Placa: m = g/2 − tw/2 − 0.8·w = ${r1(m)} mm, e = ${r1(ep)} mm${filas.some(f => ext(f.k)) ? `; extensión mx = pfo − 0.8·w = ${r1(mx)} mm, ex = ${r1(ex)} mm` : ''}. α de la Figura 6.11 tomado como 2π (fila junto al ala).`);
+    if(cl) pasos.push(`Columna ${cl.nom}: m = g/2 − tw/2 − 0.8·r = ${r1(mc)} mm, e = ${r1(ec)} mm, dc = ${r1(dc)} mm${rigC ? ' · con placas de continuidad: alma en tensión y compresión rígidas (k3 = k2 = ∞)' : ''}`);
+    else notas.push('No se escogió la columna: no se incluyen su ala, su alma ni su zona de panel (la rigidez real es menor).');
+    let sumKh = 0, sumKh2 = 0;
+    filas.forEach(({ k, h }, i) => {
+      const lp = ext(k) ? Math.min(2 * Math.PI * mx, Math.PI * mx + gg, Math.PI * mx + 2 * ep, 4 * mx + 1.25 * ex, ep + 2 * mx + 0.625 * ex, 0.5 * bp, 0.5 * gg + 2 * mx + 0.625 * ex)
+        : (i === filas.findIndex(f => !ext(f.k)) ? 2 * Math.PI * m : Math.min(2 * Math.PI * m, 4 * m + 1.25 * ep));
+      const mm = ext(k) ? mx : m, k5 = 0.9 * lp * tp ** 3 / mm ** 3;
+      let k3 = Infinity, k4 = Infinity, lc = 0;
+      if(cl){ lc = Math.min(2 * Math.PI * mc, 4 * mc + 1.25 * ec); k4 = 0.9 * lc * tfc ** 3 / mc ** 3; k3 = rigC ? Infinity : 0.7 * lc * cl.tw / dc; }
+      const keff = 1 / (inv(k3) + inv(k4) + inv(k5) + inv(k10));
+      pasos.push(`Fila a h = ${r1(h)} mm: leff placa ${r1(lp)} → k5 = 0.9·leff·tp³/m³ = ${r2(k5)}${cl ? `; leff ala col. ${r1(lc)} → k4 = ${r2(k4)}; k3 = ${isFinite(k3) ? r2(k3) : '∞'}` : ''}; k10 = ${r2(k10)} → keff = ${r2(keff)} mm`);
+      sumKh += keff * h; sumKh2 += keff * h * h;
+    });
+    const zeq = sumKh2 / sumKh, keq = sumKh / zeq;
+    kc('Filas de pernos en tensión (keq: pernos, placa, ala y alma de la columna)', keq, 'keq = Σ keff·h / zeq');
+    let k1 = Infinity, k2 = Infinity;
+    if(cl){
+      const pX = (G.PERFILES_LAM || []).find(x => x[0] === cl.nom), A = pX ? pX[7] : 0, Avc = Math.max(A - 2 * cl.bf * cl.tf + (cl.tw + 2 * (cl.r || 0)) * cl.tf, cl.d * cl.tw);
+      const beta = !c.dosLados ? 1 : c.sentido2 === 'mismo' ? 2 : 0;
+      k1 = beta === 0 ? Infinity : 0.38 * Avc / (beta * zeq);
+      const sp = 2 * tp, beffc = vg.tf + 2 * Math.SQRT2 * 0.707 * wF + 5 * (tfc + (cl.r || 0)) + sp;
+      k2 = rigC ? Infinity : 0.7 * beffc * cl.tw / dc;
+      pasos.push(`Zona de panel: Avc = ${r1(Avc)} mm², β = ${beta}${beta === 0 ? ' (vigas a los dos lados con momentos opuestos: panel equilibrado)' : ''} → k1 = 0.38·Avc/(β·z) = ${isFinite(k1) ? r2(k1) : '∞'} mm`);
+      pasos.push(`Alma en compresión: beff = tfb + 2√2·a + 5(tfc + r) + 2tp = ${r1(beffc)} mm → k2 = 0.7·beff·tw/dc = ${isFinite(k2) ? r2(k2) : '∞'} mm`);
+      kc('Zona de panel de la columna (k1)', k1); kc('Alma de la columna en compresión (k2)', k2);
+    }
+    const Sj = E * zeq * zeq / (inv(k1) + inv(k2) + inv(keq));
+    pasos.push(`z = zeq = Σkeff·h²/Σkeff·h = ${r1(zeq)} mm → Sj,ini = E·z²/Σ(1/ki) = 200000·${r1(zeq)}²/(${[k1, k2, keq].map(k => isFinite(k) ? '1/' + r2(k) : '0').join(' + ')}) = ${r2(Sj / 1e6)} kN·m/rad`);
+    const I = inerciaPerfil(vg.nom), cls = clasificaRig(Sj, Lm, I, E);
+    return out({ tipo:'momento', Sj:Sj / 1e6, z:zeq, I, L:Lm, eta:2, ...cls });
+  }
+  if(c.tipo === 'soldada'){
+    const g = R.geo || {}, mm = g.m; if(!mm) return null;
+    const I = mm.tub ? inerciaTubo(mm.d, mm.bf, mm.tf) : inerciaPerfil(mm.nom);
+    if(c.soporte !== 'col'){ notas.push(c.soporte === 'alma' ? 'Viga al alma de la columna (eje débil) con placas de continuidad: fuera del alcance de EN 1993-1-8; se considera rígida.' : 'Soldada a una placa: se considera rígida si la placa no se deforma fuera de su plano.');
+      return out({ tipo:'momento', Sj:Infinity, I, L:Lm, eta:2, ...clasificaRig(Infinity, Lm, I, E) }); }
+    const cl = perfil(c.columna);
+    if(!cl){ notas.push('No se escogió la columna: la unión soldada sola se considera rígida.'); return out({ tipo:'momento', Sj:Infinity, I, L:Lm, eta:2, ...clasificaRig(Infinity, Lm, I, E) }); }
+    const z = mm.d - mm.tf, rigC = !!g.rig, dc = cl.d - 2 * (cl.tf + (cl.r || 0)), aF = c.union === 'cjp' ? 0 : 0.707 * (+c.w || 0);
+    const pX = (G.PERFILES_LAM || []).find(x => x[0] === cl.nom), A = pX ? pX[7] : 0, Avc = Math.max(A - 2 * cl.bf * cl.tf + (cl.tw + 2 * (cl.r || 0)) * cl.tf, cl.d * cl.tw);
+    const beta = !c.dosLados ? 1 : c.sentido2 === 'mismo' ? 2 : 0, k1 = beta === 0 ? Infinity : 0.38 * Avc / (beta * z);
+    const beff = mm.tf + 2 * Math.SQRT2 * aF + 5 * (cl.tf + (cl.r || 0)), k2 = rigC ? Infinity : 0.7 * beff * cl.tw / dc, k3 = rigC ? Infinity : 0.7 * beff * cl.tw / dc;
+    kc('Zona de panel de la columna (k1)', k1); kc('Alma de la columna en compresión (k2)', k2); kc('Alma de la columna en tensión (k3)', k3);
+    const Sj = E * z * z / (inv(k1) + inv(k2) + inv(k3));
+    pasos.push(`z = d − tf = ${r1(z)} mm; Avc = ${r1(Avc)} mm², β = ${beta} → k1 = ${isFinite(k1) ? r2(k1) : '∞'}; beff = tfb + 2√2·a + 5(tfc + r) = ${r1(beff)} mm → k2 = k3 = ${isFinite(k2) ? r2(k2) : '∞'} mm${rigC ? ' (placas de continuidad)' : ''}`);
+    pasos.push(`Sj,ini = E·z²/Σ(1/ki) = ${isFinite(Sj) ? r2(Sj / 1e6) + ' kN·m/rad' : '∞ (rígida)'}`);
+    return out({ tipo:'momento', Sj:Sj / 1e6, z, I, L:Lm, eta:2, ...clasificaRig(Sj, Lm, I, E) });
+  }
+  if(c.tipo === 'base'){
+    const AE = G.AnexoE; if(!AE) return null;
+    const tubo = c.colTipo === 'tubo', tt = 0.93 * (+c.tt || 0);
+    const cl = tubo ? { nom:`Tubo ${c.Ht}×${c.Bt}×${c.tt}`, d:+c.Ht, bf:+c.Bt, tf:tt, tw:tt } : perfil(c.columna); if(!cl) return null;
+    const I = tubo ? inerciaTubo(+c.Ht, +c.Bt, tt) : inerciaPerfil(cl.nom);
+    const da = (AE.PERNOS[c.perno] || [19.05])[0], N = +c.N, B = +c.B, tp = +c.tp, S1 = +c.S1, nB = Math.max(1, Math.round(+c.nB)), fc = +c.fc, w = +c.w || 0;
+    const Fy = (AE.ACEROS?.[c.aceroPlaca]?.[0]) || 250, Ec = 4700 * Math.sqrt(fc);
+    const A1 = N * B, A2 = (+c.Lp || N) * (+c.Wp || B), fjd = (2 / 3) * 0.85 * fc * Math.min(Math.sqrt(A2 / A1), 2);
+    const cc = tp * Math.sqrt(Fy / (3 * fjd)), beffC = Math.min(cl.tf + 2 * cc, N), leffC = Math.min(cl.bf + 2 * cc, B);
+    const k13 = Ec * Math.sqrt(beffC * leffC) / (1.275 * E);
+    const m = Math.max((S1 - cl.d) / 2 - 0.8 * w, 0.5 * da), ex = (N - S1) / 2;
+    if((S1 - cl.d) / 2 <= 0) notas.push('Los pernos quedan dentro de las alas de la columna: la flexión de la placa se aproxima con m = 0.5·d del perno.');
+    const leff = Math.min(B, nB * 2 * Math.PI * m, nB * (4 * m + 1.25 * ex)), k15 = 0.425 * leff * tp ** 3 / m ** 3;
+    const As = 0.76 * Math.PI * da * da / 4, Lb = 8 * da + (c.mortero ? (+c.grout || 25) : 0) + tp + 6 + 0.4 * da, k16 = 2.0 * nB * As / Lb;
+    const kt = 1 / (inv(k15) + inv(k16)), zt = S1 / 2, zc = cl.d / 2 - cl.tf / 2, z = zt + zc;
+    kc('Concreto en compresión bajo el ala (k13)', k13); kc('Placa a flexión del lado en tensión (k15)', k15); kc(`Pernos de anclaje en tensión, ${nB} por fila (k16)`, k16);
+    const P = +c.P || 0, Mx = Math.abs(+c.Mx || 0); let fac = 1;
+    if(P > 0 && Mx > 0){ const e = Mx * 1e6 / (P * 1e3), ek = (zc * k13 - zt * kt) / (k13 + kt); if(e + ek > 0) fac = e / (e + ek);
+      pasos.push(`Con carga axial: e = M/N = ${r1(e)} mm, ek = (zc·kc − zt·kt)/(kc + kt) = ${r1(ek)} mm → factor e/(e + ek) = ${r3(fac)} (Tabla 6.12)`); }
+    const Sj = E * z * z / (inv(k13) + inv(kt)) * fac;
+    pasos.push(`Concreto: Ec = 4700√f'c = ${Math.round(Ec)} MPa, fjd ≈ ⅔·0.85·f'c·√(A2/A1) = ${r2(fjd)} MPa, c = tp·√(Fy/(3·fjd)) = ${r1(cc)} mm → T equivalente ${r1(beffC)} × ${r1(leffC)} mm → k13 = Ec·√(beff·leff)/(1.275·E) = ${r2(k13)} mm`);
+    pasos.push(`Placa: m = (S1 − d)/2 − 0.8·w = ${r1(m)} mm, leff = ${r1(leff)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15)} mm (sin palanca: anclajes largos)`);
+    pasos.push(`Anclajes: As ≈ ${r1(As)} mm², Lb = 8d + mortero + tp + arandela + ½ tuerca = ${r1(Lb)} mm → k16 = 2.0·n·As/Lb = ${r2(k16)} mm`);
+    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = E·z²/(1/k13 + 1/kt)${fac < 1 ? '·e/(e + ek)' : ''} = ${r2(Sj / 1e6)} kN·m/rad (sentido N)`);
+    const Lc = +c.Lcol > 0 ? +c.Lcol * 1000 : null;
+    return out({ tipo:'base', Sj:Sj / 1e6, z, I, L:Lc, eta:3, ...clasificaRig(Sj, Lc, I, E) });
+  }
+  return null;
+}
 const CALC = { aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
 const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c, !!c._sinSug); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
-    if(r.error || !EXTRA[c.tipo]) return r;
-    EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); return r; },
+    if(r.error) return r;
+    if(EXTRA[c.tipo]){ EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); }
+    if(!c._sinSug) try{ r.rigid = rigidez(c, r); }catch(e){ r.rigid = null; }
+    return r; },
   defaults: t => (DEF[t] || defaultsAleta)(),
   CARAS, nudo:calcNudo, defaultsNudo, ajustarNudo, vigaDe };
 G.Conex = Conex;

@@ -279,7 +279,11 @@ function memDoc(ctx, ed){
       T('con.' + c.id, `${dsc} La relación demanda / capacidad máxima es ${fx(X.ratio, 3)}: ${X.cumple ? 'cumple' : 'NO cumple'}.`);
       const e = metDe(ctx.D, c.de), s = e ? secDe(e) : null;
       fig('con.' + c.id, `Detalle de la conexión ${c.nom}`, c.tipo === 'placa' ? `<div class="m-2f">${svgPlacaPlanta(I, X, false, fl)}${svgPlacaAlzado(I, X, false, fl)}</div>` : c.tipo === 'vc' ? svgVC(I, X, false, fl) : svgSoldX({ ...I, _sec:s }, X, false, fl.falla));
-      ver('E'); } }
+      ver('E'); }
+    const rg = ctx.con.filter(({ X }) => X?.ok && X.tipo === 'cx' && X.R?.rigid);
+    if(rg.length){ const CL = { rigida:'Rígida', semi:'Semirrígida', art:'Articulada' };
+      T('con.rig', 'La rigidez a rotación de las conexiones se calculó con el método de los componentes de la norma europea EN 1993-1-8 (numeral 6.3), ya que el Reglamento NSR-10 (Título F.2, basado en AISC 360-10, sección B3.6) exige clasificarlas por su rigidez pero no da fórmulas para calcularla. La clasificación sigue el comentario de la sección B3.6 del AISC 360-10: con K = Sj·L/(E·I), la conexión es rígida si K ≥ 20, articulada si K ≤ 2 y semirrígida en los demás casos.');
+      tabla(['Conexión', 'Tipo', 'Sj,ini [kN·m/rad]', 'K', 'Clasificación'], rg.map(({ c, X }) => { const g = X.R.rigid; return [esc(c.nom), esc(cxNombre(c.tipo)), g.tipo === 'cortante' ? '—' : isFinite(g.Sj) ? Math.round(g.Sj).toLocaleString('es-CO') : '∞', g.K == null ? '—' : isFinite(g.K) ? fx(g.K, 1) : '∞', g.clase ? CL[g.clase] : '—']; }), 'Rigidez y clasificación de las conexiones'); } }
 
   // ══ Conclusiones y recomendaciones (solo revisión estructural, pedido de Amo 15-nov) ══
   if(S.m?.tipo === 'revest'){

@@ -158,7 +158,7 @@ function figPlacaApoyo(){
     <line x1="129" y1="100" x2="170" y2="120" stroke="${nar}"/><text x="172" y="124" font-size="9" fill="${nar}">Soldadura</text>
   </svg><figcaption>La viga se suelda a una placa (por ejemplo, una placa de base o una placa embebida). Se revisa la flexión de la placa bajo el ala en tensión; lo que sostiene la placa se revisa aparte.</figcaption></figure>`;
 }
-function seccionesDe(c){
+function seccionesDe0(c){
   const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
   const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] }),
     `<div class="f"><label class="ck"><input type="checkbox" data-k="cizalla" ${c.cizalla ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Bordes cortados con cizalla</label><div class="hint">Borde mínimo ${Conex.BORDE_CIZ[+c.d] ?? '—'} mm (con soplete o laminado ${Conex.BORDE_MIN[+c.d] ?? '—'} mm), Tabla F.2.10.3-4</div></div>`];
@@ -422,12 +422,40 @@ function chequeosHTML(r){
 function reqHTML(r){
   return `<ul class="req">${r.req.map(([t, ok, v]) => `<li class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(t)} <span class="hint">${esc(v)}</span></li>`).join('')}</ul>`;
 }
+
+// Sección «Rigidez y clasificación» (pedido de Amo 20-nov): luz de la viga (o altura de la columna) para K = Sj·L/(E·I)
+function seccionesDe(c){
+  const L = seccionesDe0(c);
+  if(['testa', 'ras', 'soldada'].includes(c.tipo))
+    L.push(['rigid', 'Rigidez y clasificación', () => c.Lviga ? `luz de la viga ${c.Lviga} m` : 'escriba la luz de la viga',
+      `<div class="fg g3">${campo(c, 'Lviga', 'Luz de la viga L [m]', { h:'Para clasificar con K = Sj·L/(E·I) (AISC 360-10 B3.6). En el Anexo E sale del modelo.' })}</div>`]);
+  if(c.tipo === 'base')
+    L.push(['rigid', 'Rigidez y clasificación', () => c.Lcol ? `altura de la columna ${c.Lcol} m` : 'escriba la altura de la columna',
+      `<div class="fg g3">${campo(c, 'Lcol', 'Altura de la columna L [m]', { h:'Para clasificar la base con K = Sj·L/(E·I). En el Anexo E sale del modelo.' })}</div>`]);
+  return L;
+}
+const CLASE_RIG = { rigida:['Rígida', 'ok'], semi:['Semirrígida', 'pend'], art:['Articulada', 'gray'] };
+const fmtN = v => !isFinite(v) ? '∞' : Math.round(v).toLocaleString('es-CO');
+// Bloque de rigidez para la pantalla y la impresión
+function rigHTML(r, imp){
+  const g = r && r.rigid; if(!g) return '';
+  const cl = g.clase ? CLASE_RIG[g.clase] : null;
+  const pill = cl ? `<span class="pill ${cl[1]}">${cl[0]}</span>` : '<span class="pill gray">sin clasificar</span>';
+  if(g.tipo === 'cortante') return `<div class="rig-box"><div class="rig-hd"><b>Rigidez y clasificación</b> ${pill}</div><p class="hint" style="margin:4px 0 0">${g.notas.map(esc).join(' ')}</p></div>`;
+  const resorte = isFinite(g.Sj) && g.Sj > 0 ? g.Sj / g.eta : null;
+  const lin = [`Rigidez inicial <b>Sj,ini = ${fmtN(g.Sj)} kN·m/rad</b>`,
+    g.K != null ? `K = Sj·L/(E·I) = ${isFinite(g.K) ? f2(g.K, 1) : '∞'} con L = ${f2(g.L / 1000, 2)} m (${g.tipo === 'base' ? 'altura de la columna' : 'luz de la viga'}) → ${cl ? cl[0].toLowerCase() : ''} (rígida si K ≥ 20, articulada si K ≤ 2)` : `Para clasificar escriba ${g.tipo === 'base' ? 'la altura de la columna' : 'la luz de la viga'}.`,
+    g.clase === 'rigida' ? `Para el modelo: ${g.tipo === 'base' ? 'apoyo empotrado' : 'extremo de la viga empotrado (sin liberación)'}` : g.clase === 'art' ? `Para el modelo: ${g.tipo === 'base' ? 'apoyo articulado' : 'extremo de la viga con M3 liberado'}` : resorte ? `Para el modelo: ${g.tipo === 'base' ? 'resorte a rotación en el apoyo (Joint Springs, R2/R3)' : 'resorte a rotación en el extremo de la viga (Partial Fixity, M3)'} = Sj,ini/η = ${fmtN(resorte)} kN·m/rad (η = ${g.eta}, EN 1993-1-8 §5.1.2)` : ''].filter(Boolean);
+  return `<div class="rig-box"><div class="rig-hd"><b>Rigidez y clasificación</b> ${pill}<span class="hint">${esc(g.ref)}</span></div>
+    <ul class="rig-l">${lin.map(x => `<li>${x}</li>`).join('')}</ul>${g.notas.length ? `<p class="hint" style="margin:4px 0">${g.notas.map(esc).join(' ')}</p>` : ''}
+    ${imp ? `<div class="calc">${g.pasos.map(esc).join('<br/>')}</div>` : `<details><summary class="hint">Ver componentes y cálculo</summary><div class="calc">${g.pasos.map(esc).join('<br/>')}</div></details>`}</div>`;
+}
 function resHTML(c, r){
   if(r.error) return `<div class="note">${esc(r.error)}</div>`;
   return `<div class="ct">Resultado <span class="pill ${r.ok ? 'ok' : 'no'}" style="margin-left:8px">${r.ok ? 'Cumple' : 'No cumple'} · relación máx. ${f2(r.max, 3)}</span></div>
     ${r.av.length ? `<div class="note amber">${r.av.map(esc).join('<br/>')}</div>` : ''}
     ${r.sug && r.sug.ok && esIng() ? `<div style="margin:-4px 0 10px"><button type="button" class="btn sm pri" data-apsug="1">${esc(r.sug.txt || '💡 Aplicar platina de rigidez')}</button></div>` : ''}
-    ${chequeosHTML(r)}
+    ${rigHTML(r)}${chequeosHTML(r)}
     <details style="margin-top:8px"><summary><b>Requisitos de geometría y detallado</b> (${r.req.filter(x => x[1]).length}/${r.req.length})</summary>${reqHTML(r)}</details>
     <details style="margin-top:6px"><summary><b>Ver cálculo detallado</b></summary><div class="calc">${r.pasos.map(esc).join('<br/>')}</div></details>`;
 }
@@ -729,5 +757,5 @@ function datosPrint(c){
 
 /* Barra lateral (estilo B de Amo, 18-nov; igual al generador de memorias). En un proyecto, en el computador, la lista de
    conexiones y la galería para agregar pasan a la barra lateral; en el celular quedan como antes (lista desplegable). */
-G.ConUI = { NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint };
+G.ConUI = { rigHTML, CLASE_RIG, NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint };
 })(window);
