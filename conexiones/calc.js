@@ -1893,6 +1893,19 @@ function clasificaRig(Sj, L, I, E){   // Sj [N·mm/rad], L [mm], I [mm⁴]
   const K = Sj * L / (E * I); return { K, clase:K >= 20 ? 'rigida' : K <= 2 ? 'art' : 'semi' };
 }
 const inv = k => !isFinite(k) || k <= 0 ? (k <= 0 ? Infinity : 0) : 1 / k;
+// EN 1993-1-8 Tabla 6.12 (placa base): P > 0 = compresión, M ≥ 0. Devuelve Sj [N·mm/rad] y el texto del caso.
+// Corrección 20-nov: con compresión e = M/N es negativa en la norma → factor |e|/(|e| − ek) (la compresión rigidiza); si |e| < zc no hay pernos en tensión
+// (caso compresión–compresión: z = 2zc, concreto de los dos lados).
+function sjBase(E, P, M, zc, zt, kc, kt){
+  const z1 = zt + zc, S1 = E * z1 * z1 / (inv(kc) + inv(kt)), ek = (zc * kc - zt * kt) / (kc + kt);
+  if(!(M > 0)){ if(P > 0){ const z = 2 * zc; return { Sj:E * z * z / (2 * inv(kc)), z, txt:`sin momento y con compresión: los dos lados en compresión, z = 2·zc = ${r1(z)} mm, Sj = E·z²/(2/kc) (Tabla 6.12)` }; }
+    return { Sj:S1, z:z1, txt:'' }; }
+  if(!P) return { Sj:S1, z:z1, txt:'' };
+  const e = M * 1e6 / (Math.abs(P) * 1e3);
+  if(P > 0 && e < zc){ const z = 2 * zc; return { Sj:E * z * z / (2 * inv(kc)), z, txt:`compresión con e = M/N = ${r1(e)} mm < zc = ${r1(zc)} mm: los pernos no trabajan a tensión, los dos lados en compresión → z = 2·zc = ${r1(z)} mm, Sj = E·z²/(2/kc) (Tabla 6.12)` }; }
+  const f = P > 0 ? (e - ek > 0 ? e / (e - ek) : 1) : (e + ek > 0 ? e / (e + ek) : 1);
+  return { Sj:S1 * f, z:z1, txt:`${P > 0 ? 'compresión' : 'tensión'} con e = |M/N| = ${r1(e)} mm, ek = (zc·kc − zt·kt)/(kc + kt) = ${r1(ek)} mm → factor ${P > 0 ? '|e|/(|e| − ek)' : 'e/(e + ek)'} = ${r3(f)} (Tabla 6.12)` };
+}
 function rigidez(c, R){
   const E = 200000, pasos = [], notas = [], comps = [];
   const kc = (n, k, f) => { comps.push({ n, k, f }); return k; };
@@ -1981,14 +1994,12 @@ function rigidez(c, R){
     const As = 0.76 * Math.PI * da * da / 4, Lb = 8 * da + (c.mortero ? (+c.grout || 25) : 0) + tp + 6 + 0.4 * da, k16 = 2.0 * nB * As / Lb;
     const kt = 1 / (inv(k15) + inv(k16)), zt = S1 / 2, zc = cl.d / 2 - cl.tf / 2, z = zt + zc;
     kc('Concreto en compresión bajo el ala (k13)', k13); kc('Placa a flexión del lado en tensión (k15)', k15); kc(`Pernos de anclaje en tensión, ${nB} por fila (k16)`, k16);
-    const P = +c.P || 0, Mx = Math.abs(+c.Mx || 0); let fac = 1;
-    if(P > 0 && Mx > 0){ const e = Mx * 1e6 / (P * 1e3), ek = (zc * k13 - zt * kt) / (k13 + kt); if(e + ek > 0) fac = e / (e + ek);
-      pasos.push(`Con carga axial: e = M/N = ${r1(e)} mm, ek = (zc·kc − zt·kt)/(kc + kt) = ${r1(ek)} mm → factor e/(e + ek) = ${r3(fac)} (Tabla 6.12)`); }
-    const Sj = E * z * z / (inv(k13) + inv(kt)) * fac;
+    const P = +c.P || 0, Mx = Math.abs(+c.Mx || 0), sb = sjBase(E, P, Mx, zc, zt, k13, kt), Sj = sb.Sj;
+    if(sb.txt) pasos.push('Con carga axial: ' + sb.txt);
     pasos.push(`Concreto: Ec = 4700√f'c = ${Math.round(Ec)} MPa, fjd ≈ ⅔·0.85·f'c·√(A2/A1) = ${r2(fjd)} MPa, c = tp·√(Fy/(3·fjd)) = ${r1(cc)} mm → T equivalente ${r1(beffC)} × ${r1(leffC)} mm → k13 = Ec·√(beff·leff)/(1.275·E) = ${r2(k13)} mm`);
     pasos.push(`Placa: m = (S1 − d)/2 − 0.8·w = ${r1(m)} mm, leff = ${r1(leff)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15)} mm (sin palanca: anclajes largos)`);
     pasos.push(`Anclajes: As ≈ ${r1(As)} mm², Lb = 8d + mortero + tp + arandela + ½ tuerca = ${r1(Lb)} mm → k16 = 2.0·n·As/Lb = ${r2(k16)} mm`);
-    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = E·z²/(1/k13 + 1/kt)${fac < 1 ? '·e/(e + ek)' : ''} = ${r2(Sj / 1e6)} kN·m/rad (sentido N, eje fuerte de la columna)`);
+    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = ${r2(Sj / 1e6)} kN·m/rad (sentido N, eje fuerte de la columna)`);
     const Lc = +c.Lcol > 0 ? +c.Lcol * 1000 : null;
     // Eje débil (pedido de Amo 20-nov): momento en el sentido B (My). Tensión = los 2 pernos de la columna extrema (uno por fila);
     // compresión bajo las puntas de las 2 alas (perfil I) o bajo la pared lateral (tubo); m = distancia del perno al contorno de la columna.
@@ -2006,10 +2017,8 @@ function rigidez(c, R){
       const mw = Math.max(Math.hypot(dN, dB) - 0.8 * w, 0.5 * da), nT = 2;
       const leffw = Math.min(N, nT * Math.min(2 * Math.PI * mw, 4 * mw + 1.25 * aB)), k15w = 0.425 * leffw * tp ** 3 / mw ** 3, k16w = 2.0 * nT * As / Lb;
       kw('Concreto en compresión (k13)', k13w); kw('Placa a flexión del lado en tensión (k15)', k15w); kw('Pernos de anclaje en tensión, 2 de la columna extrema (k16)', k16w);
-      const ktw = 1 / (inv(k15w) + inv(k16w)), zt = S2 / 2, zw = zt + zc, My = Math.abs(+c.My || 0); let fw = 1;
-      if(P > 0 && My > 0){ const e = My * 1e6 / (P * 1e3), ek = (zc * k13w - zt * ktw) / (k13w + ktw); if(e + ek > 0) fw = e / (e + ek);
-        pw.push(`Con carga axial: e = My/N = ${r1(e)} mm, ek = ${r1(ek)} mm → factor e/(e + ek) = ${r3(fw)} (Tabla 6.12)`); }
-      const Sjw = E * zw * zw / (inv(k13w) + inv(ktw)) * fw;
+      const ktw = 1 / (inv(k15w) + inv(k16w)), zt = S2 / 2, zw = zt + zc, My = Math.abs(+c.My || 0), sw = sjBase(E, P, My, zc, zt, k13w, ktw), Sjw = sw.Sj;
+      if(sw.txt) pw.push('Con carga axial: ' + sw.txt);
       pw.push(`Concreto ${txtC} → k13 = ${r2(k13w)} mm`);
       pw.push(`Placa: m = √(${r1(dN)}² + ${r1(dB)}²) − 0.8·w = ${r1(mw)} mm (perno extremo al contorno de la columna), leff = ${r1(leffw)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15w)} mm`);
       pw.push(`Anclajes: 2 pernos en tensión → k16 = 2.0·2·As/Lb = ${r2(k16w)} mm${nB > 2 ? ' (los pernos intermedios de la fila, más cerca del eje, no se cuentan: del lado seguro)' : ''}`);
