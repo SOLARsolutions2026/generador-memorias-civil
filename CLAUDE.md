@@ -297,5 +297,14 @@ que revisa que el ZIP contenga ese id (si no, dice de qué consecutivo es) y lla
 - Hecho: verificación puntual (herramientas con datos a mano).
 - Hecho: guardar en el NAS (ZIP) y volver a cargar.
 
+## Pendientes (anotados con Amo el 21-nov para retomar)
+Módulo metálico:
+1. Prueba de punta a punta con un proyecto real de Amo (modelo, Anexo D, Anexo E con resortes y columna fuerte – viga débil, memoria general, PDF final, guardar en el NAS).
+2. Yc de la columna en la chapa de testa a ras: POR CONFIRMAR (falta la tabla de Yc de la Guía AISC 16; hoy se usa el menor con la T equivalente y aviso).
+3. Columna fuerte – viga débil más completa (opcional): sumar el cortante de gravedad de las vigas y Ω0 en Puc (hoy es simplificación escrita en la nota).
+4. Confirmar con Amo si la chapa de aleta (shear tab) ya pasó por su revisión detallada una por una.
+5. DEFLEXIONES en el Anexo D (diseño completo): hoy NO se revisan (solo en la revisión de cubierta/correas y las derivas del Anexo C). Opciones propuestas: A calculada por la app con L, I y cargas de servicio (como las correas; límites L/240, L/360 con cielo raso…) — recomendada —, B del modelo (desplazamientos con nudos al centro de las vigas), C escrita a mano (valor del software); recomendación A + C. OJO: el capítulo 8.3 de la memoria general ya dice «Para revisar las deflexiones se usan las combinaciones de servicio»: ajustar esa frase si no se hace el chequeo.
+Concreto reforzado (idea de Amo 21-nov, SIN empezar; no calcular nada todavía): módulo para estructuras aporticadas de concreto. Propuesta recomendada «camino A» = nuevo tipo de memoria «🏢 Pórtico de concreto reforzado» en el mismo generador reutilizando ficha, portada, revisiones, B, Combinaciones (R0 de concreto), C, derivas, zapatas/pedestales, F/G, memoria general, PDF y NAS; cambian A (avalúo de entrepisos B.3/B.4: losa, acabados, muros, viva por uso), B (FHE de varios pisos con Cvx), D (vigas, columnas P–M biaxial partiendo del pedestal, losas/viguetas; C.21 DES/DMO) y E (nudos: cortante del nudo, ΣMnc ≥ 1.2ΣMnb, anclajes). Etapas 1 cargas + FHE multipiso, 2 fuerzas del modelo, 3 vigas, 4 columnas, 5 nudos, 6 losas, 7 memoria. Alternativas: B app aparte, C herramientas de concreto en la verificación puntual. Preguntas abiertas para Amo: ¿SAP2000 o ETABS?, ¿tipo de losa (aligerada, maciza, steel deck)?, ¿DES/DMO/DMI usual?, ¿despiece y cantidades o solo diseño?
+
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.
