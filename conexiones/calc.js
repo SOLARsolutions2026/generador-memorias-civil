@@ -2032,8 +2032,197 @@ function rigidez(c, R){
   }
   return null;
 }
-const CALC = { aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ };
-const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ };
+// ── Empalme de columna (pedido de Amo 20-nov): atornillado con cubrejuntas, soldado de penetración completa o con placa de tope ─────────────
+// Decisiones de Amo: siempre SIN contacto (los empalmes toman toda la carga, también la compresión); sismo DMO/DES según AISC 341
+// (D2.5: ubicación ≥ 1.2 m de las conexiones viga–columna, fuerzas con Ω0; E2.6g/E3.6g: flexión ≥ Ry·Fy·Zx de la columna menor,
+// cortante ΣMpc/H y, si es soldado, penetración completa). Ejes del miembro como el Anexo D: P (+ tensión), V2/M3 eje fuerte, V3/M2 eje débil.
+function defaultsEmpCol(){
+  return { tipo:'empCol', nom:'', desc:'', P:-400, Vu:30, V3:10, T:0, M2:5, Mu:60,
+    colI:'HEB 200', colS:'', acero:'A572 Gr 50', union:'pernos', gap:10,
+    tpf:12.7, bpf:180, aceroPl:'A36', nf:3, sf:75, gf:100, Lef:40,
+    tpw:8, hpw:130, nw:2, sw:60, Lew:35, Lehw:40,
+    d:19.1, grado:'A325', rosca:'N', desliz:false, claseSup:'A',
+    tpb:25.4, Bpl:'', Npl:'', wS:8, wI:8, electrodo:'E70XX',
+    sismo:'no', hEmp:'', Hcol:'' };
+}
+// Método elástico de un grupo de pernos en su plano: Fx a lo largo del miembro, Fy transversal [kN], M [kN·m] → fuerza del perno más cargado [kN]
+function grupoElastico(pts, Fx, Fy, M){
+  const n = pts.length, cx = pts.reduce((s, p) => s + p.x, 0) / n, cy = pts.reduce((s, p) => s + p.y, 0) / n;
+  const J = pts.reduce((s, p) => s + (p.x - cx) ** 2 + (p.y - cy) ** 2, 0); let mx = 0;
+  for(const p of pts){ const fx = Fx / n - (J > 0 ? M * 1000 * (p.y - cy) / J : 0), fy = Fy / n + (J > 0 ? M * 1000 * (p.x - cx) / J : 0); mx = Math.max(mx, Math.hypot(fx, fy)); }
+  return mx;
+}
+function calcEmpCol(c){
+  const ch = [], av = [], pasos = [], req = [], add = addF(ch);
+  const P = nz(c.P), V2 = Math.abs(nz(c.Vu)), V3 = Math.abs(nz(c.V3)), T = Math.abs(nz(c.T)), M2 = Math.abs(nz(c.M2)), M3m = Math.abs(nz(c.Mu));
+  const busca = n => (G.PERFILES_LAM || []).find(x => x[0] === n);
+  const pI = busca(c.colI); if(!pI) return { error:'Escoja el perfil de la columna de abajo.' };
+  const pS = c.colS ? busca(c.colS) : pI; if(!pS) return { error:'Escoja el perfil de la columna de arriba.' };
+  const sec = p => { const [nom, , d, bf, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy] = p; return { nom, d, bf, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy, T:d - 2 * (tf + r) }; };
+  const I = sec(pI), Su = sec(pS), m = I.A <= Su.A ? I : Su, igual = I.nom === Su.nom;
+  const ac = ACEROS[c.acero] || ACEROS['A572 Gr 50'], E = 200000, un = ['pernos', 'cjp', 'placa'].includes(c.union) ? c.union : 'pernos';
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '', Hc = nz(c.Hcol) * 1000;
+  pasos.push(`Columna de abajo ${I.nom}${igual ? '' : `, columna de arriba ${Su.nom}`} (${c.acero}, Fy ${ac.Fy} MPa); el empalme se revisa con la ${igual ? 'sección' : `menor (${m.nom})`}: d = ${m.d}, bf = ${m.bf}, tf = ${m.tf}, tw = ${m.tw} mm, A = ${Math.round(m.A)} mm²`);
+  pasos.push('Sin contacto entre los extremos de las columnas (decisión de Amo): el empalme toma toda la carga, también la compresión.');
+  // Sismo: resistencia mínima (AISC 341 E2.6g / E3.6g) y ubicación (D2.5a)
+  let M3 = M3m, V2d = V2;
+  if(sis){
+    const Ry = RY(c.acero), Mreq = Ry * ac.Fy * m.Zx / 1e6;
+    pasos.push('Con sismo el empalme (pernos, cubrejuntas y soldaduras) se diseña para la resistencia mínima; la sección de la columna se revisa con las fuerzas del modelo.');
+    pasos.push(`Sismo ${sis}: flexión requerida ≥ Ry·Fy·Zx de la columna menor = ${Ry}·${ac.Fy}·${Math.round(m.Zx).toLocaleString('es-CO')} = ${r2(Mreq)} kN·m (del modelo ${r2(M3m)} kN·m)`);
+    M3 = Math.max(M3m, Mreq);
+    if(Hc > 0){ const Vreq = 2 * ac.Fy * m.Zx / 1e6 / (Hc / 1000); pasos.push(`Cortante requerido ≥ ΣMpc/H = 2·Fy·Zx/H = ${r2(Vreq)} kN (H = ${r2(Hc / 1000)} m; del modelo ${r2(V2)} kN)`); V2d = Math.max(V2, Vreq); }
+    else av.push('Sismo: escriba la altura libre de la columna H para revisar el cortante mínimo ΣMpc/H.');
+    av.push(`Sismo ${sis}: la carga axial y los cortantes del modelo deben venir de las combinaciones con sobrerresistencia Ω0 (AISC 341 D2.5b, NSR-10 F.3).`);
+    const hE = nz(c.hEmp) * 1000, lim = Hc > 0 && Hc < 2400 ? Hc / 2 : 1200;
+    req.push([`Sismo: empalme a ${lim < 1200 ? 'la mitad de la altura libre' : '1.2 m o más'} de las conexiones viga–columna (AISC 341 D2.5a)`, hE > 0 ? hE >= lim - 1e-6 : true, hE > 0 ? `${r1(hE)} ≥ ${r1(lim)} mm` : 'escriba la distancia; si no, indicar en planos']);
+  }
+  const Af = m.bf * m.tf, Aw = m.A - 2 * Af, Pt = Math.max(P, 0), Pc = Math.max(-P, 0);
+  const Pcap = 0.9 * ac.Fy * m.A / 1000, Mc3 = 0.9 * ac.Fy * m.Zx / 1e6, Mc2 = 0.9 * ac.Fy * m.Zy / 1e6;
+  const h1 = (p, pc, m3, mc3, m2, mc2) => { const pr = p / pc; return pr >= 0.2 ? pr + 8 / 9 * (m3 / mc3 + m2 / mc2) : pr / 2 + m3 / mc3 + m2 / mc2; };
+  const hwm = m.d - 2 * m.tf - 2 * m.r, phiV = hwm / m.tw <= 2.24 * Math.sqrt(E / ac.Fy) ? 1.0 : 0.9;
+  const FEXX = ELECTRODOS[c.electrodo] || 483;
+  let geo = { I, Su, m, un };
+  if(un === 'pernos'){
+    const d = +c.d, dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d), pl = ACEROS[c.aceroPl] || ACEROS.A36, gap = nz(c.gap);
+    const tpf = +c.tpf, bpf = +c.bpf, nf = Math.max(1, Math.round(+c.nf)), sf = +c.sf, gf = +c.gf, Lef = +c.Lef;
+    const tpw = +c.tpw, hpw = +c.hpw, nw = Math.max(1, Math.round(+c.nw)), sw = +c.sw, Lew = +c.Lew, Lehw = +c.Lehw;
+    const brazo = m.d + tpf, Ft = M3 * 1000 / brazo + Pt * Af / m.A, Fc = M3 * 1000 / brazo + Pc * Af / m.A, Ff = Math.max(Ft, Fc);
+    const Vf = V3 / 2 + T * 1000 / brazo, Mf = M2 / 2, Pw = Math.abs(P) * Aw / m.A, ew = gap / 2 + Lehw;
+    pasos.push(`Alas: F = M3/(d + tpf) + P·Af/A → tensión ${r2(Ft)} kN, compresión ${r2(Fc)} kN por ala; en el plano del ala V = V3/2 + T/(d + tpf) = ${r2(Vf)} kN y M = M2/2 = ${r2(Mf)} kN·m`);
+    pasos.push(`Alma: axial P·Aw/A = ${r2(Pw)} kN y cortante V2 = ${r2(V2d)} kN con excentricidad e = gap/2 + Lehw = ${r1(ew)} mm`);
+    // Rellenos (J5.2) cuando cambia el perfil: se reduce el corte del perno si el relleno pasa de 6 mm (salvo deslizamiento crítico)
+    const tFill = Math.abs(I.d - Su.d) / 2, tFillW = Math.abs(I.tw - Su.tw) / 2, kF = t => c.desliz || t <= 6 ? 1 : Math.max(0.5, 1 - 0.0154 * (t - 6));
+    if(tFill > 0.5) pasos.push(`Rellenos en las alas de la columna menor: t = (d₁ − d₂)/2 = ${r1(tFill)} mm${kF(tFill) < 1 ? ` → corte del perno × ${r3(kF(tFill))} (F.2.10.5 / J5.2: 1 − 0.0154(t − 6))` : ''}`);
+    if(tFillW > 0.5) pasos.push(`Rellenos en el alma: t = ${r1(tFillW)} mm${kF(tFillW) < 1 ? ` → corte × ${r3(kF(tFillW))}` : ''}`);
+    // Pernos de las alas: 2 columnas × nf filas a cada lado, método elástico con F, V y M2/2
+    const ptsF = []; for(let i = 0; i < nf; i++) for(const s of [-1, 1]) ptsF.push({ x:i * sf, y:s * gf / 2 });
+    const fF = grupoElastico(ptsF, Ff, Vf, Mf), tMin = Math.min(I.tf, Su.tf);
+    const bP = Math.min(aplast(Lef - dh / 2, tpf, d, pl.Fu).phiRn, aplast(sf - dh, tpf, d, pl.Fu).phiRn), bC = Math.min(aplast(Lef - dh / 2, tMin, d, ac.Fu).phiRn, aplast(sf - dh, tMin, d, ac.Fu).phiRn);
+    const capF = Math.min(rv * kF(tFill), bP, bC);
+    add('pernos', `Pernos de un ala, a cada lado (${2 * nf}, corte simple, método elástico)`, 'F.2.10.3.6 y F.2.10.3.10 · Manual AISC parte 7', fF, capF, 'kN', `perno más cargado; corte ${r2(rv * kF(tFill))}, aplast. cubrejunta ${r2(bP)}, ala ${r2(bC)} kN`);
+    const Tb = pretension(c.grado, d), mu = c.claseSup === 'B' ? 0.50 : 0.30;
+    if(c.desliz){ add('pernos', 'Deslizamiento de los pernos de un ala', 'F.2.10.3.8 (J3-4), φ = 1.00', fF, 1.0 * mu * 1.13 * Tb, 'kN', `μ = ${mu}, Tb = ${Tb} kN`); if(!Tb) av.push('Pernos A307: no sirven para deslizamiento crítico.'); }
+    // Cubrejuntas de las alas
+    const Ag = bpf * tpf, An = Math.min((bpf - 2 * dn) * tpf, 0.85 * Ag), KLr = 0.65 * (gap + 2 * Lef) / (tpf / Math.sqrt(12));
+    const PtC = Math.min(0.9 * pl.Fy * Ag, 0.75 * pl.Fu * An) / 1000, PcC = 0.9 * fcrE3(pl.Fy, KLr) * Ag / 1000, MpC = 0.9 * pl.Fy * tpf * bpf * bpf / 4 / 1e6;
+    add('alas', 'Cubrejunta del ala: fluencia a tensión', 'F.2.10.4.1 (J4-1)', Ft, 0.9 * pl.Fy * Ag / 1000, 'kN', `Ag = ${r1(Ag)} mm²`);
+    add('alas', 'Cubrejunta del ala: rotura a tensión', 'F.2.10.4.1 (J4-2), An ≤ 0.85Ag', Ft, 0.75 * pl.Fu * An / 1000, 'kN', `An = ${r1(An)} mm²`);
+    add('alas', 'Cubrejunta del ala: compresión (sin contacto)', 'F.2.10.4.4 (J4-6) / E3', Fc, PcC, 'kN', `KL/r = 0.65·(gap + 2Lef)/r = ${r1(KLr)}`);
+    if(Mf > 0) add('alas', 'Cubrejunta del ala: axial + flexión en su plano (M2/2)', 'F.2.8.1 (H1-1)', h1(Ff, Ft >= Fc ? PtC : PcC, Mf, MpC, 0, 1), 1, '', `φMn = 0.9·Fy·t·b²/4 = ${r2(MpC)} kN·m`);
+    const agv = 2 * (Lef + (nf - 1) * sf) * tpf, anv = agv - 2 * (nf - 0.5) * dn * tpf;
+    add('alas', 'Cubrejunta del ala: bloque de cortante', 'F.2.10.4.3 (J4-5)', Ft, Math.min(bloqueRn(pl.Fy, pl.Fu, agv, anv, (gf - dn) * tpf), bloqueRn(pl.Fy, pl.Fu, agv, anv, 2 * ((bpf - gf) / 2 - dn / 2) * tpf)), 'kN', 'entre las líneas de pernos o hacia los bordes');
+    const agvC = 2 * (Lef + (nf - 1) * sf) * tMin, anvC = agvC - 2 * (nf - 0.5) * dn * tMin;
+    add('columna', 'Ala de la columna: bloque de cortante', 'F.2.10.4.3 (J4-5)', Ft, bloqueRn(ac.Fy, ac.Fu, agvC, anvC, 2 * ((Math.min(I.bf, Su.bf) - gf) / 2 - dn / 2) * tMin), 'kN', 'hacia los bordes del ala');
+    // Pernos del alma: 1 columna de nw a cada lado, doble cortante, método elástico con Pw, V2 y V2·e
+    const ptsW = []; for(let i = 0; i < nw; i++) ptsW.push({ x:0, y:i * sw });
+    const fW = grupoElastico(ptsW, Pw, V2d, V2d * ew / 1000), twMin = Math.min(I.tw, Su.tw);
+    const bWp = 2 * Math.min(aplast(Lew - dh / 2, tpw, d, pl.Fu).phiRn, aplast(sw - dh, tpw, d, pl.Fu).phiRn), bWc = 0.75 * 2.4 * d * twMin * ac.Fu / 1000;
+    add('pernos', `Pernos del alma, a cada lado (${nw}, doble cortante, método elástico)`, 'F.2.10.3 · Manual AISC parte 7', fW, Math.min(2 * rv * kF(tFillW), bWp, bWc), 'kN', `corte ${r2(2 * rv * kF(tFillW))}, aplast. cubrejuntas ${r2(bWp)}, alma ${r2(bWc)} kN`);
+    if(c.desliz) add('pernos', 'Deslizamiento de los pernos del alma (2 planos)', 'F.2.10.3.8 (J3-4), φ = 1.00', fW, 2 * mu * 1.13 * Tb, 'kN', '');
+    // Cubrejuntas del alma (2)
+    const AgW = 2 * hpw * tpw, KLw = 0.65 * (gap + 2 * Lehw) / (tpw / Math.sqrt(12)), ZW = 2 * tpw * hpw * hpw / 4;
+    add('almaPl', 'Cubrejuntas del alma: fluencia por cortante (2)', 'F.2.10.4.2 (J4-3)', V2d, 0.6 * pl.Fy * AgW / 1000, 'kN', '');
+    add('almaPl', 'Cubrejuntas del alma: rotura por cortante (2)', 'F.2.10.4.2 (J4-4)', V2d, 0.75 * 0.6 * pl.Fu * 2 * (hpw - nw * dn) * tpw / 1000, 'kN', '');
+    const PwC = P >= 0 ? 0.9 * pl.Fy * AgW / 1000 : 0.9 * fcrE3(pl.Fy, KLw) * AgW / 1000;
+    add('almaPl', 'Cubrejuntas del alma: axial + flexión por la excentricidad', 'F.2.8.1 (H1-1)', h1(Pw, PwC, V2d * ew / 1000, 0.9 * pl.Fy * ZW / 1e6, 0, 1), 1, '', `axial ${r2(Pw)} kN (${P >= 0 ? 'tensión' : `compresión, KL/r ${r1(KLw)}`}), M = V2·e = ${r3(V2d * ew / 1000)} kN·m`);
+    // Columna en el empalme: sección neta con los agujeros
+    const AnC = m.A - 4 * dn * m.tf - nw * dn * m.tw, Afn = (m.bf - 2 * dn) * m.tf, Yt = ac.Fy / ac.Fu <= 0.8 ? 1.0 : 1.1;
+    const Mn3 = ac.Fu * Afn < Yt * ac.Fy * Af ? Math.min(Mc3, 0.9 * ac.Fu * Afn / Af * m.Sx / 1e6) : Mc3;
+    const PcapN = P > 0 ? Math.min(Pcap, 0.75 * ac.Fu * AnC / 1000) : Pcap;
+    add('columna', 'Columna en el empalme (con los agujeros): axial + flexión', 'F.2.8.1 (H1-1) · F.2.4 (D2) · F.2.6.13 (F13-1)', h1(Math.abs(P), PcapN, M3m, Mn3, M2, Mc2), 1, '', `φPn ${r2(PcapN)} kN${P > 0 ? ` (rotura An = ${Math.round(AnC)} mm²)` : ' (sin pandeo: el pandeo de la columna va en el Anexo D)'}, φMn3 ${r2(Mn3)}, φMn2 ${r2(Mc2)} kN·m`);
+    add('columna', 'Cortante del alma de la columna', 'F.2.7.2 (G2-1)', V2, phiV * 0.6 * ac.Fy * m.d * m.tw / 1000, 'kN', `φv = ${phiV}`);
+    // Requisitos
+    const bfMin = Math.min(I.bf, Su.bf), Tmin = Math.min(I.T, Su.T);
+    req.push(['Cubrejunta del ala bpf ≤ bf de la columna menor', bpf <= bfMin + 1e-6, `${bpf} ≤ ${bfMin} mm`]);
+    req.push(['Bordes de la cubrejunta del ala (bpf − gf)/2 y Lef ≥ mín.', Math.min((bpf - gf) / 2, Lef) >= bm, `${r1(Math.min((bpf - gf) / 2, Lef))} ≥ ${bm} mm`]);
+    req.push(['Bordes del ala de la columna (bf − gf)/2 ≥ mín.', (bfMin - gf) / 2 >= bm, `${r1((bfMin - gf) / 2)} ≥ ${bm} mm`]);
+    req.push(['Cubrejunta del alma cabe entre las alas: hpw ≤ T', hpw <= Tmin + 1e-6, `${hpw} ≤ ${r1(Tmin)} mm`]);
+    req.push(['Al menos 2 pernos por lado en el alma (para tomar el momento V2·e)', nw >= 2, `${nw}`]);
+    req.push(['Bordes de las cubrejuntas del alma Lew y Lehw ≥ mín.', Math.min(Lew, Lehw) >= bm, `${Math.min(Lew, Lehw)} ≥ ${bm} mm`]);
+    req.push(['Pernos del alma caben: (nw − 1)·sw + 2·Lew ≤ hpw', (nw - 1) * sw + 2 * Lew <= hpw + 1e-6, `${(nw - 1) * sw + 2 * Lew} ≤ ${hpw} mm`]);
+    req.push(['Separaciones ≥ 2.67d', Math.min(sf, gf, nw > 1 ? sw : Infinity) >= 2.67 * d - 1e-6, `${Math.min(sf, gf, nw > 1 ? sw : Infinity)} ≥ ${r1(2.67 * d)} mm`]);
+    if(tFill > 0.5) req.push([`Rellenos de ${r1(tFill)} mm en las alas${tFillW > 0.5 ? ` y ${r1(tFillW)} mm en el alma` : ''} de la columna menor (J5)`, tFill <= 19 + 1e-6 || c.desliz, tFill <= 19 ? 'indicar en planos' : 'relleno grueso: extiéndalo más allá de la cubrejunta con pernos adicionales (J5.2b) o use placa de tope']);
+    req.push([sis ? 'Sismo: pernos pretensionados, agujeros estándar y superficies de contacto clase A o mejor (AISC 341 D2.2)' : c.desliz ? `Pernos de deslizamiento crítico, superficie clase ${c.claseSup === 'B' ? 'B' : 'A'}` : 'Pernos apretados sin holgura (empalme a momento: se recomienda pretensionarlos)', true, 'indicar en planos']);
+    geo = { ...geo, dh, gap, tpf, bpf, nf, sf, Lef, tpw, hpw, nw, sw, Lew, Lehw, tFill };
+  } else if(un === 'cjp'){
+    pasos.push('Soldadura de penetración completa en las alas y el alma: la resistencia es la del metal base de la columna menor (Tabla J2.5).');
+    add('columna', 'Sección de la columna menor en la junta: axial + flexión', 'F.2.8.1 (H1-1) · Tabla J2.5 (CJP = metal base)', h1(Math.abs(P), Pcap, M3m, Mc3, M2, Mc2), 1, '', `φPn ${r2(Pcap)} kN (sin pandeo: va en el Anexo D), φMn3 ${r2(Mc3)}, φMn2 ${r2(Mc2)} kN·m`);
+    add('columna', 'Cortante V2 por el alma', 'F.2.7.2 (G2-1)', V2, phiV * 0.6 * ac.Fy * m.d * m.tw / 1000, 'kN', `φv = ${phiV}`);
+    add('columna', 'Cortante V3 + torsión por las alas', 'F.2.7.2 (G2-1), φ 0.9', V3 + 2 * T * 1000 / (m.d - m.tf), 0.9 * 0.6 * ac.Fy * 2 * m.bf * m.tf / 1000, 'kN', 'V3 + 2·T/(d − tf)');
+    const dd = Math.abs(I.d - Su.d), db = Math.abs(I.bf - Su.bf), dt = Math.max(Math.abs(I.tf - Su.tf), Math.abs(I.tw - Su.tw));
+    if(!igual){
+      req.push(['Penetración completa entre perfiles distintos: las alas deben quedar alineadas (diferencia de peralte ≤ 10 mm)', dd <= 10, `${r1(dd)} mm${dd > 10 ? ': use placa de tope o el empalme atornillado con rellenos' : ''}`]);
+      if(dt > 0 || db > 0) req.push(['Transición de espesor y de ancho con pendiente ≤ 1:2.5 en la pieza más gruesa o más ancha (AWS D1.1; AISC 341 D2.5c con sismo)', true, `diferencia de espesor ${r1(dt)} mm, de ancho ${r1(db)} mm: indicar en planos`]);
+    }
+    req.push(['Junta precalificada con bisel y respaldo; ultrasonido de las alas', true, 'indicar en planos']);
+    req.push(['Agujero de acceso (ratonera) en el alma junto a las alas (F.2.10.1.6 / J1.6)', true, 'indicar en planos']);
+    if(sis) req.push(['Sismo: soldaduras de demanda crítica (AISC 341 A3.4b): respaldo retirado o sellado y ultrasonido 100 %', true, 'indicar en planos']);
+  } else {
+    // Placa de tope: columna de arriba soldada a la placa y la placa soldada a la columna de abajo, con filetes en todo el contorno
+    const tp = +c.tpb, pl = ACEROS[c.aceroPl] || ACEROS.A36, Bmin = Math.max(I.bf, Su.bf), Nmin = Math.max(I.d, Su.d);
+    const Bp = nz(c.Bpl) > 0 ? +c.Bpl : Bmin + 40, Np = nz(c.Npl) > 0 ? +c.Npl : Nmin + 40, wS = +c.wS, wI = +c.wI;
+    pasos.push(`Placa de tope ${Bp} × ${Np} × ${tp} mm (${c.aceroPl}); filetes en todo el contorno: columna de arriba ${wS} mm, columna de abajo ${wI} mm (${c.electrodo})`);
+    for(const [col, w, txt] of [[Su, wS, 'de arriba'], [I, wI, 'de abajo']]){
+      const R = soldPerim({ d:col.d, bf:col.bf, tf:col.tf, tw:col.tw, r:col.r }, { wF:w, wW:w, kds:false, FEXX, P:Math.abs(P), V2:V2d, V3, T, M2, M3 });
+      add('soldadura', `Filetes columna ${txt}–placa: alas (${w} mm)`, 'F.2.10.2.4 (J2-4), método elástico', R.peor.F ? R.peor.F.f : 0, R.fd, 'MPa', `contorno ${col.nom}`);
+      add('soldadura', `Filetes columna ${txt}–placa: alma (${w} mm)`, 'F.2.10.2.4 (J2-4), método elástico', R.peor.W ? R.peor.W.f : 0, R.fd, 'MPa', '');
+      const tmin = Math.min(col.tf, tp), wMin = tmin <= 6 ? 3 : tmin <= 13 ? 5 : tmin <= 19 ? 6 : 8;
+      req.push([`Filete columna ${txt}: mínimo según la parte más delgada (J2.4)`, w >= wMin, `${w} ≥ ${wMin} mm`]);
+    }
+    // Flexión de la placa cuando las alas no quedan una sobre otra
+    const e = Math.abs(I.d - Su.d) / 2, Fala = M3 * 1000 / (m.d - m.tf) + Math.abs(P) * Af / m.A, b = Math.min(I.bf, Su.bf);
+    if(e > 1){ const Mu = Fala * e / 1000, Mn = 0.9 * pl.Fy * b * tp * tp / 4 / 1e6;
+      pasos.push(`Las alas están desfasadas e = (d₁ − d₂)/2 = ${r1(e)} mm: la placa se dobla con M = F·e = ${r2(Fala)}·${r1(e)} = ${r3(Mu)} kN·m`);
+      add('placa', 'Placa: flexión por el desfase de las alas', 'F.2.6 · φb = 0.90 (Z = b·t²/4)', Mu, Mn, 'kN·m', `b = ${b} mm`);
+      add('placa', 'Placa: cortante entre las alas', 'F.2.10.4.2 (J4-3)', Fala, 0.6 * pl.Fy * b * tp / 1000, 'kN', ''); }
+    else pasos.push('Las alas de las dos columnas quedan una sobre otra: la placa solo transmite la fuerza a través de su espesor.');
+    add('columna', 'Sección de la columna menor junto a la placa: axial + flexión', 'F.2.8.1 (H1-1)', h1(Math.abs(P), Pcap, M3m, Mc3, M2, Mc2), 1, '', `φPn ${r2(Pcap)} kN, φMn3 ${r2(Mc3)}, φMn2 ${r2(Mc2)} kN·m`);
+    req.push(['Placa más grande que las dos columnas', Bp >= Bmin && Np >= Nmin, `${Bp} × ${Np} ≥ ${Bmin} × ${Nmin} mm`]);
+    if(Pt > 0 || M3 > 0) av.push('La placa de tope trabaja a tensión en su espesor (por la tensión o el momento): use acero con buena ductilidad en el espesor y revise el desgarro laminar en planos.');
+    if(sis) req.push(['Sismo: en empalmes soldados se exige penetración completa (AISC 341 E2.6g/E3.6g); con filetes a una placa de tope no se acepta', false, 'use el empalme atornillado o el soldado de penetración completa']);
+    geo = { ...geo, tp, Bp, Np, wS, wI, e };
+  }
+  if(T > 0 && un !== 'cjp') av.push('La torsión se reparte como cortante lateral en las alas; el alabeo no se revisa.');
+  const R = fin(ch, req, av, pasos, geo);
+  // 💡 sugerencia: lo mínimo que cumple
+  if(!c._sinSug && !R.ok){
+    const ESP = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4, 31.8, 38.1];
+    const prueba = o => { const r = calcEmpCol({ ...c, ...o, _sinSug:true }); return !r.error && r.ok; };
+    let s = null;
+    if(un === 'pernos'){
+      // Alas y alma por separado (como el empalme de viga); luego se confirma todo junto
+      const Tm = Math.min(I.T, Su.T), hMax = Math.floor(Tm / 5) * 5, bfMin = Math.min(I.bf, Su.bf), base = {};
+      if(+c.bpf > bfMin) base.bpf = Math.floor(bfMin / 5) * 5;
+      if(Math.abs(I.d - Su.d) / 2 > 19 && !c.desliz) base.desliz = true;
+      const esAla = x => x.grupo === 'alas' || /un ala|Ala de la columna/.test(x.nombre), esAlma = x => x.grupo === 'almaPl' || /del alma/.test(x.nombre);
+      const okP = (o, f, rq) => { const r = calcEmpCol({ ...c, ...base, ...o, _sinSug:true }); return !r.error && r.ch.filter(f).every(x => x.ratio <= 1) && r.req.filter(q => rq(q[0])).every(q => q[1]); };
+      let sF = null, sW = null;
+      const dL = [+c.d, ...DIAM.map(x => x[1]).filter(x => x !== +c.d).sort((x, y) => Math.abs(x - +c.d) - Math.abs(y - +c.d) || y - x)];
+      buscar: for(const d of dL) for(const acp of [...new Set([c.aceroPl, 'A572 Gr 50'])]){
+        const sMin = Math.ceil(2.67 * d / 5) * 5, bpfS = base.bpf || +c.bpf, bmS = bordeMin(d), gfS = Math.max(sMin, Math.min(+c.gf, bpfS - 2 * bmS, bfMin - 2 * bmS));
+        sF = null; for(let nf = 2; nf <= 6 && !sF; nf++) for(const t of ESP){ const o = { aceroPl:acp, d, nf, tpf:t, sf:Math.max(+c.sf, sMin), gf:gfS };
+          if(okP(o, esAla, q => /ala/.test(q) && !/alma/.test(q))){ sF = o; break; } }
+        if(!sF) continue;
+        sW = null;
+        for(let nw = 2; nw <= 6 && !sW; nw++) for(const tw of ESP.filter(x => x <= 15.9)){ const LewS = Math.max(bmS, Math.min(+c.Lew, 40, Math.floor((hMax - (nw - 1) * sMin) / 2)));
+          const o = { ...sF, nw, tpw:tw, sw:sMin, Lew:LewS, hpw:Math.min(hMax, Math.max(+c.hpw, (nw - 1) * sMin + 2 * LewS)) };
+          if(okP(o, esAlma, q => /alma/.test(q))){ sW = o; break; } }
+        if(sW && prueba({ ...base, ...sW })) break buscar; sW = null; }
+      if(sF && sW && prueba({ ...base, ...sW })){ const o = { ...base, ...sW };
+        s = { ...o, txt:`💡 Usar pernos de ${(DIAM.find(x => x[1] === o.d) || [o.d])[0]}${o.desliz ? ' de deslizamiento crítico' : ''}, ${o.nf} filas por lado en las alas con cubrejunta de ${o.tpf} mm${o.aceroPl !== c.aceroPl ? ` en ${o.aceroPl}` : ''} y ${o.nw} pernos por lado en el alma con cubrejuntas de ${o.tpw} mm` }; }
+    } else if(un === 'placa'){
+      for(const w of [5, 6, 8, 10, 12, 14, 16]){ for(const t of ESP.filter(x => x >= 12.7)){ if(prueba({ wS:w, wI:w, tpb:t })){ s = { wS:w, wI:w, tpb:t, txt:`💡 Usar placa de ${t} mm y filetes de ${w} mm` }; break; } } if(s) break; }
+    }
+    if(s) R.sug = { tipo:'sold', ok:true, ...s };
+    else if(un === 'pernos' && !R.ch.some(x => x.grupo === 'columna' && x.ratio > 1)) R.av.push(`No se encontró una combinación de pernos y cubrejuntas que cumpla (hasta 6 filas, 38 mm y pernos de 1-1/8")${igual ? '' : ': con perfiles distintos el alma de la columna menor deja poco espacio y los rellenos son gruesos; considere la placa de tope'}.`);
+    else if(R.ch.some(x => x.grupo === 'columna' && x.ratio > 1)) R.av.push('La columna misma no resiste las fuerzas en la junta: no hay empalme que lo arregle; revise el perfil o mueva el empalme.');
+  }
+  return R;
+}
+
+const CALC = { aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ, empCol:calcEmpCol };
+const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ, empCol:defaultsEmpCol };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c, !!c._sinSug); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
     if(r.error) return r;

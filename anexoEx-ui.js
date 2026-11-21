@@ -9,11 +9,11 @@
 'use strict';
 const esCx = c => !!(c && window.ConUI && ConUI.NOMBRES[c.tipo]);
 const CX_VC = ['aleta', 'angular', 'testaV', 'asiento', 'testa', 'ras', 'soldada'];   // viga que llega a una columna (o a otra viga)
-const CX_MOM = ['testa', 'ras', 'soldada', 'empalme', 'empZ'];                      // M3 se guarda como Mu
-const CX_EMP = ['empalme', 'empZ'];
+const CX_MOM = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'empCol'];                      // M3 se guarda como Mu
+const CX_EMP = ['empalme', 'empZ', 'empCol'];
 const CX_DESC = { aleta:'Viga a columna o a viga, a cortante', angular:'Viga a columna o a viga, a cortante', testaV:'Viga a columna o a viga, a cortante', asiento:'Viga apoyada sobre un angular',
   testa:'Viga a columna a momento', ras:'Viga a columna a momento', soldada:'Viga soldada a la columna a momento', empalme:'Unión de dos tramos de viga', empZ:'Unión soldada de dos tramos de viga',
-  cartela:'Diagonal a una placa', grupo:'Grupo de pernos con carga excéntrica (cargas a mano)', base:'Columna sobre pedestal (reacciones del modelo)' };
+  cartela:'Diagonal a una placa', grupo:'Grupo de pernos con carga excéntrica (cargas a mano)', base:'Columna sobre pedestal (reacciones del modelo)', empCol:'Unión de dos tramos de columna' };
 const CX_CORT = ['aleta', 'angular', 'testaV', 'asiento'];                        // conexiones a cortante (extremo articulado)
 const REL_ICO = { lib:' · articulado', parc:' · rigidez parcial', emp:' · empotrado', '?':'' };
 const REL_TXT = { lib:'M3 liberado en el modelo (articulado)', parc:'Rigidez parcial en el modelo', emp:'Sin liberar en el modelo: el extremo trabaja a momento', '?':'El archivo no trae las liberaciones' };
@@ -30,7 +30,7 @@ function avisoRel(c, ext, T){
   if(est.every(r => r === '?')) return '<p class="hint" style="margin-top:6px">El archivo no trae las liberaciones de los elementos (exporte MODEL DEFINITION → Frame Assignments completo) para revisar si el extremo es articulado o empotrado.</p>';
   return '';
 }
-const cxPre = t => ({ aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB' }[t] || 'CX');
+const cxPre = t => ({ aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB', empCol:'EC' }[t] || 'CX');
 const cxNombre = t => ConUI.NOMBRES[t] || t;
 let _topo = null, _cxCtx = null;
 
@@ -99,7 +99,11 @@ function entradaCx(c, D, T){
         z.tSop = esCol && ala ? sa.tf : sa.tw; z.aceroSop = a.acero || z.aceroSop; lock.add('tSop'); lock.add('aceroSop'); }
     }
   }
-  if(CX_EMP.includes(c.tipo) && de && !ponI('viga', 'aceroViga', de, sd)) avisos.push(`${de.nom} no es un perfil I.`);
+  if(c.tipo === 'empCol'){
+    if(de && sd?.tipo === 'I'){ z.colI = de.perfil; z.acero = de.acero || z.acero; lock.add('colI'); lock.add('acero'); } else if(de) avisos.push(`${de.nom} no es un perfil I: el empalme de columna se revisa con perfiles I.`);
+    if(a && sa?.tipo === 'I'){ z.colS = a.perfil; lock.add('colS'); } else if(!c.eA){ z.colS = ''; lock.add('colS'); }
+  }
+  else if(CX_EMP.includes(c.tipo) && de && !ponI('viga', 'aceroViga', de, sd)) avisos.push(`${de.nom} no es un perfil I.`);
   if(c.tipo === 'cartela' && de && sd?.tipo === 'HSS'){ z.diag = 'tubo'; z.Bt = +de.B; z.tt = +de.t; z.aceroT = de.acero && /A500/.test(de.acero) ? de.acero : z.aceroT; ['diag', 'Bt', 'tt'].forEach(k => lock.add(k)); if(+de.B !== +de.H) avisos.push('La diagonal de tubo se revisa como tubo cuadrado de lado B.'); }
   if(c.tipo === 'base'){
     if(de && sd?.tipo === 'I'){ z.colTipo = 'I'; z.columna = de.perfil; lock.add('colTipo'); lock.add('columna'); }
@@ -211,6 +215,7 @@ function nuevaCx(t, E, D){
   const col = I.find(esCol), viga = I.find(e => esViga(e) && e !== col), diag = I.find(e => /Diagonal/i.test(e.grupo || ''));
   if(t === 'base'){ c.eDe = col?.id || ''; c.eA = D.ped[0]?.id || ''; }
   else if(t === 'cartela'){ c.eDe = diag?.id || ''; c.eA = col?.id || viga?.id || ''; }
+  else if(t === 'empCol') c.eDe = col?.id || '';
   else if(CX_EMP.includes(t)) c.eDe = viga?.id || '';
   else if(t !== 'grupo'){ c.eDe = viga?.id || ''; c.eA = col?.id || ''; }
   return c;
@@ -225,7 +230,7 @@ function uneHTML(c, D, T){
     return `<div class="cx-une"><div class="fg g3">${sel('eDe', 'Columna (Anexo D)', [['', '— escoja —'], ...mets])}${sel('eA', 'Pedestal (Anexo D)', [['', '— escoja —'], ...D.ped.map(x => [x.id, `${x.nom} · ${x.b}×${x.h} mm`])])}${sel('ori', 'Peralte d de la columna paralelo a', [['y', 'eje Y del modelo (h del pedestal)'], ['x', 'eje X del modelo (b del pedestal)']])}</div>
       <p class="hint" style="margin:2px 0 0">${p ? `Reacciones de los nudos ${esc((p.nudos || []).join(', ') || '(sin nudos: escójalos en el pedestal del Anexo D)')} del pedestal ${esc(p.nom)}, con las combinaciones de resistencia del Anexo D. Medidas y f'c del pedestal tomadas del Anexo D.` : 'Escoja el pedestal: de ahí salen sus medidas y sus nudos.'}</p></div>`; }
   if(CX_EMP.includes(c.tipo)){ const de = metDe(D, c.eDe), Fs = T && de?.grupo ? Object.keys(T).filter(F => T[F].g === de.grupo) : [];
-    return `<div class="cx-une"><div class="fg g3">${sel('eDe', 'Viga (Anexo D)', [['', '— escoja —'], ...mets])}${sel('empF', 'Elemento del modelo donde va el empalme', [['', 'Cualquiera (el peor punto del grupo)'], ...Fs.map(F => [F, `E${F} · nudos ${T[F].i}–${T[F].j} · L ${fx(T[F].L, 2)} m`])])}
+    return `<div class="cx-une"><div class="fg g3">${sel('eDe', c.tipo === 'empCol' ? 'Columna (Anexo D)' : 'Viga (Anexo D)', [['', '— escoja —'], ...mets])}${c.tipo === 'empCol' ? sel('eA', 'Columna de arriba (Anexo D)', [['', 'La misma (no cambia de perfil)'], ...mets.filter(([id]) => id !== c.eDe)], 'Si arriba cambia el perfil') : ''}${sel('empF', 'Elemento del modelo donde va el empalme', [['', 'Cualquiera (el peor punto del grupo)'], ...Fs.map(F => [F, `E${F} · nudos ${T[F].i}–${T[F].j} · L ${fx(T[F].L, 2)} m`])])}
       ${c.empF ? `<div class="f"><label>Distancia desde el nudo inicial [m]</label><input data-cxu="empX" inputmode="decimal" value="${esc(c.empX ?? '')}" ${ro_}/><div class="hint">Se usa la estación del modelo más cercana.</div></div>` : ''}</div></div>`; }
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), ext = T ? extremosCx(c, D, T) : null, off = new Set((c.nudosOff || []).map(String));
   const nudos = ext ? [...new Map(ext.map(x => [String(x.j), x])).values()] : [];
@@ -372,7 +377,7 @@ function debilTxt(g){
 // Una fila por conexión (cada conexión del Anexo E = un detalle que puede cubrir varios nudos): qué poner en el modelo por eje y,
 // en cada nudo o extremo, si el archivo del modelo ya lo tiene (✓) o falta (✗).
 function resortesCardHTML(){
-  if(!S.m.anexos?.C?.modelo || !datosE().con.some(esCx)) return '';
+  if(!S.m.anexos?.C?.modelo || !datosE().con.some(c => esCx(c) && !CX_EMP.includes(c.tipo) && c.tipo !== 'grupo')) return '';
   return `<div class="card"><details id="eRes"><summary class="ct" style="cursor:pointer">🔧 Resortes para el modelo <span class="hint" style="text-transform:none;letter-spacing:0">qué poner en cada nudo y si el modelo ya lo tiene</span></summary>
     <div id="eResT"><p class="muted">Calculando…</p></div></details></div>`;
 }
@@ -382,7 +387,7 @@ async function pintarResortes(){
   if(!T){ box.innerHTML = '<p class="hint">No se pudo leer el archivo del modelo.</p>'; return; }
   const ap = T._apoyos || {}, sp = T._resortes || {}, filas = [];
   const chip = (txt, ok, t) => `<span title="${esc(t || '')}" style="display:inline-block;margin:2px 4px 2px 0;padding:1px 8px;border-radius:999px;font-size:12px;white-space:nowrap;${ok ? 'background:#ecfdf3;color:#166534;border:1px solid #bbf7d0' : 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca'}">${esc(txt)} ${ok ? '✓' : '✗'}${ok ? '' : ` <small>(${esc(t || '')})</small>`}</span>`;
-  for(const c of E.con.filter(esCx)){
+  for(const c of E.con.filter(c => esCx(c) && !CX_EMP.includes(c.tipo) && c.tipo !== 'grupo')){
     let X = null; try{ X = calcE(c, D, ctx); }catch(e){ console.warn(e); }
     let g = X?.R?.rigid; const nom = `<b>${esc(c.nom)}</b><br/><small>${esc(cxNombre(c.tipo))}</small>`;
     if(g && g.tipo === 'cortante' && !g.clase) g = { ...g, clase:'art', _req:true };

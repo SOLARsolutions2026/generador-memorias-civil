@@ -5,10 +5,10 @@
 const f2 = (x, d = 2) => x == null || !isFinite(x) ? '—' : (+x).toLocaleString('es-CO', { minimumFractionDigits:d, maximumFractionDigits:d });
 const NOMBRES = { aleta:'Chapa de aleta (shear tab)', angular:'Doble angular de alma', testaV:'Chapa de testa a cortante', asiento:'Asiento con angular',
   testa:'Chapa de testa extendida (4 pernos)', ras:'Chapa de testa a ras', empalme:'Empalme de viga con cubrejuntas', empZ:'Empalme en Z soldado', soldada:'Soldada en todo el perímetro',
-  cartela:'Diagonal a cartela', grupo:'Grupo de pernos excéntrico', base:'Placa base a momento' };
+  cartela:'Diagonal a cartela', grupo:'Grupo de pernos excéntrico', base:'Placa base a momento', empCol:'Empalme de columna' };
 // Galería por tipo de trabajo (pedido de Amo 10-nov)
-const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme', 'empZ']], ['Axiales y otras', ['cartela', 'grupo', 'base']]];
-const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB' };
+const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme', 'empZ']], ['Axiales y otras', ['cartela', 'grupo', 'base', 'empCol']]];
+const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB', empCol:'EC' };
 
 // Resumen de los datos de portada para la franja cerrada (pedido de Amo 19-nov: que se vea que se puede abrir)
 function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
@@ -255,6 +255,30 @@ function seccionesDe0(c){
         ...(sold ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })])) : '')],
     ...(sold ? [] : [['pern', 'Pernos al soporte', () => `${2 * c.filas} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g}${c.cizalla ? ' · cizalla' : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas (2 pernos por fila)'), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'ev', 'Del talón a la fila superior [mm]'))]]) ]; }
+  if(c.tipo === 'empCol'){ const un = c.union || 'pernos', TIP = { pernos:'Atornillado con cubrejuntas', cjp:'Soldado de penetración completa', placa:'Con placa de tope soldada' };
+    return [
+    ['col', 'Columnas', () => `${c.colI}${c.colS && c.colS !== c.colI ? ` abajo · ${c.colS} arriba` : ''} · ${c.acero}`,
+      g3(SELP('colI', 'Columna de abajo'), SELP('colS', 'Columna de arriba', '— Igual a la de abajo —'), campo(c, 'acero', 'Acero', { sel:SEL_ACERO }))],
+    ['tipo', 'Tipo de empalme', () => `${TIP[un]} · sin contacto`,
+      g3(campo(c, 'union', 'Tipo', { sel:Object.entries(TIP) }), ...(un === 'pernos' ? [campo(c, 'gap', 'Separación entre columnas [mm]')] : []))
+      + '<div class="hint">Sin contacto entre los extremos de las columnas: el empalme toma toda la carga, también la compresión.</div>'],
+    ...(un === 'pernos' ? [
+      ['alas', 'Cubrejuntas de las alas', () => `PL ${c.bpf} × ${c.tpf} mm · ${2 * c.nf} pernos por lado · s ${c.sf} · g ${c.gf}`,
+        g3(campo(c, 'bpf', 'Ancho bpf [mm]', { h:'≤ bf de la columna menor' }), campo(c, 'tpf', 'Espesor tpf [mm]'), campo(c, 'aceroPl', 'Acero de las platinas', { sel:SEL_ACERO }), campo(c, 'nf', 'Filas por lado (2 pernos c/u)'), campo(c, 'sf', 'Separación sf [mm]'), campo(c, 'gf', 'Gramil gf [mm]'), campo(c, 'Lef', 'Borde Lef [mm]', { h:'Del extremo de la columna y de la platina a la primera fila' }))],
+      ['alma', 'Cubrejuntas del alma (2)', () => `PL ${c.hpw} × ${c.tpw} mm · ${c.nw} pernos por lado · s ${c.sw}`,
+        g3(campo(c, 'hpw', 'Ancho hpw [mm]', { h:'Cabe entre las alas (≤ T)' }), campo(c, 'tpw', 'Espesor tpw [mm]'), campo(c, 'nw', 'Pernos por lado nw', { h:'Mínimo 2' }), campo(c, 'sw', 'Separación sw [mm]'), campo(c, 'Lew', 'Borde Lew [mm]'), campo(c, 'Lehw', 'Junta a los pernos Lehw [mm]'))],
+      ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}${c.desliz ? ` · deslizamiento crítico clase ${c.claseSup || 'A'}` : ''}`, g3(...pernosTipo)
+        + ck('desliz', 'Pernos de deslizamiento crítico (J3-8): necesarios con rellenos gruesos o cargas que cambian de sentido')
+        + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30)'], ['B', 'Clase B (μ = 0.50)']] })) : '')]] : []),
+    ...(un === 'placa' ? [
+      ['placa', 'Placa de tope', () => `PL ${c.Bpl || 'auto'} × ${c.Npl || 'auto'} × ${c.tpb} mm · ${c.aceroPl}`,
+        g3(campo(c, 'tpb', 'Espesor [mm]'), campo(c, 'Bpl', 'Ancho B [mm]', { h:'Vacío = bf mayor + 40' }), campo(c, 'Npl', 'Largo N [mm]', { h:'Vacío = d mayor + 40' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }))],
+      ['sold', 'Soldaduras a la placa', () => `filetes ${c.wS} mm (arriba) · ${c.wI} mm (abajo) · ${c.electrodo}`,
+        g3(campo(c, 'wS', 'Filete columna de arriba [mm]', { h:'En todo el contorno' }), campo(c, 'wI', 'Filete columna de abajo [mm]', { h:'En todo el contorno' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : []),
+    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · a ${c.hEmp || '—'} m de la viga · H ${c.Hcol || '—'} m` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'hEmp', 'Distancia del empalme a la viga [m]', { h:'Al ala de la viga más cercana; ≥ 1.2 m' }), campo(c, 'Hcol', 'Altura libre de la columna H [m]', { h:'Para el cortante ΣMpc/H' })] : []))
+      + (['DMO', 'DES'].includes(c.sismo) ? `<div class="note${un === 'placa' ? ' red' : ''}">AISC 341: el empalme se diseña para Ry·Fy·Zx de la columna menor y el cortante ΣMpc/H; las fuerzas axiales del modelo deben incluir Ω0.${un === 'placa' ? ' Con filetes a una placa de tope NO se acepta: use atornillado o penetración completa.' : ''}</div>` : '')] ]; }
   if(c.tipo === 'empalme') return [
     ['viga', 'Viga', () => `${c.viga} · ${c.aceroViga} · separación ${c.gap} mm${c.resComp ? ' · a resistencia completa' : ''}`, g3(SELP('viga', 'Perfil'), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'gap', 'Separación entre tramos [mm]'))
       + ck('resComp', 'Diseñar a resistencia completa: con lo máximo que la viga resiste en el empalme (φMn y φVn), no con las cargas del modelo')],
@@ -393,13 +417,13 @@ function cargasHTML(c){
   if(c.tipo === 'base') return caja('Cargas en la base de la columna', [f('P', 'P [kN]', '+ compresión'), f('Vx', 'Vx [kN]', 'sentido N'), f('Vy', 'Vy [kN]', 'sentido B'), f('T', 'T [kN·m]', 'torsión'), f('Mx', 'Mx [kN·m]', 'flexión en el sentido N'), f('My', 'My [kN·m]', 'flexión en el sentido B')], 'Resultantes mayoradas · vacío = 0', false);
   if(c.tipo === 'grupo') return caja('Cargas sobre el grupo de pernos', [f('Pu', 'Pu en el plano [kN]'), f('e', 'Excentricidad e [mm]', 'al centro del grupo'), f('ang', 'Ángulo [°]', '0° = vertical'),
     f('Nt', 'N normal a la chapa [kN]', '+ tensión en los pernos'), f('Mx', 'Mx fuera del plano [kN·m]', 'eje horizontal'), f('My', 'My fuera del plano [kN·m]', 'eje vertical')], 'Resultantes mayoradas · vacío = 0', false);
-  const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme', 'soldada', 'empZ'].includes(c.tipo) ? 'Mu' : 'M3';
-  return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]', 'a lo largo del eje 1'), f(k2, 'V2 [kN]', 'dirección 2 (alma)'), f('V3', 'V3 [kN]', 'dirección 3 (alas)'),
+  const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme', 'soldada', 'empZ', 'empCol'].includes(c.tipo) ? 'Mu' : 'M3';
+  return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : c.tipo === 'empCol' ? 'Cargas en la columna en el empalme' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]', 'a lo largo del eje 1'), f(k2, 'V2 [kN]', 'dirección 2 (alma)'), f('V3', 'V3 [kN]', 'dirección 3 (alas)'),
     f('T', 'T torsión [kN·m]', 'alrededor del eje 1'), f('M2', 'M2 [kN·m]', 'alrededor de 2 · eje débil'), f(k3, 'M3 [kN·m]', 'alrededor de 3 · eje fuerte')], nota);
 }
 const cargasTxt = c => c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
   : c.tipo === 'grupo' ? `Pu ${nz(c.Pu)} kN a ${nz(c.ang)}° con e = ${nz(c.e)} mm · N ${nz(c.Nt)} kN · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
-  : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme', 'soldada', 'empZ'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
+  : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme', 'soldada', 'empZ', 'empCol'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
 const nz = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
 function formHTML(c){
   const ab = abiertas();
@@ -477,7 +501,7 @@ const ICO_ALETA = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="2"
 const ICO_GRUPO = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="4" width="26" height="32" fill="#93c5fd" stroke="#1e3a8a"/>' + [10, 20, 30].map(y => `<circle cx="12" cy="${y}" r="2.2" fill="#1e3a8a"/><circle cx="22" cy="${y}" r="2.2" fill="#1e3a8a"/>`).join('') + '<line x1="50" y1="6" x2="50" y2="32" stroke="#ea580c" stroke-width="2.5"/><path d="M46 28 L50 35 L54 28" fill="#ea580c"/></svg>';
 function cotaV(x, y1, y2, t, lado = -1){ const xx = x + lado * 0; return `<g class="cota"><line x1="${xx}" y1="${y1}" x2="${xx}" y2="${y2}"/><line x1="${xx - 4}" y1="${y1}" x2="${xx + 4}" y2="${y1}"/><line x1="${xx - 4}" y1="${y2}" x2="${xx + 4}" y2="${y2}"/><text x="${xx + lado * 6}" y="${(y1 + y2) / 2}" text-anchor="${lado < 0 ? 'end' : 'start'}" dominant-baseline="middle">${t}</text></g>`; }
 function cotaH(y, x1, x2, t, lado = 1){ return `<g class="cota"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/><line x1="${x1}" y1="${y - 4}" x2="${x1}" y2="${y + 4}"/><line x1="${x2}" y1="${y - 4}" x2="${x2}" y2="${y + 4}"/><text x="${(x1 + x2) / 2}" y="${y + lado * 11}" text-anchor="middle">${t}</text></g>`; }
-function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, base:dibBase, soldada:dibSoldada, empZ:dibEmpZ }[c.tipo] || dibAleta)(c, r); }
+function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, base:dibBase, soldada:dibSoldada, empZ:dibEmpZ, empCol:dibEmpCol }[c.tipo] || dibAleta)(c, r); }
 const ICO_ANG = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="8" height="38" fill="#cbd5e1"/><rect x="18" y="6" width="40" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="12" y="9" width="18" height="22" fill="#93c5fd" stroke="#1e3a8a"/><rect x="12" y="9" width="3" height="22" fill="#1e3a8a"/><circle cx="23" cy="14" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="20" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="26" r="2" fill="#fff" stroke="#1e3a8a"/></svg>';
 function dibAngular(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0, ts = +c.tSop || 10;
@@ -522,7 +546,8 @@ const ICO_CAR = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="34" 
 const ICO_BASE = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="8" y="28" width="44" height="11" fill="#e5e7eb" stroke="#94a3b8"/><rect x="12" y="24" width="36" height="4" fill="#93c5fd" stroke="#1e3a8a"/><rect x="22" y="2" width="16" height="22" fill="#f1f5f9" stroke="#475569"/><line x1="16" y1="20" x2="16" y2="38" stroke="#1e3a8a" stroke-width="2"/><line x1="44" y1="20" x2="44" y2="38" stroke="#1e3a8a" stroke-width="2"/></svg>';
 const ICO_SP = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="9" height="38" fill="#cbd5e1"/><rect x="13" y="8" width="45" height="24" fill="#f1f5f9" stroke="#94a3b8"/><rect x="13" y="8" width="45" height="3" fill="#475569"/><rect x="13" y="29" width="45" height="3" fill="#475569"/><path d="M13 5 l4 3 h-4z M13 35 l4 -3 h-4z" fill="#b45309"/><line x1="13.5" y1="8" x2="13.5" y2="32" stroke="#b45309" stroke-width="2.5"/></svg>';
 const ICO_EZ = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="6" width="56" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="2" y="6" width="56" height="3" fill="#475569"/><rect x="2" y="31" width="56" height="3" fill="#475569"/><path d="M22 4 V20 H38 V36" fill="none" stroke="#b45309" stroke-width="2.6"/></svg>';
-const ICO = { empZ:ICO_EZ, soldada:ICO_SP, aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, grupo:ICO_GRUPO, base:ICO_BASE };
+const ICO_EC = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="22" y="1" width="16" height="18" fill="#f1f5f9" stroke="#94a3b8"/><rect x="22" y="21" width="16" height="18" fill="#f1f5f9" stroke="#94a3b8"/><rect x="18" y="10" width="4" height="20" fill="#93c5fd" stroke="#1e3a8a"/><rect x="38" y="10" width="4" height="20" fill="#93c5fd" stroke="#1e3a8a"/><rect x="26" y="13" width="8" height="14" fill="#93c5fd" stroke="#1e3a8a"/></svg>';
+const ICO = { empCol:ICO_EC, empZ:ICO_EZ, soldada:ICO_SP, aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, grupo:ICO_GRUPO, base:ICO_BASE };
 const svgW = (w, h, body, label, nota) => `<svg viewBox="0 0 ${w} ${h}" class="dsvg" role="img" aria-label="${label}">${body}</svg><div class="hint" style="text-align:center">${nota}</div>`;
 function dibTestaV(c, r){
   const vg = r.geo.vg, n = +c.n, s = +c.s, Lev = +c.Lev, tp = +c.tp, bp = +c.bp, gg = +c.g, Lp = r.geo.Lp, ts = +c.tSop || 10;
@@ -654,6 +679,37 @@ function dibSoldada(c, r){
   return `<svg viewBox="0 0 ${ox + m.bf * k2 + 30} ${Y(m.d + 40) + 22}" class="dsvg" role="img" aria-label="Unión soldada en todo el perímetro">${h}</svg>
     <div class="hint" style="text-align:center">Izquierda: elevación · Derecha: sección en la cara del soporte (en naranja la soldadura)</div>`;
 }
+function dibEmpCol(c, r){
+  // Elevación de frente al alma: la columna de abajo y la de arriba, con las cubrejuntas, la soldadura o la placa de tope
+  const g = r.geo, I = g.I, Su = g.Su, un = g.un, dM = Math.max(I.d, Su.d), tp = un === 'pernos' ? g.tpf : un === 'placa' ? g.tp : 0;
+  const Lpf = un === 'pernos' ? 2 * (g.Lef + (g.nf - 1) * g.sf) + g.gap : 0, Lpw = un === 'pernos' ? 2 * (g.Lehw + (g.nw - 1) * 0 + g.Lew) + g.gap : 0;
+  const H = Math.max(Lpf, 300) + 160, W = (un === 'placa' ? Math.max(g.Np, dM) : dM + 2 * tp) + 140, k = Math.min(300 / W, 330 / H);
+  const cx = 80 + W / 2 * k, cy = 20 + H / 2 * k, X = v => cx + v * k, Y = v => cy - v * k, gap = un === 'pernos' ? g.gap / 2 : un === 'placa' ? g.tp / 2 : 0;
+  const col = (s, y1, y2, rel) => `<rect x="${X(-s.d / 2)}" y="${Y(Math.max(y1, y2))}" width="${s.d * k}" height="${Math.abs(y2 - y1) * k}" class="vg"/>
+    <line x1="${X(-s.d / 2 + s.tf)}" y1="${Y(y1)}" x2="${X(-s.d / 2 + s.tf)}" y2="${Y(y2)}" class="vgl"/><line x1="${X(s.d / 2 - s.tf)}" y1="${Y(y1)}" x2="${X(s.d / 2 - s.tf)}" y2="${Y(y2)}" class="vgl"/>
+    <text x="${X(0)}" y="${Y((y1 + y2) / 2)}" class="lbl" text-anchor="middle">${esc(s.nom)}</text><text x="${X(0)}" y="${Y((y1 + y2) / 2) + 12}" class="lbl" text-anchor="middle" style="font-size:9px">${rel}</text>`;
+  const top = H / 2 - 20;
+  let h = col(I, -top, -gap, 'abajo') + col(Su, gap, top, 'arriba');
+  if(un === 'pernos'){
+    const xo = dM / 2;
+    for(const sg of [-1, 1]){ h += `<rect x="${sg < 0 ? X(-xo - tp) : X(xo)}" y="${Y(Lpf / 2)}" width="${tp * k}" height="${Lpf * k}" class="pl"/>`;
+      for(const s of [I, Su]) if(s.d < dM - 1){ const yA = s === Su ? gap : -Lpf / 2, yB = s === Su ? Lpf / 2 : -gap;
+        h += `<rect x="${sg < 0 ? X(-xo) : X(s.d / 2)}" y="${Y(yB)}" width="${(xo - s.d / 2) * k}" height="${(yB - yA) * k}" fill="#fde68a" stroke="#b45309"/>`; }
+      for(const sv of [-1, 1]) for(let i = 0; i < g.nf; i++){ const y = sv * (gap + g.Lef + i * g.sf), sd = sv > 0 ? Su : I;
+        h += `<line x1="${sg < 0 ? X(-xo - tp - 6) : X(sd.d / 2 - sd.tf - 6)}" y1="${Y(y)}" x2="${sg < 0 ? X(-sd.d / 2 + sd.tf + 6) : X(xo + tp + 6)}" y2="${Y(y)}" class="bl"/>`; } }
+    const Lw = 2 * (g.Lehw + (g.nw > 0 ? 0 : 0)) + g.gap + 2 * g.Lew;   // alto de la cubrejunta del alma (vertical)
+    h += `<rect x="${X(-g.hpw / 2)}" y="${Y(Lw / 2)}" width="${g.hpw * k}" height="${Lw * k}" class="pl" opacity=".85"/>`;
+    for(const sv of [-1, 1]) for(let i = 0; i < g.nw; i++) h += `<circle cx="${X(-g.hpw / 2 + g.Lew + i * g.sw)}" cy="${Y(sv * (gap + g.Lehw))}" r="${Math.max(3, g.dh / 2 * k)}" class="bolt"/>`;
+    h += cotaV(X(-xo - tp) - 12, Y(Lpf / 2), Y(-Lpf / 2), `cubrejunta ${Math.round(Lpf)}`);
+  } else if(un === 'cjp'){
+    h += `<line x1="${X(-dM / 2 - 8)}" y1="${Y(0)}" x2="${X(dM / 2 + 8)}" y2="${Y(0)}" stroke="#ea580c" stroke-width="4"/><text x="${X(dM / 2 + 12)}" y="${Y(0) + 4}" class="lbl" fill="#ea580c">CJP</text>`;
+  } else {
+    h += `<rect x="${X(-g.Np / 2)}" y="${Y(g.tp / 2)}" width="${g.Np * k}" height="${g.tp * k}" class="pl"/>`;
+    for(const [s, y] of [[Su, g.tp / 2], [I, -g.tp / 2]]) for(const sg of [-1, 1]) h += `<path d="M${X(sg * s.d / 2)} ${Y(y)} l${sg * 6} 0 l${-sg * 6} ${y > 0 ? -6 : 6} z" fill="#ea580c"/>`;
+    h += cotaH(Y(-g.tp / 2) + 16, X(-g.Np / 2), X(g.Np / 2), `placa ${g.Np} × ${g.tp}`);
+  }
+  return svgW(X(W / 2) + 20, Y(-H / 2) + 20, h, 'Empalme de columna', un === 'pernos' ? 'Elevación (alas a los lados): cubrejuntas en azul, rellenos en amarillo, pernos de las alas como líneas' : un === 'cjp' ? 'Elevación: soldadura de penetración completa en naranja' : 'Elevación: placa de tope en azul y filetes en naranja');
+}
 function dibEmpZ(c, r){
   const p = r.geo.pf, a = +c.a || 0, Lt = a + 360, k = Math.min(560 / Lt, 200 / (p.d + 60)), X = v => 48 + (v + Lt / 2) * k, Y = v => 34 + v * k;
   const x1 = -a / 2, x2 = a / 2;
@@ -750,7 +806,7 @@ function dibGrupo(c, r){
 // ── Lista en el celular (igual que el generador: una línea fija con el elemento abierto) ─────────────
 function datosPrint(c){
   const t = (l, v) => `<tr><th>${l}</th><td>${v}</td></tr>`, dn = (Conex.DIAM.find(x => x[1] === +c.d) || [c.d])[0];
-  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base', 'soldada', 'empZ'].includes(c.tipo)){
+  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base', 'soldada', 'empZ', 'empCol'].includes(c.tipo)){
     const carga = cargasTxt(c);
     return `<table class="t kv">${t('Cargas', carga)}${seccionesDe(c).map(([, tt, res]) => t(esc(tt), esc(res()))).join('')}</table>`; }
   if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)} · angulares ${c.unSop === 'sold' ? `soldados (filete ${c.wS} mm ${esc(c.electrodo || '')}, retorno 2w)` : 'atornillados'}`)}
