@@ -116,8 +116,22 @@ function guardar(){ clearTimeout(tGuardar); $('#gEst') && ($('#gEst').textConten
     if($('#gEst')) $('#gEst').textContent = error ? '⚠ Sin guardar' : '✓ Guardado'; if(error) err(error, 'No se pudo guardar'); }, 700); }
 const conSel = () => S.p.datos.con.find(c => c.id === S.sel);
 const resumenDatos = F => [F.proyecto, F.prop, [F.mun, F.depto].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos: toque para llenarlos (van a la portada)';
+// Disipación de energía del proyecto (pedido de Amo 21-nov): se escoge una vez y la toman todas las conexiones y nudos;
+// con DMO o DES las conexiones a momento no precalificadas (AISC 358) quedan en gris en la galería.
+window.ConSisProy = true;
+const TIENE_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'base', 'empCol'];
+const NO_PRECAL = { DMO:['ras'], DES:['ras'] };
+const SIS_OP = [['no', 'Sin sismo'], ['DMI', 'DMI · pórtico ordinario (OMF)'], ['DMO', 'DMO · pórtico intermedio (IMF)'], ['DES', 'DES · pórtico especial (SMF)']];
+function sisProyecto(p){
+  if(!p.datos.sismo){ const v = p.datos.con.map(c => c.sismo); p.datos.sismo = v.includes('DES') ? 'DES' : v.includes('DMO') ? 'DMO' : 'no'; }   // proyectos viejos: el mayor que tenían
+  return p.datos.sismo;
+}
+function aplicarSis(p){ const s = sisProyecto(p), v = ['DMO', 'DES'].includes(s) ? s : 'no';
+  p.datos.con.forEach(c => { if(TIENE_SIS.includes(c.tipo)) c.sismo = v; }); (p.datos.nudos || []).forEach(n => { n.sismo = s; }); }
+const noPrecal = (p, t) => (NO_PRECAL[sisProyecto(p)] || []).includes(t);
 function renderProyecto(){
   const p = S.p, F = p.ficha, ro = esIng() ? '' : 'disabled';
+  aplicarSis(p); const sisP = sisProyecto(p);
   p.datos.nudos = p.datos.nudos || []; p.datos.nudos.forEach(recalcNudo);
   const inp = (k, l, ph = '') => `<div class="f"><label>${l}</label><input data-fk="${k}" value="${esc(F[k] || '')}" placeholder="${esc(ph)}" ${ro}/></div>`;
   $('#app').innerHTML = `<div class="ws-bar"><a class="btn sm" href="#/">← Proyectos</a><span class="code">${esc(p.consecutivo)}</span><span class="muted" id="gEst"></span>
@@ -130,14 +144,21 @@ function renderProyecto(){
         ${inp('dir', 'Dirección del predio')}${inp('mun', 'Municipio')}${inp('depto', 'Departamento')}
         <div class="f"><label>Fecha</label><input type="date" data-fk="fecha" value="${esc(F.fecha || '')}" ${ro}/></div>
         <div class="f"><label>Membrete y pie de página</label><select id="pPerfil" ${ro}>${S.perfiles.map(x => `<option value="${x.id}" ${x.id === p.perfil_id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></div></div></details>
+    <div class="card sis-card"><div class="sis-hd"><b>Disipación de energía</b><div class="sis-op" role="radiogroup" aria-label="Disipación de energía del proyecto">${SIS_OP.map(([k, t]) => `<button type="button" class="${sisP === k ? 'on' : ''}" data-sisp="${k}" role="radio" aria-checked="${sisP === k}" ${ro}>${t}</button>`).join('')}</div></div>
+      <div class="hint">Vale para todas las conexiones del proyecto. ${['DMO', 'DES'].includes(sisP) ? 'Con DMO o DES las conexiones a momento deben estar precalificadas (AISC 358): las que no lo están quedan en gris en la galería. Las conexiones a cortante solo van en vigas de gravedad, fuera del pórtico resistente a momento.' : 'Sin requisitos sísmicos especiales en las conexiones.'}</div></div>
     <div class="d-grid"><div class="d-lista">
-        ${p.datos.con.map(c => { const r = c.res; return `<button type="button" class="d-el ${c.id === S.sel ? 'on' : ''}" data-sel="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(NOMBRES[c.tipo].split(' (')[0])}<small>${esc(c.desc || '')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}
+        ${p.datos.con.map(c => { const r = c.res; return `<button type="button" class="d-el ${c.id === S.sel ? 'on' : ''}" data-sel="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(NOMBRES[c.tipo].split(' (')[0])}<small>${esc(c.desc || '')}</small>${noPrecal(p, c.tipo) ? `<small class="np">🔒 No precalificada para ${sisP}</small>` : ''}</span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}
         ${p.datos.nudos.length ? `<div class="gal-cat">Nudos de columna</div>${p.datos.nudos.map(n => { const r = n.res; return `<button type="button" class="d-el ${'N:' + n.id === S.sel ? 'on' : ''}" data-sel="N:${n.id}"><span><b>${esc(n.nom)}</b> Nudo · ${esc(n.columna)}<small>${esc(nudoCons(n).map(x => x.c.nom).join(', ') || 'sin conexiones')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}` : ''}
-        ${esIng() ? CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div><div class="gal">${L.map(t => `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('')
+        ${esIng() ? (['DMO', 'DES'].includes(sisP) ? `<div class="sis-pill">Disipación del proyecto: ${sisP}</div>` : '') + CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div>${['DMO', 'DES'].includes(sisP) && L.includes('aleta') ? '<div class="hint gal-nota">Solo para vigas de gravedad (fuera del pórtico a momento)</div>' : ''}<div class="gal">${L.map(t => noPrecal(p, t)
+          ? `<button type="button" class="gal-it np" disabled title="No precalificada para ${sisP} (AISC 358)">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}<small>🔒 No precalificada para ${sisP}</small></span></button>`
+          : `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('')
           + `<div class="gal-cat">Varias vigas a una columna</div><div class="gal"><button type="button" class="gal-it" data-nnudo="1">${ICO_NUDO}<span>＋ Nudo de columna (agrupar conexiones)</span></button></div>` : ''}
       </div><div id="ed">${S.sel ? '' : '<div class="card empty">Agregue una conexión con los botones de la izquierda.</div>'}</div></div>`;
   $$('[data-fk]').forEach(el => el.oninput = () => { F[el.dataset.fk] = el.value; const r = $('#pdRes'); if(r) r.textContent = resumenDatos(F); guardar(); });
   if($('#pPerfil')) $('#pPerfil').onchange = e => { p.perfil_id = e.target.value; guardar(); };
+  $$('[data-sisp]').forEach(b => b.onclick = () => { if(!esIng() || p.datos.sismo === b.dataset.sisp) return; p.datos.sismo = b.dataset.sisp; aplicarSis(p);
+    p.datos.con.forEach(c => recalcular(c)); p.datos.nudos.forEach(recalcNudo); guardar(); renderProyecto();
+    const np = p.datos.con.filter(c => noPrecal(p, c.tipo)); toast(`Disipación del proyecto: ${b.dataset.sisp === 'no' ? 'sin sismo' : b.dataset.sisp}.${np.length ? ` ${np.map(c => c.nom).join(', ')} no está${np.length > 1 ? 'n' : ''} precalificada${np.length > 1 ? 's' : ''}.` : ''}`, 6000); });
   if($('#pEst')) $('#pEst').onchange = e => { p.estado = e.target.value; e.target.className = `est-sel est-${p.estado}`; guardar(); toast(p.estado === 'apr' ? 'Terminado: lo puede ver el personal de consulta.' : 'En proceso.'); };
   $$('[data-sel]').forEach(b => b.onclick = () => { S.sel = b.dataset.sel; history.replaceState(null, '', `#/p/${p.id}${hashSel()}`); renderProyecto(); });
   $$('[data-nnudo]').forEach(b => b.onclick = () => { const n = Conex.defaultsNudo(); n.id = Math.random().toString(36).slice(2, 10); n.nom = `N-${p.datos.nudos.length + 1}`;
@@ -145,6 +166,7 @@ function renderProyecto(){
     p.datos.nudos.push(n); S.sel = 'N:' + n.id; recalcNudo(n); guardar(); history.replaceState(null, '', `#/p/${p.id}${hashSel()}`); renderProyecto(); });
   $$('[data-nueva]').forEach(b => b.onclick = () => { const t = b.dataset.nueva, c = Conex.defaults(t);
     c.id = Math.random().toString(36).slice(2, 10); c.nom = `${PREF[t]}-${p.datos.con.filter(x => x.tipo === t).length + 1}`;
+    if(TIENE_SIS.includes(t)) c.sismo = ['DMO', 'DES'].includes(sisP) ? sisP : 'no';
     p.datos.con.push(c); S.sel = c.id; recalcular(c); guardar(); history.replaceState(null, '', `#/p/${p.id}/c/${c.id}`); renderProyecto(); });
   $('#imp').onclick = imprimir;
   armarListaMovil();
@@ -202,7 +224,9 @@ function nudoFormHTML(n){
   const sec = (i, t, res, body) => `<section class="sec on"><div class="sec-hd" style="cursor:default"><i>${i}</i><b>${t}</b><small>${esc(res)}</small></div><div class="sec-bd">${body}</div></section>`;
   return sec(1, 'Columna', `${n.columna} · ${n.aceroCol}`, g3(SELP('columna', 'Perfil'), campo(n, 'aceroCol', 'Acero', { sel:SEL_ACERO }), '<div></div>',
       campo(n, 'Pc', 'Axial de la columna Pu [kN]', { h:'Compresión mayorada; reduce la zona de panel si pasa de 0.4·Py' }), campo(n, 'Vc', 'Cortante de la columna Vc [kN]', { h:'Descuenta en la zona de panel; vacío = 0' }))
-      + ck('colTope', 'El nudo está en el extremo superior de la columna (menos de d de la punta)'))
+      + ck('colTope', 'El nudo está en el extremo superior de la columna (menos de d de la punta)')
+      + (n.sismo === 'DES' ? `<h4 class="sub">Columna fuerte – viga débil (proyecto DES)</h4>` + g3(campo(n, 'colArriba', 'Columna de arriba', { sel:[['', 'La misma'], ['ninguna', 'Ninguna (último piso)'], ...(window.PERFILES_LAM || []).map(x => [x[0], x[0]])] }),
+          n.colArriba === 'ninguna' || n.colTope ? '' : campo(n, 'PcA', 'Axial de la columna de arriba Pu [kN]', { h:'Vacío = la misma de abajo' })) : ''))
     + sec(2, 'Conexiones que llegan', `${n.cons.length} conexi${n.cons.length === 1 ? 'ón' : 'ones'}`,
       `<div class="tw"><table class="t nd-t"><thead><tr><th>Cara de la columna</th><th>Conexión</th><th>Viga y cargas</th><th></th></tr></thead><tbody>${filas || '<tr><td colspan="4" class="hint">Todavía no hay conexiones en este nudo.</td></tr>'}</tbody></table></div>
       ${esIng() ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button type="button" class="btn sm" id="nAdd" ${L.length ? '' : 'disabled'}>＋ Agregar conexión al nudo</button>

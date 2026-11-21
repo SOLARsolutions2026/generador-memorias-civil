@@ -16,6 +16,8 @@ function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r
 // ── Editor de una conexión ─────────────
 function campo(c, k, l, opt = {}){
   const ro = esIng() ? '' : 'disabled';
+  // En la app de conexiones el sismo se escoge una vez para todo el proyecto (Amo 21-nov)
+  if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">Se escoge arriba, en «Disipación de energía» del proyecto</div></div>`;
   if(opt.sel) return `<div class="f"><label>${l}</label><select data-k="${k}" ${ro}>${opt.sel.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(c[k]) === String(v) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
   return `<div class="f"><label>${l}</label><input data-k="${k}" ${opt.num === false ? '' : 'inputmode="decimal" data-num="1"'} value="${esc(c[k] ?? '')}" ${ro}/>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
 }
@@ -292,7 +294,10 @@ function seccionesDe0(c){
         campo(c, 'Lew', 'Borde Lew [mm]', { h:'Vertical y horizontal' }), campo(c, 'Lehw', 'Junta a los pernos Lehw [mm]', { h:'Del extremo de la viga a la primera columna' }))],
     ['pern', 'Pernos', () => `${dnom(c)} ${c.grado}-${c.rosca}${c.desliz ? ` · deslizamiento crítico clase ${c.claseSup || 'A'}` : ''}`, g3(...pernosTipo)
       + ck('desliz', 'Pernos de deslizamiento crítico (J3-8): para cuando el momento cambia de sentido o la junta no se puede mover')
-      + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')] ];
+      + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')],
+    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · empalme a ${c.xEmp || '—'} mm de la cara de la columna` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))] ];
   if(c.tipo === 'cartela'){ const tbo = c.diag === 'tubo'; return [
     ['diag', 'Diagonal', () => tbo ? `Tubo ${c.Bt}×${c.Bt}×${c.tt} mm · ${c.aceroT} · ranurado y soldado` : `${+c.nL === 1 ? 'L' : '2L'} ${c.bL}×${c.bL}×${c.tL} mm · ${c.aceroL}`,
       g3(campo(c, 'diag', 'Tipo de diagonal', { sel:[['L', 'Angulares atornillados'], ['tubo', 'Tubo cuadrado ranurado y soldado']] }),
@@ -433,7 +438,7 @@ function formHTML(c){
       <button type="button" class="sec-hd" aria-expanded="${ab.includes(k)}"><i>${i + 1}</i><b>${t}</b><small data-res="${k}">${esc(res())}</small><span class="car" aria-hidden="true">▾</span></button>
       <div class="sec-bd">${body}</div></section>`).join('');
 }
-const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad', cortante:'Transmisión del cortante' };
+const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad', cortante:'Transmisión del cortante', scwb:'Columna fuerte – viga débil' };
 function chequeosHTML(r){
   let h = '';
   const extra = [...new Set(r.ch.map(x => x.grupo))].filter(g => !GRUPOS[g]).map(g => [g, g]);   // grupos sin nombre: no se pierden

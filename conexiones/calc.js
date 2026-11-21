@@ -850,7 +850,8 @@ function defaultsEmpalme(){
     d:19.1, grado:'A325', rosca:'N',
     interior:false, tpi:10, bpi:'',                 // cubrejuntas interiores de las alas (pedido de Amo 20-nov)
     desliz:false, claseSup:'A',                      // pernos de deslizamiento crítico (J3-8)
-    resComp:false };                                 // empalme a resistencia completa de la viga
+    resComp:false,                                   // empalme a resistencia completa de la viga
+    sismo:'no', xEmp:'' };                           // sismo del proyecto (21-nov) y distancia del empalme a la cara de la columna [mm]
 }
 // Pretensión mínima Tb [kN] (Tabla J3.1)
 const PRETEN = { A325:{ 12.7:53, 15.9:85, 19.1:125, 22.2:173, 25.4:227, 28.6:250 }, A490:{ 12.7:67, 15.9:106, 19.1:156, 22.2:218, 25.4:285, 28.6:357 } };
@@ -948,6 +949,13 @@ function calcEmpalme(c, sinSug){
   if(ncw === 2) pasos.push(`Cubrejunta del alma: largo total = 2·(Lehw + gw + Lew) + gap = ${r1(2 * (Lehw + gw + Lew) + gap)} mm`);
   req.push([c.desliz ? `Pernos de deslizamiento crítico, superficies clase ${c.claseSup === 'B' ? 'B' : 'A'} (sin pintura en las caras de contacto)` : 'Pernos pretensionados (empalme a momento)', true, 'indicar en planos']);
   if(c.desliz && c.grado === 'A307') req.push(['Deslizamiento crítico requiere A325 o A490', false, 'A307']);
+  if(['DMO', 'DES'].includes(c.sismo)){   // pedido de Amo 21-nov (NSR-10 F.3 = AISC 341-10)
+    const xE = nz(c.xEmp);
+    pasos.push(`Sismo ${c.sismo}: el empalme debe quedar fuera de la zona protegida de la viga (rótula plástica); sus pernos son pretensionados con superficies de contacto clase A o mejor (AISC 341 D2.2).`);
+    req.push([`Sismo ${c.sismo}: empalme fuera de la zona protegida (a más de d de la cara de la columna)`, xE > 0 ? xE >= vg.d - 1e-6 : true, xE > 0 ? `${xE} ≥ ${vg.d} mm` : 'escriba la distancia; si no, indicar en planos']);
+    req.push(['Sismo: pernos pretensionados, agujeros estándar y superficies de contacto clase A o mejor (AISC 341 D2.2)', true, 'indicar en planos']);
+    av.push('Sismo: si el empalme queda cerca de la rótula, revíselo con el momento probable de la viga (Mpr = 1.1·Ry·Fy·Zx), no solo con el del modelo; «Diseñar a resistencia completa» lo cubre.');
+  }
   const R = fin(ch, req, av, pasos, { vg, dh, Ff, ic, inter, bpi, tpi });
   // 💡 Sugerencia (pedido de Amo 20-nov): menos pernos y cubrejuntas más delgadas que cumplan; alas y alma se buscan por separado
   if(!sinSug){
@@ -1718,7 +1726,7 @@ const CARAS = { ala1:'Ala 1', ala2:'Ala 2 (opuesta)', alma1:'Alma, lado 1', alma
 const MOMENTO = ['testa', 'ras', 'soldada'], CORTANTE = ['aleta', 'angular', 'testaV', 'asiento'];
 function defaultsNudo(){
   return { nom:'', desc:'', columna:'HEB 300', aceroCol:'A572 Gr 50', colTope:false, Pc:0, Vc:0,
-    sentido:'opuesto', sentidoW:'opuesto', rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36', electrodo:'E70XX', cons:[] };
+    sentido:'opuesto', sentidoW:'opuesto', rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36', electrodo:'E70XX', cons:[], colArriba:'', PcA:'' };
 }
 // Viga que llega con cada conexión: perfil, momento, cortante y axial
 function vigaDe(c){
@@ -1848,6 +1856,26 @@ function calcNudo(n, lista){
   const sCort = k => en(k).filter(v => !v.mom);
   if(sCort('alma1').length && sCort('alma2').length) pasos.push('Vigas a cortante a los dos lados del alma: el alma recibe las dos reacciones en el mismo sitio; por eso cada conexión debe tener marcada «otra conexión al otro lado» (pernos que comparten el alma o soldaduras sobre el mismo espesor).');
   av.push('El diseño de la columna como miembro (flexocompresión con los momentos de todas las vigas) va en el Anexo D del generador de memorias.');
+  // Columna fuerte – viga débil (pedido de Amo 21-nov; proyecto DES, NSR-10 F.3 = AISC 341-10 E3.4a): ΣM*pc / ΣM*pb > 1 en cada sentido
+  if(n.sismo === 'DES'){
+    const PL = G.PERFILES_LAM || [], pC = PL.find(x => x[0] === n.columna), arribaNo = n.colArriba === 'ninguna' || tope;
+    const pA = arribaNo ? null : n.colArriba ? PL.find(x => x[0] === n.colArriba) : pC;
+    const Pu = Math.abs(nz(n.Pc)), PuA = String(n.PcA ?? '').trim() === '' ? Pu : Math.abs(nz(n.PcA));
+    const mpc = (pp, P, eje) => pp ? Math.max(0, (eje === 'x' ? pp[10] : pp[13]) * (ac.Fy - P * 1000 / pp[7]) / 1e6) : 0;
+    for(const [ini, nomS, eje] of [['ala', 'de las alas (eje fuerte de la columna)', 'x'], ['alma', 'del alma (eje débil de la columna)', 'y']]){
+      const vs = V.filter(v => v.mom && v.vg && v.cara.startsWith(ini)); if(!vs.length) continue;
+      const Mpc = mpc(pC, Pu, eje) + mpc(pA, PuA, eje); let Mpb = 0; const tB = [];
+      for(const v of vs){ const pv = PL.find(x => x[0] === v.vg.nom), Zb = pv ? pv[10] : 0, acv = ACEROS[v.c.aceroViga] || ACEROS['A572 Gr 50'], Ryb = /A36/.test(v.c.aceroViga || '') ? 1.5 : 1.1;
+        const Mpr = 1.1 * Ryb * acv.Fy * Zb / 1e6, Lp = nz(v.c.Lh) || nz(v.c.Lviga), sh = v.vg.d / 2000, Muv = Lp > 0 ? 2 * Mpr / Lp * (sh + cl.d / 2000) : 0;
+        if(!(Lp > 0)) av.push(`${v.c.nom}: escriba la luz de la viga (sección Sismo o Rigidez) para sumar el momento por cortante en la rótula; sin ella se toma solo 1.1·Ry·Fy·Zb.`);
+        Mpb += Mpr + Muv; tB.push(`${v.c.nom} ${v.vg.nom}: 1.1·${Ryb}·${acv.Fy}·Zb = ${r2(Mpr)}${Muv ? ` + Vpr·(sh + dc/2) = ${r2(Muv)}` : ''} kN·m`); }
+      const exc = arribaNo && Pu < 0.3 * ac.Fy * Acol / 1000;
+      pasos.push(`Columna fuerte – viga débil, sentido ${nomS}: ΣM*pc = Zc·(Fy − Puc/Ag) = ${r2(mpc(pC, Pu, eje))} (abajo, Puc ${r1(Pu)} kN)${pA ? ` + ${r2(mpc(pA, PuA, eje))} (arriba ${pA[0]}, Puc ${r1(PuA)} kN)` : ' (sin columna arriba)'} = ${r2(Mpc)} kN·m; ΣM*pb: ${tB.join('; ')} = ${r2(Mpb)} kN·m → ΣM*pc/ΣM*pb = ${Mpb > 0 ? r2(Mpc / Mpb) : '—'}`);
+      if(exc && Mpc <= Mpb) av.push(`Columna fuerte – viga débil (sentido ${nomS}): no cumple (${r2(Mpc / Mpb)}), pero está exceptuada: último piso con Puc < 0.3·Fy·Ag (AISC 341 E3.4a, excepción (a)).`);
+      else add('scwb', `Columna fuerte – viga débil: sentido ${nomS}`, 'NSR-10 F.3 · AISC 341-10 E3.4a (ΣM*pc/ΣM*pb > 1)', Mpb, Mpc, 'kN·m', 'demanda = ΣM*pb de las vigas, capacidad = ΣM*pc de las columnas');
+    }
+    av.push('Columna fuerte – viga débil: no incluye el cortante de gravedad de las vigas; Puc debe venir de las combinaciones con sobrerresistencia Ω0.');
+  }
 
   // Resultado de cada conexión (para el resumen)
   const cons = V.map(v => { const r = Conex.calc(v.c); return { nom:v.c.nom, cara:v.cara, tipo:v.c.tipo, ok:!r.error && r.ok, max:r.error ? null : r.max }; });
