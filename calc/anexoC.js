@@ -334,6 +334,18 @@ function filasGrupos(texto, res){
   return G;
 }
 
+// ─── Topología de los elementos (para el Anexo E: dónde se encuentran dos grupos de perfiles) ───
+// { F: { i, j, L, g:'sección|función' } } con los nudos inicial y final de cada elemento.
+function topologia(texto){
+  const T = leer(texto);
+  const J = {}; for(const r of T['JOINT COORDINATES'] || []) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
+  const sec = {}; for(const r of T['FRAME SECTION ASSIGNMENTS'] || []) sec[r.Frame] = r.AnalSect || r.DesignSect || '?';
+  const out = {};
+  for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ];
+    out[r.Frame] = { i:r.JointI, j:r.JointJ, L:a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0, g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b) }; }
+  return out;
+}
+
 // ─── Reacciones en los apoyos (JOINT REACTIONS) para zapatas y pedestales ───
 // filas { j, c, step, F1, F2, F3, M1, M2, M3 } (kN, kN·m). F3 + = compresión sobre la cimentación.
 function reaccionesDe(T){
@@ -384,6 +396,6 @@ function disenoDe(T){
 }
 
 
-const api = { reacciones, filasGrupos, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+const api = { reacciones, filasGrupos, topologia, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

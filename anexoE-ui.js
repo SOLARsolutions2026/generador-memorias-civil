@@ -48,8 +48,11 @@ function nomEl(D, id, c){
   if(!id && c.tipo === 'sold') return 'platina';
   const e = metDe(D, id) || pedDe(D, id); return e ? e.nom : '?';
 }
+const nomTipoE = c => esCx(c) ? cxNombre(c.tipo) : TIPOS_E[c.tipo]?.n || c.tipo;
 function etiquetaE(c, D){
   if(c.etiqueta) return c.etiqueta;
+  if(esCx(c)){ if(c.tipo === 'grupo') return 'Grupo de pernos'; if(c.tipo === 'base') return `Placa base de ${nomEl(D, c.eDe, c)} sobre ${nomEl(D, c.eA, c)}`;
+    if(CX_EMP.includes(c.tipo)) return `Empalme de ${nomEl(D, c.eDe, c)}`; return `Conexión ${nomEl(D, c.eDe, c)} a ${nomEl(D, c.eA, c)}`; }
   if(c.tipo === 'placa') return `Conexión ${nomEl(D, c.de, c)} a ${c.plN || 'PL'} sobre ${nomEl(D, c.a, c)}`;
   return `Conexión ${nomEl(D, c.de, c)} a ${nomEl(D, c.a, c)}`;
 }
@@ -75,6 +78,7 @@ async function ctxE(){
   const ctx = { R:null, G:null };
   try{ ctx.R = await reacModelo(); }catch(e){ console.warn(e); }
   try{ ctx.G = await filasModelo(); }catch(e){ console.warn(e); }
+  try{ ctx.T = await topoModelo(); }catch(e){ console.warn(e); }
   return ctx;
 }
 function filasExtremos(filas, extremo){
@@ -107,6 +111,7 @@ function correrE(c, D, filas){
   return { ...peor, tipo:'sold', checks, avisos:[], nFilas:filas.length };
 }
 function calcE(c, D, ctx){
+  if(esCx(c)) return calcCx(c, D, ctx);
   const filas = filasE(c, D, ctx);
   if(!filas.length && c.tipo !== 'sold'){ c.res = { ok:false, error: c.cargas === 'manual' ? 'Escribe las cargas.' : c.tipo === 'placa' ? 'Sin reacciones: revisa los nudos del pedestal y el archivo del modelo.' : 'El perfil no tiene fuerzas del modelo: escoge su grupo en el Anexo D o escribe las cargas.' }; return { ok:false, error:c.res.error }; }
   const X = correrE(c, D, filas);
@@ -302,19 +307,20 @@ function paneAnexoE(){
   const E = datosE(), D = datosD(), ing = esIng();
   const sel = E.con.find(c => c.id === selE) || E.con[0]; selE = sel?.id || null;
   const gal = ing ? `<div class="card"><div class="ct">Agregar conexión <span class="hint" style="text-transform:none;letter-spacing:0">toca el tipo</span></div>
-    <div class="e-gal">${Object.entries(TIPOS_E).filter(([k]) => S.m.tipo !== 'verificacion' || !S.m.anexos?.her || S.m.anexos.her.includes(k)).map(([k, t]) => `<button type="button" class="e-tc" data-nueva="${k}">${miniE(k)}<b>${t.n}</b><span>${t.s}</span></button>`).join('')}</div>
+    ${galCxHTML()}
     ${!D.met.length ? '<div class="note amber" style="margin-top:8px">Primero crea los perfiles y pedestales en el Anexo D: las conexiones toman de ahí sus medidas y sus fuerzas.</div>' : ''}</div>` : '';
-  const lista = `${E.con.map(c => `<button type="button" class="d-el ${c.id === selE ? 'on' : ''}" data-sele="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(TIPOS_E[c.tipo].n)}
+  const lista = `${E.con.map(c => `<button type="button" class="d-el ${c.id === selE ? 'on' : ''}" data-sele="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(nomTipoE(c))}
       <small class="e-lbl">${esc(etiquetaE(c, D))}</small>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span>${pillRes(c.res)}</button>`).join('')}
     ${!E.con.length ? '<p class="hint">Aún no hay conexiones.</p>' : ''}
     ${ing && E.con.length > 1 ? '<button class="btn sm" type="button" id="eOrdenar" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>' : ''}`;
-  pane(`${gal}<div class="d-grid"><div class="d-lista">${lista}</div><div id="eDet">${sel ? detEHTML(sel, D) : '<div class="card"><p class="muted">Agrega una conexión desde la galería.</p></div>'}</div></div>`);
+  pane(`${gal}<div class="d-grid"><div class="d-lista">${lista}</div><div id="eDet">${sel ? (esCx(sel) ? detCxHTML(sel, D) : detEHTML(sel, D)) : '<div class="card"><p class="muted">Agrega una conexión desde la galería.</p></div>'}</div></div>`);
   $$('[data-sele]').forEach(b => b.onclick = () => { selE = b.dataset.sele; tabE = 0; paneAnexoE(); });
   if(ing){
+    $$('[data-nuevacx]').forEach(b => b.onclick = () => crearCx(b.dataset.nuevacx));
     $$('[data-nueva]').forEach(b => b.onclick = () => { const c = nuevaCon(b.dataset.nueva, E, D); E.con.push(c); selE = c.id; tabE = 0; guardarMemoria(); paneAnexoE(); toast(`${c.nom} creada: ${etiquetaE(c, D)}.`); });
     if($('#eOrdenar')) $('#eOrdenar').onclick = () => { ordenNombre(E.con); guardarMemoria(); paneAnexoE(); toast('Lista ordenada por nombre.'); };
   }
-  if(sel) activarE(sel, D);
+  if(sel){ if(esCx(sel)) abrirCx(sel, D); else activarE(sel, D); }
 }
 const TABS_E = { placa:['Placa y pedestal', 'Pernos de anclaje', 'Soldadura columna–placa', 'Cargas'], vc:['Perfiles', 'Cubrejuntas y pernos', 'Cartela a cortante y pernos', 'Soldaduras', 'Cargas'], sold:['Forma y medidas', 'Cargas'] };
 function detEHTML(c, D){
@@ -672,13 +678,13 @@ function anexoEPrintHTML(Xs, D){
     const sS = secSold(c, D); return [['Elemento · forma', `${sS ? esc(sS.n || '') + ' · ' : 'platina · '}${esc(AnexoE.FORMAS[c.forma]?.n || '')}${sS ? '' : ` · b ${fx(+c.b,0)} · d ${fx(+c.d,0)} mm`}`], ['Filete · electrodo · metal base', `${c.forma === 'T' ? 'penetración completa' : fx(+c.w,0) + ' mm'} · ${esc(c.electrodo)} · t ${fx(+c.t,1)} mm ${esc(c.acero)}`]]; };
   const ok = Xs.filter(x => x.X.ok);
   return `<div class="ax"><section>
-    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - DISEÑO DE CONEXIONES METÁLICAS</div><div class="ax-n">NSR-10 Título F.2 y Título C</div><div class="ax-n2">Placas base, anclajes, conexiones a momento y soldaduras</div>
+    <div class="ax-hd"><div class="ax-t">ANEXO ${L} - DISEÑO DE CONEXIONES METÁLICAS</div><div class="ax-n">NSR-10 Título F.2 y Título C</div><div class="ax-n2">Placas base, anclajes, conexiones a cortante y a momento, empalmes y soldaduras</div>
       <table class="ax-id"><tr><td><b>Proyecto:</b></td><td>${esc(f.proyecto||m.titulo||'')}</td><td><b>Ingeniero:</b></td><td>${esc((cf.nombre_firma||'').replace(/^ING\.\s*/,''))}</td></tr>
       <tr><td><b>Proyecto No.:</b></td><td>${esc(m.consecutivo)}</td><td><b>Fecha:</b></td><td>${esc(fecha)}</td></tr></table></div>
     <h3>${L}-1 Resumen de conexiones</h3>
     <p>Las conexiones se diseñan por el método de resistencia (NSR-10 F.2.10) con las fuerzas mayoradas del modelo estructural. Las placas base siguen la Guía de diseño 1 del AISC y los pernos de anclaje el Apéndice C-D de la NSR-10 (concreto fisurado salvo que se indique). Las soldaduras de filete se revisan con el método de la línea: el cordón se trata como una línea, se combinan vectorialmente los esfuerzos de cortante directo, torsión y flexión en el punto más cargado, y el esfuerzo sobre la garganta se compara con φ·0.60·FEXX (φ = 0.75).</p>
-    ${tb(['Conexión','Une','Tipo','Relación D/C','Resultado'], Xs.map(({ c, X }) => [`<b>${esc(c.nom)}</b>`, esc(etiquetaE(c, D)), esc(TIPOS_E[c.tipo].n), X.ok ? fx(X.ratio,3) : '—', X.ok ? (X.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}</section>
-    ${ok.map(({ c, X }, i) => { const I = entradaE(c, D), fl = fallasE(X); const e = metDe(D, c.de), s = e ? secDe(e) : null;
+    ${tb(['Conexión','Une','Tipo','Relación D/C','Resultado'], Xs.map(({ c, X }) => [`<b>${esc(c.nom)}</b>`, esc(etiquetaE(c, D)), esc(nomTipoE(c)), X.ok ? fx(X.ratio,3) : '—', X.ok ? (X.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}</section>
+    ${ok.map(({ c, X }, i) => { if(X.tipo === 'cx') return cxPrintSec(c, X, D, `${L}-1.${i+1}`); const I = entradaE(c, D), fl = fallasE(X); const e = metDe(D, c.de), s = e ? secDe(e) : null;
       const figs = c.tipo === 'placa' ? `<figure>${svgPlacaPlanta(I, X, false, fl)}<figcaption>Planta</figcaption></figure><figure>${svgPlacaAlzado(I, X, false, fl)}<figcaption>Corte</figcaption></figure>`
         : c.tipo === 'vc' ? `<figure style="grid-column:1/-1">${svgVC(I, X, false, fl)}<figcaption>Alzado</figcaption></figure><figure>${svgCubrejunta(c, fl, false)}<figcaption>Cubrejunta (planta)</figcaption></figure><figure>${svgCartelaE(c, fl, false)}<figcaption>Cartela (frente)</figcaption></figure>` : `<figure style="grid-column:1/-1">${svgSoldX({ ...I, _sec:s }, X, false, fl.falla)}<figcaption>Cordones de soldadura (G = centroide)</figcaption></figure>`;
       return `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(c.nom)} · ${esc(etiquetaE(c, D))} — ${esc(TIPOS_E[c.tipo].n)}${c.desc ? ' (' + esc(c.desc) + ')' : ''}</h3>

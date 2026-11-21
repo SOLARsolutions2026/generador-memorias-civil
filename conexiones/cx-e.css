@@ -1,0 +1,113 @@
+/* Estilos del editor de conexiones dentro del Anexo E (copiados de conexiones/app.css con el prefijo .cxE para no chocar con el generador). */
+.cxE .ed-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.cxE .ed-grid h4{margin:14px 0 6px;font-size:12.5px;color:#334155}
+.cxE .ed-grid #form h4:first-child{margin-top:4px}
+.cxE .dib{position:sticky;top:10px;background:#fbfcfe;border:1px solid var(--border);border-radius:8px;padding:8px}
+.cxE .dsvg{width:100%;height:auto;display:block;font-family:inherit}
+.cxE .dsvg .sop{fill:#cbd5e1;stroke:#64748b}
+.cxE .dsvg .vg{fill:#f1f5f9;stroke:#475569}
+.cxE .dsvg .vgl{stroke:#94a3b8;stroke-dasharray:4 3}
+.cxE .dsvg .pl{fill:#dbeafe;stroke:#1e3a8a;stroke-width:1.4}
+.cxE .dsvg .bolt{fill:#fff;stroke:#1e3a8a;stroke-width:1.6}
+.cxE .dsvg .wl{stroke:#b45309;stroke-width:3}
+.cxE .dsvg .wld{fill:#b45309}
+.cxE .dsvg .cota line{stroke:#475569;stroke-width:.8}
+.cxE .dsvg .cota text,.cxE .dsvg .lbl{font-size:10px;fill:#334155}
+.cxE .dsvg .carga line{stroke:#ea580c;stroke-width:2.5}
+.cxE .dsvg .carga path,.cxE .dsvg .carga circle{fill:#ea580c}
+.cxE .dsvg .cg{fill:#0f2d5e}
+.cxE .dsvg .icr circle{fill:none;stroke:#7c3aed;stroke-width:2}
+.cxE .dsvg .icr text{font-size:10px;fill:#7c3aed}
+.cxE .f label.ck{display:flex;gap:6px;align-items:center;font-weight:500}
+.cxE table.chq tr.grp td{background:#f1f5f9;font-weight:700;font-size:12px;color:#0f2d5e}
+.cxE table.chq td.n{white-space:nowrap}
+.cxE ul.req{list-style:none;padding:0;margin:8px 0;font-size:12.5px;columns:2;column-gap:20px}
+.cxE ul.req li{padding:3px 0;break-inside:avoid}
+.cxE ul.req li.ok{color:#065f46}
+.cxE ul.req li.no{color:#991b1b;font-weight:600}
+.cxE .calc{font-family:Consolas,'Courier New',monospace;font-size:11.5px;line-height:1.6;background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:6px;overflow-x:auto}
+@media (max-width:900px){.cxE .ed-grid{grid-template-columns:1fr}
+.cxE .dib{position:static}
+.cxE ul.req{columns:1}
+}.cxE .carga-in{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;background:#fff7ed;border-left:4px solid #ea580c;border-radius:0 8px 8px 0;padding:8px 12px 2px;margin-bottom:8px}
+.cxE .carga-in .f{width:170px;margin-bottom:6px}
+.cxE .carga-in>.hint{margin-bottom:10px}
+.cxE .sec-tools{text-align:right;font-size:11.5px;color:#94a3b8;margin:2px 0 6px}
+.cxE .lnk{background:none;border:none;padding:0;color:#0f2d5e;font-weight:600;font-size:11.5px;cursor:pointer;text-decoration:underline}
+.cxE .sec{border:1px solid #d5dde8;border-radius:9px;margin-bottom:8px;overflow:hidden;background:#fff}
+.cxE .sec-hd{display:flex;align-items:center;gap:9px;width:100%;background:#0f2d5e;color:#fff;border:none;padding:8px 12px;cursor:pointer;text-align:left;font:inherit}
+.cxE .sec-hd i{font-style:normal;flex:none;background:#fff;color:#0f2d5e;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.cxE .sec-hd b{font-size:13.5px;flex:none}
+.cxE .sec-hd small{margin-left:auto;color:#c7d2e3;font-size:11.5px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cxE .sec-hd .car{flex:none;transition:transform .15s;transform:rotate(-90deg);font-size:12px}
+.cxE .sec.on .sec-hd .car{transform:none}
+.cxE .sec-bd{display:none;padding:10px 12px 2px}
+.cxE .sec.on .sec-bd{display:block}
+.cxE .sec-bd .fg+.fg{margin-top:2px}
+@media (max-width:600px){.cxE .sec-hd small{display:none}
+.cxE .sec.on .sec-hd small{display:none}
+}.cxE .dsvg .bl{stroke:#1e3a8a;stroke-width:3;stroke-linecap:round}
+.cxE .dsvg .mom path{fill:none;stroke:#7c3aed;stroke-width:2}
+.cxE .dsvg .mom path.pt{fill:#7c3aed;stroke:none}
+.cxE .f label.ck{display:flex!important;gap:8px;align-items:center;font-weight:500;color:var(--text);font-size:12.5px;margin:4px 0 8px}
+.cxE .f label.ck input{width:16px!important;height:16px;margin:0;flex:none;min-height:0}
+.cxE .gal-cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:14px 2px 4px}
+.cxE .gal-cat:first-of-type{margin-top:10px}
+.cxE .carga6{display:block;padding:8px 12px 4px}
+.cxE .carga6 .cg-hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
+.cxE .carga6 .cg-hd b{color:#9a3412;font-size:13px}
+.cxE .carga6 .cg-bd{display:flex;gap:12px;align-items:flex-start}
+.cxE .carga6 .cg-f{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px}
+.cxE .carga6 .cg-f .f{width:auto}
+.cxE .carga6 .cg-ej{flex:none;width:130px}
+.cxE .carga6 .ejes{width:100%;height:auto}
+.cxE .carga6 .ejes .lbl{font-size:9px;fill:#334155}
+@media (max-width:600px){.cxE .carga6 .cg-bd{flex-direction:column}
+.cxE .carga6 .cg-f{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cxE .carga6 .cg-ej{align-self:center}
+}.cxE .carga6 .cg-ej{width:260px}
+.cxE .carga6 .ejes text{font-size:11px}
+.cxE .ej-ley{font-size:10.5px;color:#475569;text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}
+.cxE .ej-ley .f{color:#b45309}
+.cxE .ej-ley .m{color:#7c3aed}
+.cxE .carga6 .cg-bd{flex-wrap:wrap;justify-content:center}
+.cxE .carga6 .cg-f{min-width:min(100%,360px)}
+.cxE .carga6 .cg-ej{width:240px}
+.cxE .con-fig{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;align-items:start}
+.cxE .fig-ayuda{margin:0;padding:8px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.cxE .fig-ayuda svg{display:block;width:100%;height:auto}
+.cxE .fig-ayuda figcaption{font-size:11px;line-height:1.35;color:#475569;margin-top:4px}
+.cxE .sec-bd > .fig-ayuda{max-width:300px;margin-top:8px}
+@media (max-width:700px){.cxE .con-fig{grid-template-columns:1fr}
+.cxE .con-fig .fig-ayuda{max-width:300px}
+}.cxE .con-fig.ancho{grid-template-columns:1fr}
+.cxE .con-fig.ancho .fig-ayuda{max-width:520px}
+.cxE .fig-par{display:grid;grid-template-columns:1fr;gap:12px}
+.cxE .fig-par svg{width:100%;height:auto;display:block}
+.cxE .fig-par > div:first-child svg{max-width:300px;margin:0 auto}
+.cxE .fig-tit{font-size:11px;font-weight:600;color:#0f2d5e;margin-bottom:2px}
+.cxE .con-fig.ancho .fig-ayuda{max-width:none}
+@media (max-width:700px){.cxE .fig-par{grid-template-columns:1fr}
+}.cxE .f label.ck{display:flex!important;gap:8px;align-items:center;font-weight:500;font-size:12.5px;margin:4px 0 8px}
+.cxE .f label.ck input{width:16px!important;height:16px;margin:0;flex:none;min-height:0}
+.cxE .dib{position:sticky;top:10px;background:#fbfcfe;border:1px solid var(--border);border-radius:8px;padding:8px}
+.cx-une{background:#eff6ff;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.cx-une .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cx-une .chip{border:1.5px solid #1e3a8a;color:#1e3a8a;background:#fff;border-radius:99px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
+.cx-une .chip.off{border-color:#cbd5e1;color:#94a3b8;text-decoration:line-through}
+.cx-lock{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}.cx-lock span{background:#f1f5f9;border-radius:8px;padding:4px 9px;font-size:12px}
+.cx-auto{border:1.5px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:10px 12px;margin-bottom:10px}
+.cx-auto .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}.cx-auto .hd b{color:#92400e}
+.cx-auto table{width:100%;border-collapse:collapse;font-size:11.5px;background:#fff}.cx-auto th,.cx-auto td{border:1px solid #f1e2b8;padding:3px 5px;text-align:left}
+.cx-auto th{background:#fef3c7}.cx-auto td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.cx-auto tr.ctrl td{background:#fde68a;font-weight:600}
+.cxE [data-lock]{opacity:.75}
+.e-gal.cx-gal{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.e-gal-cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:12px 2px 6px}
+.e-gal-cat:first-child{margin-top:2px}
+.e-tc .cx-ico svg{width:100%;height:60px}
+@media print{.cxE .dib{position:static}}
+/* En el Anexo E la lista ocupa la izquierda: el dibujo va arriba de los datos (una sola columna) */
+.cxE .ed-grid{grid-template-columns:minmax(0,1fr)}
+.cxE .ed-grid>div:last-child{order:-1}
+.cxE .dib{position:static;max-width:620px;margin:0 auto 4px}
+.cx-gal .e-tc svg{width:100%;max-height:64px}

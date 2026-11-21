@@ -271,6 +271,9 @@ function memDoc(ctx, ed){
       ver('D'); } }
   if(ctx.con.length){ H(3, 'Diseño de conexiones');
     for(const { c, X } of ctx.con){ if(!X?.ok) continue;
+      if(X.tipo === 'cx'){ H(4, `${c.nom} — ${etiquetaE(c, ctx.D)}`);
+        T('con.' + c.id, `${descCx(c, ctx.D, X)} La relación demanda / capacidad máxima es ${fx(X.ratio, 3)}: ${X.cumple ? 'cumple' : 'NO cumple'}.`);
+        fig('con.' + c.id, `Detalle de la conexión ${c.nom}`, `<div class="cxE">${ConUI.dibujo(X.inp, X.R)}</div>`); ver('E'); continue; }
       const I = entradaE(c, ctx.D), fl = fallasE(X), dsc = descCon(c, ctx.D, I);
       H(4, `${c.nom} — ${etiquetaE(c, ctx.D)}`);
       T('con.' + c.id, `${dsc} La relación demanda / capacidad máxima es ${fx(X.ratio, 3)}: ${X.cumple ? 'cumple' : 'NO cumple'}.`);
