@@ -149,10 +149,10 @@ function renderProyecto(){
     <div class="d-grid"><div class="d-lista">
         ${p.datos.con.map(c => { const r = c.res; return `<button type="button" class="d-el ${c.id === S.sel ? 'on' : ''}" data-sel="${c.id}"><span><b>${esc(c.nom)}</b> ${esc(NOMBRES[c.tipo].split(' (')[0])}<small>${esc(c.desc || '')}</small>${noPrecal(p, c.tipo) ? `<small class="np">🔒 No precalificada para ${sisP}</small>` : ''}</span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}
         ${p.datos.nudos.length ? `<div class="gal-cat">Nudos de columna</div>${p.datos.nudos.map(n => { const r = n.res; return `<button type="button" class="d-el ${'N:' + n.id === S.sel ? 'on' : ''}" data-sel="N:${n.id}"><span><b>${esc(n.nom)}</b> Nudo · ${esc(n.columna)}<small>${esc(nudoCons(n).map(x => x.c.nom).join(', ') || 'sin conexiones')}</small></span>${r ? `<span class="pill ${r.ok ? 'ok' : 'no'}">${f2(r.max)}</span>` : ''}</button>`; }).join('')}` : ''}
-        ${esIng() ? (['DMO', 'DES'].includes(sisP) ? `<div class="sis-pill">Disipación del proyecto: ${sisP}</div>` : '') + CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div>${['DMO', 'DES'].includes(sisP) && L.includes('aleta') ? '<div class="hint gal-nota">Solo para vigas de gravedad (fuera del pórtico a momento)</div>' : ''}<div class="gal">${L.map(t => noPrecal(p, t)
+        ${esIng() ? '<div class="gal-zona">' + (['DMO', 'DES'].includes(sisP) ? `<div class="sis-pill">Disipación del proyecto: ${sisP}</div>` : '') + CATS.map(([ct, L]) => `<div class="gal-cat">${ct}</div>${['DMO', 'DES'].includes(sisP) && L.includes('aleta') ? '<div class="hint gal-nota">Solo para vigas de gravedad (fuera del pórtico a momento)</div>' : ''}<div class="gal">${L.map(t => noPrecal(p, t)
           ? `<button type="button" class="gal-it np" disabled title="No precalificada para ${sisP} (AISC 358)">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}<small>🔒 No precalificada para ${sisP}</small></span></button>`
           : `<button type="button" class="gal-it" data-nueva="${t}">${ICO[t] || ''}<span>＋ ${NOMBRES[t]}</span></button>`).join('')}</div>`).join('')
-          + `<div class="gal-cat">Varias vigas a una columna</div><div class="gal"><button type="button" class="gal-it" data-nnudo="1">${ICO_NUDO}<span>＋ Nudo de columna (agrupar conexiones)</span></button></div>` : ''}
+          + `<div class="gal-cat">Varias vigas a una columna</div><div class="gal"><button type="button" class="gal-it" data-nnudo="1">${ICO_NUDO}<span>＋ Nudo de columna (agrupar conexiones)</span></button></div></div>` : ''}
       </div><div id="ed">${S.sel ? '' : '<div class="card empty">Agregue una conexión con los botones de la izquierda.</div>'}</div></div>`;
   $$('[data-fk]').forEach(el => el.oninput = () => { F[el.dataset.fk] = el.value; const r = $('#pdRes'); if(r) r.textContent = resumenDatos(F); guardar(); });
   if($('#pPerfil')) $('#pPerfil').onchange = e => { p.perfil_id = e.target.value; guardar(); };
@@ -392,7 +392,10 @@ function pintarLateral(){
     const L = p.datos.con, ok = L.filter(c => c.res && c.res.ok).length, mal = L.filter(c => c.res && !c.res.ok);
     slot.innerHTML = `<button type="button" class="sb-mem" id="sbMem" title="Volver a la lista de proyectos"><span class="tile">${icoL('con')}</span><span><b>${esc(p.consecutivo)}</b><small>${esc((p.titulo || '').slice(0, 40))}</small></span></button>`;
     const lista = app.querySelector('.d-lista');
-    if(lista && matchMedia('(min-width:901px)').matches){ const t = document.createElement('div'); t.className = 'ph'; t.textContent = 'Conexiones del proyecto'; slot.append(t, lista); app.querySelector('.d-grid')?.classList.add('sin-lista'); }
+    if(lista && matchMedia('(min-width:901px)').matches){ const t = document.createElement('div'); t.className = 'ph'; t.textContent = 'Conexiones del proyecto'; slot.append(t, lista); app.querySelector('.d-grid')?.classList.add('sin-lista');
+      // Arriba fijo (marca, proyecto y sus conexiones), abajo fijo (resumen); en medio se desliza la galería de tipos (pedido de Amo 21-nov)
+      const gz = lista.querySelector('.gal-zona'); if(gz){ slot.appendChild(gz); sbar.classList.add('sb-fija'); } }
+    else sbar.classList.remove('sb-fija');
     if(L.length){ const av = document.createElement('div'); av.className = 'sb-av';
       av.innerHTML = `<small>Resumen del proyecto</small><b>${ok} de ${L.length} cumplen</b><div class="bar"><i style="width:${Math.round(100 * ok / L.length)}%"></i></div><small>${mal.length ? esc(mal.slice(0, 3).map(c => `${c.nom} (${f2(c.res.max)})`).join(', ')) + ' no cumple' + (mal.length > 1 ? 'n' : '') : 'Todas las conexiones calculadas cumplen'}</small>`;
       slot.appendChild(av); }

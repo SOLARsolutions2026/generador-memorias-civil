@@ -153,3 +153,9 @@ h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
 .gal-it.np small,.d-el small.np{display:block;color:#b91c1c;font-weight:700;font-size:10.5px;filter:none}
 .gal-nota{margin:-2px 0 6px 4px;font-size:11px}
 .sis-proy{padding:8px 10px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;font-size:12.5px;font-weight:600;color:#0f2a4a}
+/* Barra lateral con partes fijas (Amo 21-nov): marca, proyecto y conexiones arriba; resumen abajo; la galería se desliza en medio */
+.sbar.sb-fija{overflow:hidden}
+.sbar.sb-fija .sb-slot{min-height:0;flex:1;display:flex;flex-direction:column}
+.sbar.sb-fija .sb-slot>.d-lista{flex:0 0 auto;max-height:32vh;overflow-y:auto;padding-bottom:4px}
+.sbar.sb-fija .gal-zona{flex:1 1 auto;min-height:80px;overflow-y:auto;margin:6px -6px 0;padding:0 6px 8px;border-top:1px solid #eef2f7;scrollbar-width:thin}
+.sbar.sb-fija .sb-av{flex:0 0 auto;margin-top:10px}
