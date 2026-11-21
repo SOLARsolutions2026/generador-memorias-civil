@@ -440,8 +440,19 @@ const fmtN = v => !isFinite(v) ? '∞' : Math.round(v).toLocaleString('es-CO');
 function rigHTML(r, imp){
   const g = r && r.rigid; if(!g) return '';
   const cl = g.clase ? CLASE_RIG[g.clase] : null;
-  const pill = cl ? `<span class="pill ${cl[1]}">${cl[0]}</span>` : '<span class="pill gray">sin clasificar</span>';
+  const pill = cl ? `<span class="pill ${cl[1]}">${g.debil ? 'fuerte: ' : ''}${cl[0]}</span>` : '<span class="pill gray">sin clasificar</span>';
   if(g.tipo === 'cortante') return `<div class="rig-box"><div class="rig-hd"><b>Rigidez y clasificación</b> ${pill}</div><p class="hint" style="margin:4px 0 0">${g.notas.map(esc).join(' ')}</p></div>`;
+  if(g.tipo === 'base' && g.debil){
+    const ax = (h, nom, sent, rot) => { const c2 = h.clase ? CLASE_RIG[h.clase] : null, rs = isFinite(h.Sj) && h.Sj > 0 ? h.Sj / g.eta : null;
+      return `<b>${nom}</b> (${sent}): Sj,ini = <b>${fmtN(h.Sj)} kN·m/rad</b>${h.K != null ? `, K = ${isFinite(h.K) ? f2(h.K, 1) : '∞'} → ${c2 ? c2[0].toLowerCase() : ''}` : ''}${h.clase === 'rigida' ? ' → en el modelo: rotación restringida' : h.clase === 'art' ? ' → en el modelo: rotación libre' : rs ? ` → resorte <b>${fmtN(rs)} kN·m/rad</b> (${rot})` : ''}`; };
+    const lin = [ax(g, 'Eje fuerte de la columna', 'momento Mx, sentido N', '«Rotation about 1» si el peralte es paralelo a Y; «Rotation about 2» si es paralelo a X'),
+      ax(g.debil, 'Eje débil de la columna', 'momento My, sentido B', 'la otra casilla: «Rotation about 2» si el peralte es paralelo a Y; «Rotation about 1» si es paralelo a X'),
+      g.K != null ? `K = Sj·L/(E·I) con L = ${f2(g.L / 1000, 2)} m (altura de la columna) e I del eje que corresponde; rígida si K ≥ 20, articulada si K ≤ 2. Resorte = Sj,ini/η (η = 3, EN 1993-1-8 §5.1.2). En Joint Springs deje en 0 las traslaciones y «Rotation about 3»; en Restraints libere las rotaciones que lleven resorte.` : 'Para clasificar escriba la altura de la columna.'];
+    const cd = g.debil.clase ? CLASE_RIG[g.debil.clase] : null;
+    return `<div class="rig-box"><div class="rig-hd"><b>Rigidez y clasificación</b> ${pill}${cd ? ` <span class="pill ${cd[1]}" title="eje débil">débil: ${cd[0]}</span>` : ''}<span class="hint">${esc(g.ref)}</span></div>
+    <ul class="rig-l">${lin.map(x => `<li>${x}</li>`).join('')}</ul>${g.notas.length ? `<p class="hint" style="margin:4px 0">${g.notas.map(esc).join(' ')}</p>` : ''}
+    ${imp ? `<div class="calc">${g.pasos.map(esc).join('<br/>')}</div>` : `<details><summary class="hint">Ver componentes y cálculo</summary><div class="calc">${g.pasos.map(esc).join('<br/>')}</div></details>`}</div>`;
+  }
   const resorte = isFinite(g.Sj) && g.Sj > 0 ? g.Sj / g.eta : null;
   const lin = [`Rigidez inicial <b>Sj,ini = ${fmtN(g.Sj)} kN·m/rad</b>`,
     g.K != null ? `K = Sj·L/(E·I) = ${isFinite(g.K) ? f2(g.K, 1) : '∞'} con L = ${f2(g.L / 1000, 2)} m (${g.tipo === 'base' ? 'altura de la columna' : 'luz de la viga'}) → ${cl ? cl[0].toLowerCase() : ''} (rígida si K ≥ 20, articulada si K ≤ 2)` : `Para clasificar escriba ${g.tipo === 'base' ? 'la altura de la columna' : 'la luz de la viga'}.`,

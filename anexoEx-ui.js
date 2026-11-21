@@ -141,7 +141,7 @@ function calcCx(c, D, ctx){
   c.res = { ok:true, ratio:+ratio.toFixed(3), cumple:!!R.ok, fecha:new Date().toISOString() };
   const X = { ok:true, tipo:'cx', R, inp, ratio, cumple:!!R.ok, _filas:filas, ctrl:peor, avisos:R.av, rojo };
   X.comp = compRig(c, D, X, ctx.T);
-  if(R.rigid) c.res.rig = { Sj:isFinite(R.rigid.Sj) ? Math.round(R.rigid.Sj) : null, K:R.rigid.K != null && isFinite(R.rigid.K) ? +R.rigid.K.toFixed(2) : R.rigid.K === Infinity ? 999 : null, clase:R.rigid.clase, modelo:X.comp?.tono || null };
+  if(R.rigid) c.res.rig = { Sj:isFinite(R.rigid.Sj) ? Math.round(R.rigid.Sj) : null, K:R.rigid.K != null && isFinite(R.rigid.K) ? +R.rigid.K.toFixed(2) : R.rigid.K === Infinity ? 999 : null, clase:R.rigid.clase, modelo:X.comp?.tono || null, ...(R.rigid.debil ? { debil:{ Sj:Math.round(R.rigid.debil.Sj), K:R.rigid.debil.K != null ? +R.rigid.debil.K.toFixed(2) : null, clase:R.rigid.debil.clase } } : {}) };
   return X;
 }
 
@@ -152,12 +152,22 @@ function compRig(c, D, X, T){
   const nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[g.clase], res = isFinite(g.Sj) && g.Sj > 0 ? Math.round(g.Sj / g.eta) : null;
   const fmt = v => Math.round(v).toLocaleString('es-CO');
   if(g.tipo === 'base'){
-    const p = pedDe(D, c.eA), ap = T._apoyos || {}; const est = (p?.nudos || []).map(j => { const a = ap[j]; return a ? (a.R1 && a.R2 ? 'emp' : !a.R1 && !a.R2 ? 'lib' : 'parc') : '?'; });
-    if(!est.length || est.every(e => e === '?')) return null;
-    const m = est.includes('emp') ? 'emp' : est.includes('lib') ? 'lib' : 'parc';
-    if(g.clase === 'rigida' && m === 'emp') return { tono:'ok', txt:`La base es rígida (K = ${fx(g.K, 1)}) y en el modelo está empotrada: coherente.` };
-    if(g.clase === 'art' && m === 'lib') return { tono:'ok', txt:'La base es articulada y en el modelo está articulada: coherente.' };
-    return { tono:'amber', txt:`La base es ${nom} (K = ${fx(g.K, 1)}), pero en el modelo el apoyo está ${m === 'emp' ? 'empotrado' : m === 'lib' ? 'articulado' : 'con algunas rotaciones libres'}. Para acercar el modelo a la realidad ${g.clase === 'semi' && res ? `use en ese apoyo un resorte a rotación de ${fmt(res)} kN·m/rad (Sj,ini/η, η = 3): Assign → Joint → Springs, casilla «Rotation about ${c.ori !== 'x' ? '1' : '2'}» (giro de la columna en su eje fuerte, con el peralte paralelo a ${c.ori !== 'x' ? 'Y' : 'X'}), y en Assign → Joint → Restraints deje libre esa rotación (si queda restringida, el resorte no trabaja)` : g.clase === 'rigida' ? 'empotre el apoyo' : 'libere las rotaciones del apoyo'}.` };
+    // Los dos ejes (20-nov): fuerte (Mx, peralte) y débil (My). Con el peralte paralelo a Y el giro fuerte es alrededor de X = R1.
+    const p = pedDe(D, c.eA), ap = T._apoyos || {}, nudos = (p?.nudos || []).filter(j => ap[j]); if(!nudos.length) return null;
+    const oy = c.ori !== 'x', ejes = [['fuerte', g, oy ? 'R1' : 'R2'], ['débil', g.debil, oy ? 'R2' : 'R1']].filter(e => e[1] && e[1].clase);
+    const ok = [], mal = [];
+    for(const [nomE, h, R] of ejes){
+      const n = R === 'R1' ? '1' : '2', rs = isFinite(h.Sj) && h.Sj > 0 ? Math.round(h.Sj / 3) : null, res = nudos.map(j => ap[j][R]), todos = res.every(Boolean), ning = res.every(x => !x);
+      const kN = `${nomE} (K = ${fx(h.K, 1)}, ${{ rigida:'rígida', semi:'semirrígida', art:'articulada' }[h.clase]})`;
+      if(h.clase === 'rigida') (todos ? ok : mal).push(todos ? `eje ${kN}: «Rotation about ${n}» restringida` : `eje ${kN}: restrinja «Rotation about ${n}» en Restraints`);
+      else if(h.clase === 'art') (ning ? ok : mal).push(ning ? `eje ${kN}: «Rotation about ${n}» libre` : `eje ${kN}: libere «Rotation about ${n}» en Restraints`);
+      else if(todos) mal.push(`eje ${kN}: en el modelo está empotrado; libere «Rotation about ${n}» en Restraints y en Joint Springs escriba ${fmt(rs)} kN·m/rad en «Rotation about ${n}»`);
+      else mal.push(`eje ${kN}: «Rotation about ${n}» está libre; confirme que en Joint Springs tenga ${fmt(rs)} kN·m/rad (la app todavía no lee los resortes del archivo)`);
+    }
+    if(!ejes.length) return null;
+    const pre = `Base en ${nudos.length > 1 ? 'los nudos' : 'el nudo'} ${nudos.join(', ')} (peralte de la columna paralelo a ${oy ? 'Y' : 'X'}): `;
+    if(!mal.length) return { tono:'ok', txt:pre + ok.join('; ') + ': coherente con el modelo.' };
+    return { tono:'amber', txt:pre + mal.concat(ok).join('; ') + '. Deje en 0 las traslaciones y «Rotation about 3» del resorte, vuelva a correr y suba el archivo.' };
   }
   const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
   if(!ext.length) return null;
@@ -347,5 +357,9 @@ function rigTxt(X){
   if(g.tipo === 'cortante') return g.clase === 'art' ? ' Es una conexión simple: se clasifica como articulada por sus requisitos de detallado (AISC 360-10 B3.6a; Manual AISC parte 10) y se modela con M3 liberado.' : '';
   const nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[g.clase];
   const Sj = isFinite(g.Sj) ? `${Math.round(g.Sj).toLocaleString('es-CO')} kN·m/rad` : 'muy alta (se considera infinita)';
-  return ` Su rigidez inicial a rotación es Sj,ini = ${Sj}, calculada con el método de los componentes de la norma europea EN 1993-1-8, numeral 6.3, porque el Reglamento NSR-10 (Título F.2, basado en AISC 360-10, sección B3.6) exige clasificar las conexiones por su rigidez pero no da fórmulas para calcularla.${g.K != null ? ` Con K = Sj·L/(E·I) = ${isFinite(g.K) ? fx(g.K, 1) : '∞'} la conexión se clasifica como ${nom} según el comentario de la sección B3.6 del AISC 360-10 (rígida si K ≥ 20, articulada si K ≤ 2).` : ''}${g.clase === 'semi' && isFinite(g.Sj) ? ` En el modelo estructural se representa con un resorte a rotación de Sj,ini/η = ${Math.round(g.Sj / g.eta).toLocaleString('es-CO')} kN·m/rad (EN 1993-1-8, numeral 5.1.2, η = ${g.eta}).` : ''}${X.comp && X.comp.tono === 'ok' ? ' ' + X.comp.txt : ''}`;
+  return ` Su rigidez inicial a rotación es Sj,ini = ${Sj}, calculada con el método de los componentes de la norma europea EN 1993-1-8, numeral 6.3, porque el Reglamento NSR-10 (Título F.2, basado en AISC 360-10, sección B3.6) exige clasificar las conexiones por su rigidez pero no da fórmulas para calcularla.${g.K != null ? ` Con K = Sj·L/(E·I) = ${isFinite(g.K) ? fx(g.K, 1) : '∞'} la conexión se clasifica como ${nom} según el comentario de la sección B3.6 del AISC 360-10 (rígida si K ≥ 20, articulada si K ≤ 2).` : ''}${g.clase === 'semi' && isFinite(g.Sj) ? ` En el modelo estructural se representa con un resorte a rotación de Sj,ini/η = ${Math.round(g.Sj / g.eta).toLocaleString('es-CO')} kN·m/rad (EN 1993-1-8, numeral 5.1.2, η = ${g.eta}).` : ''}${g.debil ? debilTxt(g) : ''}${X.comp && X.comp.tono === 'ok' ? (g.tipo === 'base' ? ' Los apoyos del modelo estructural coinciden con esta clasificación.' : ' ' + X.comp.txt) : ''}`;
+}
+function debilTxt(g){
+  const h = g.debil, nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[h.clase];
+  return ` Los valores anteriores corresponden al eje fuerte de la columna; en el eje débil Sj,ini = ${Math.round(h.Sj).toLocaleString('es-CO')} kN·m/rad${h.K != null ? `, K = ${fx(h.K, 1)} (con la inercia del eje débil) y la base se clasifica como ${nom}` : ''}${h.clase === 'semi' ? `, con un resorte de ${Math.round(h.Sj / g.eta).toLocaleString('es-CO')} kN·m/rad` : ''}.`;
 }

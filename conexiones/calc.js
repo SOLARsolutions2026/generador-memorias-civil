@@ -1988,9 +1988,36 @@ function rigidez(c, R){
     pasos.push(`Concreto: Ec = 4700√f'c = ${Math.round(Ec)} MPa, fjd ≈ ⅔·0.85·f'c·√(A2/A1) = ${r2(fjd)} MPa, c = tp·√(Fy/(3·fjd)) = ${r1(cc)} mm → T equivalente ${r1(beffC)} × ${r1(leffC)} mm → k13 = Ec·√(beff·leff)/(1.275·E) = ${r2(k13)} mm`);
     pasos.push(`Placa: m = (S1 − d)/2 − 0.8·w = ${r1(m)} mm, leff = ${r1(leff)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15)} mm (sin palanca: anclajes largos)`);
     pasos.push(`Anclajes: As ≈ ${r1(As)} mm², Lb = 8d + mortero + tp + arandela + ½ tuerca = ${r1(Lb)} mm → k16 = 2.0·n·As/Lb = ${r2(k16)} mm`);
-    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = E·z²/(1/k13 + 1/kt)${fac < 1 ? '·e/(e + ek)' : ''} = ${r2(Sj / 1e6)} kN·m/rad (sentido N)`);
+    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = E·z²/(1/k13 + 1/kt)${fac < 1 ? '·e/(e + ek)' : ''} = ${r2(Sj / 1e6)} kN·m/rad (sentido N, eje fuerte de la columna)`);
     const Lc = +c.Lcol > 0 ? +c.Lcol * 1000 : null;
-    return out({ tipo:'base', Sj:Sj / 1e6, z, I, L:Lc, eta:3, ...clasificaRig(Sj, Lc, I, E) });
+    // Eje débil (pedido de Amo 20-nov): momento en el sentido B (My). Tensión = los 2 pernos de la columna extrema (uno por fila);
+    // compresión bajo las puntas de las 2 alas (perfil I) o bajo la pared lateral (tubo); m = distancia del perno al contorno de la columna.
+    const db = (() => {
+      const cw = [], pw = [], kw = (n, k) => { cw.push({ n, k }); return k; };
+      const S2 = +c.S2, aB = (B - S2) / 2, Iw = tubo ? inerciaTubo(+c.Bt, +c.Ht, tt) : ((G.PERFILES_LAM || []).find(x => x[0] === cl.nom) || [])[11];
+      if(!(S2 > 0) || !(Iw > 0)) return null;
+      let k13w, zc, txtC;
+      if(tubo){ const be = Math.min(cl.tf + 2 * cc, B), le = Math.min(cl.d + 2 * cc, N); k13w = Ec * Math.sqrt(be * le) / (1.275 * E); zc = cl.bf / 2 - cl.tf / 2;
+        txtC = `bajo la pared lateral del tubo: T equivalente ${r1(be)} × ${r1(le)} mm`; }
+      else { const fuera = Math.max(0, Math.min(cc, (B - cl.bf) / 2)), be = Math.min(cl.tf + 2 * cc, (N - cl.d) / 2 + cl.tf + cc), le = cc + fuera;
+        k13w = 2 * Ec * Math.sqrt(be * le) / (1.275 * E); zc = cl.bf / 2 - (cc - fuera) / 2;
+        txtC = `bajo las puntas de las 2 alas: 2 T equivalentes de ${r1(be)} × ${r1(le)} mm`; }
+      const dN = Math.max(S1 / 2 - cl.d / 2, 0), dB = Math.max(S2 / 2 - cl.bf / 2, 0);
+      const mw = Math.max(Math.hypot(dN, dB) - 0.8 * w, 0.5 * da), nT = 2;
+      const leffw = Math.min(N, nT * Math.min(2 * Math.PI * mw, 4 * mw + 1.25 * aB)), k15w = 0.425 * leffw * tp ** 3 / mw ** 3, k16w = 2.0 * nT * As / Lb;
+      kw('Concreto en compresión (k13)', k13w); kw('Placa a flexión del lado en tensión (k15)', k15w); kw('Pernos de anclaje en tensión, 2 de la columna extrema (k16)', k16w);
+      const ktw = 1 / (inv(k15w) + inv(k16w)), zt = S2 / 2, zw = zt + zc, My = Math.abs(+c.My || 0); let fw = 1;
+      if(P > 0 && My > 0){ const e = My * 1e6 / (P * 1e3), ek = (zc * k13w - zt * ktw) / (k13w + ktw); if(e + ek > 0) fw = e / (e + ek);
+        pw.push(`Con carga axial: e = My/N = ${r1(e)} mm, ek = ${r1(ek)} mm → factor e/(e + ek) = ${r3(fw)} (Tabla 6.12)`); }
+      const Sjw = E * zw * zw / (inv(k13w) + inv(ktw)) * fw;
+      pw.push(`Concreto ${txtC} → k13 = ${r2(k13w)} mm`);
+      pw.push(`Placa: m = √(${r1(dN)}² + ${r1(dB)}²) − 0.8·w = ${r1(mw)} mm (perno extremo al contorno de la columna), leff = ${r1(leffw)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15w)} mm`);
+      pw.push(`Anclajes: 2 pernos en tensión → k16 = 2.0·2·As/Lb = ${r2(k16w)} mm${nB > 2 ? ' (los pernos intermedios de la fila, más cerca del eje, no se cuentan: del lado seguro)' : ''}`);
+      pw.push(`z = S2/2 + zc = ${r1(zt)} + ${r1(zc)} = ${r1(zw)} mm → Sj,ini = ${r2(Sjw / 1e6)} kN·m/rad (sentido B, eje débil de la columna); I débil = ${Math.round(Iw).toLocaleString('es-CO')} mm⁴`);
+      return { Sj:Sjw / 1e6, z:zw, I:Iw, L:Lc, comps:cw, pasos:pw, ...clasificaRig(Sjw, Lc, Iw, E) };
+    })();
+    if(db){ pasos.unshift('— Eje fuerte (sentido N) —'); pasos.push('— Eje débil (sentido B) —', ...db.pasos); }
+    return out({ tipo:'base', Sj:Sj / 1e6, z, I, L:Lc, eta:3, debil:db, ...clasificaRig(Sj, Lc, I, E) });
   }
   return null;
 }
