@@ -207,7 +207,7 @@ async function renderLista(){
       const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
       return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : m.tipo === 'revest' ? ' <span class="vtag tipo">🔎 Revisión estructural</span>' : ' <span class="vtag tipo dis">🏗️ Diseño</span>'}</div>
         <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? (m.ficha?.nas ? 'guardada en el NAS' : `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}`) : `${MB(mb).toFixed(1)} MB en la app · editada ${fmtFecha(m.updated_at)}`}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div>
-        ${m.ficha?.nas ? `<div style="margin-top:6px"><span class="nas-tag">📦 En el NAS desde el ${fmtFecha(m.ficha.nas.fecha)} · ${esc(m.ficha.nas.zip)}</span></div>` : ''}
+        ${m.ficha?.nas ? `<div style="margin-top:6px"><span class="nas-tag">📦 En el NAS desde el ${fmtFecha(m.ficha.nas.fecha)} · ${esc(m.ficha.nas.zip)}${m.ficha.nas.disenos > 1 ? ` · ${m.ficha.nas.disenos} diseños` : ''}</span></div>` : ''}
         ${m.estado === 'pau' ? `<div class="meta pausa">⏸ ${esc((f.pausa || '').trim() || 'Pausada sin motivo escrito')}</div>` : ''}</div>
         <div class="acts">${acts(g)}</div></div>
         ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; };
