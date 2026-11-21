@@ -72,12 +72,13 @@ const tipoDe = r => TIPOS[(r.split('.').pop() || '').toLowerCase()] || 'applicat
 const diasDesde = s => s ? (Date.now() - new Date(s).getTime()) / 86400000 : Infinity;
 
 // Botón «🛡 Respaldo» junto a Configuración (pedido de Amo 29-oct: que no ocupe espacio en la lista); punto amarillo si pasó más de una semana
-function pintarAvisoResp(){ const d = $('#respDot'); if(d) d.hidden = diasDesde(S.cfg.ultimo_respaldo) <= 7; }
+const diasResp = () => +S.cfg?.respaldo_dias || 15;   // cada cuántos días recordar el respaldo (Configuración, Amo 21-nov)
+function pintarAvisoResp(){ const d = $('#respDot'); if(d) d.hidden = diasDesde(S.cfg.ultimo_respaldo) <= diasResp(); }
 function modalRespaldo(){
   const u = S.cfg.ultimo_respaldo, d = diasDesde(u);
   const { md, cerrar } = abrirModal(`${hdModal('Respaldo de la información')}
-    <p class="lead">Último respaldo: <b>${u ? fechaHora(u) : 'nunca'}</b>${d > 7 ? ' · <span style="color:#b45309">ya pasó más de una semana</span>' : ''}.
-      Recomendado: uno por semana y antes de cada actualización grande; guárdalo en el NAS.</p>
+    <p class="lead">Último respaldo: <b>${u ? fechaHora(u) : 'nunca'}</b>${d > diasResp() ? ` · <span style="color:#b45309">ya pasaron más de ${diasResp()} días</span>` : ''}.
+      Recordatorio cada ${diasResp()} días (se cambia en Configuración) y antes de cada actualización grande; guárdalo en el NAS.</p>
     <div class="nav-btns" style="margin-top:10px"><button class="btn pri" type="button" id="respDesc">⬇ Descargar respaldo</button><button class="btn" type="button" id="respRest">⬆ Restaurar desde respaldo</button></div>`);
   $('#respDesc', md).onclick = () => { cerrar(); modalDescargar(); };
   $('#respRest', md).onclick = () => { cerrar(); modalRestaurar(); };
