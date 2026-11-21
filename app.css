@@ -703,6 +703,7 @@ table.t td{border-bottom:1px solid #edf1f6}
 .gx-i.on{color:#166534;font-weight:700}.gx-i.on::before{content:"☑ ";color:#16a34a}.gx-i.off{color:#9ca3af}.gx-i.off::before{content:"☐ "}
 .gx-why{color:#64748b;font-weight:400;font-size:11px;margin-left:8px;white-space:normal}
 .gx-ok{color:#166534}
+.gx-notas .gx-ft table{width:100%;border-collapse:collapse;margin:6px 0;font-size:12px;background:#fff}.gx-notas .gx-ft th,.gx-notas .gx-ft td{border:1px solid #e5d3a8;padding:3px 6px;text-align:left}.gx-notas .gx-ft th{background:#fef3c7}
 .gx-notas .tip-l{border-left:3px solid #d97706;background:#fffbeb;padding:7px 10px;margin-bottom:8px;border-radius:0 6px 6px 0;font-size:12.5px;line-height:1.45}
 /* Botón pequeño junto a una etiqueta (＋ Nuevo panel / riel, 9-nov) */
 .btn.xs{padding:1px 7px;font-size:11px;min-height:0;line-height:1.5;margin-left:6px;vertical-align:1px;font-weight:600}

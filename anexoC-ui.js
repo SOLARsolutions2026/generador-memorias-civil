@@ -67,6 +67,15 @@ function guiaExportHTML(){
       <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> marque las combinaciones de resistencia (U…), las de servicio y las envolventes de sismo (100%X 30%Y y 30%X 100%Y). Las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí.</div>
       <div class="tip-l"><b>Load Patterns (Model Def.):</b> déjelos todos («Select Load Patterns…» → todos).</div>
       <div class="tip-l"><b>Unidades:</b> antes de exportar ponga <b>KN, m, C</b> (abajo a la derecha de la pantalla del software).</div>
+      <div class="tip-l gx-ft"><b>Diseño en acero → Preferences → «Framing Type»</b> (debe ser el mismo sistema escogido en Combinaciones):
+        <table><tr><th>NSR-10</th><th>Framing Type</th></tr>
+        <tr><td>Pórtico resistente a momento DES</td><td>Special Moment Frame</td></tr>
+        <tr><td>Pórtico resistente a momento DMO</td><td>Intermediate Moment Frame</td></tr>
+        <tr><td>Pórtico resistente a momento DMI</td><td>Ordinary Moment Frame</td></tr>
+        <tr><td>Arriostrado concéntrico DES</td><td>Special Concentrically Braced Frame</td></tr>
+        <tr><td>Arriostrado concéntrico DMI</td><td>Ordinary Concentrically Braced Frame</td></tr>
+        <tr><td>Arriostrado excéntrico DES</td><td>Eccentrically Braced Frame</td></tr></table>
+        «Moment Frame» y «Braced Frame» a secas no tienen requisitos sísmicos: no los use para el sistema principal. Design Code: <b>AISC 360-10</b>.</div>
       <div class="tip-l"><b>Al terminar:</b> OK, guarde el archivo .$2k y súbalo aquí. Si cambia el modelo, exporte de nuevo y use «Reemplazar».</div>
     </div></div>`;
 }
