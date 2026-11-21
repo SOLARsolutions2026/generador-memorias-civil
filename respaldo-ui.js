@@ -206,3 +206,78 @@ async function restaurarRespaldo(R, files, ids, cfg, log){
   }
   return malos;
 }
+
+// ─── Guardar en el NAS (opción sencilla de Amo, 21-nov) ───
+// Una memoria terminada (con sus variantes) se descarga en un ZIP con el mismo formato del respaldo (datos.json + archivos/, sin el PDF final)
+// y luego se borra de la app para liberar espacio. Queda la fila de la memoria original como registro: estado 'arch', ficha.nas, paquete = nombre del ZIP.
+// «Cargar ZIP» la devuelve tal como estaba (restaurarRespaldo con todas las memorias del ZIP).
+async function guardarNAS(raizId){
+  await cargarMemorias();
+  const r = S.mems.find(m => m.id === raizId); if(!r) return;
+  const grupo = [r, ...S.mems.filter(x => x.variante_de === r.id)], def = grupo.find(x => x.definitiva !== false) || r;
+  if(def.estado !== 'apr') return toast('Solo las memorias terminadas se guardan en el NAS.');
+  const { md, cerrar } = abrirModal(`${hdModal(`📦 Guardar ${esc(r.consecutivo)} en el NAS`)}<div id="nasCont"><p class="muted">Armando el ZIP…</p><div class="doc-log" id="nasLog"></div></div>`);
+  const lg = $('#nasLog', md), log = t => { if(lg){ lg.textContent += t + '\n'; lg.scrollTop = lg.scrollHeight; } };
+  let nombre, mb, nArch;
+  try{
+    const fz = await libZip();
+    const { data:revs, error:er } = await sb.from('mem_revisiones').select('*').in('memoria_id', grupo.map(x => x.id)); if(er) throw er;
+    const datos = { app:'generador-memorias-civil', formato:1, tipo:'nas', raiz:r.id, consecutivo:r.consecutivo, fecha:new Date().toISOString(), por:S.user.email, memorias:grupo, revisiones:revs || [], archivos:[] };
+    const zip = {}; let bytes = 0;
+    const rutas = (await Promise.all(grupo.map(x => archivosDe(x.id)))).flat();
+    let k = 0;
+    for(const f of rutas){ k++; log(`Archivo ${k} de ${rutas.length}: ${f.ruta.split('/').pop()}`);
+      const { data:blob, error } = await sb.storage.from(BUCKET).download(f.ruta);
+      if(error || !blob) throw new Error(`No se pudo descargar ${f.ruta.split('/').pop()}: ${error?.message || 'sin datos'}. No se borró nada.`);
+      const u8 = new Uint8Array(await blob.arrayBuffer()); bytes += u8.length;
+      zip['archivos/' + f.ruta] = [u8, { level:/\.(s2k|\$2k|json|txt)$/i.test(f.ruta) ? 6 : 0 }]; datos.archivos.push({ ruta:f.ruta, kb:Math.round(u8.length / 1024) }); }
+    zip['datos.json'] = [fz.strToU8(JSON.stringify(datos, null, 1)), { level:6 }];
+    zip['LEEME.txt'] = [fz.strToU8(`${r.consecutivo} — ${def.titulo || ''}\nGuardado en el NAS el ${fechaHora(datos.fecha)} por ${datos.por}\nArchivos: ${datos.archivos.length}${grupo.length > 1 ? ` · diseños: ${grupo.length}` : ''}\n\nPara volver a usarla: en la app, pestaña Terminadas → ${r.consecutivo} → «Cargar ZIP» y escoja este archivo.\n`), { level:6 }];
+    const u8 = await new Promise((ok, no) => fz.zip(zip, (e, d) => e ? no(e) : ok(d)));
+    nombre = `${r.consecutivo}.zip`; mb = u8.length / 1048576; nArch = datos.archivos.length;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type:'application/zip' })); a.download = nombre; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }catch(e){ $('#nasCont', md).innerHTML = `<div class="note red">${esc(e.message || e)}</div>`; return; }
+  $('#nasCont', md).innerHTML = `<p style="font-size:13px;margin:0 0 10px">Se descargó <b>${esc(nombre)}</b> (${mb.toFixed(1)} MB) con todo el proyecto.<br/>Guárdelo en el NAS y luego libere el espacio de la app.</p>
+    <div class="doc-log" id="nasLog2" hidden></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn sm" type="button" data-cerrar>Después</button><button class="btn sm pri" type="button" id="nasLib">Ya lo guardé · liberar espacio</button></div>`;
+  $$('[data-cerrar]', md).forEach(b => b.onclick = cerrar);
+  $('#nasLib', md).onclick = async () => {
+    const b = $('#nasLib', md); b.disabled = true;
+    try{
+      const arch = (await Promise.all(grupo.map(x => archivosDe(x.id)))).flat();
+      for(let i = 0; i < arch.length; i += 500){ const { error } = await sb.storage.from(BUCKET).remove(arch.slice(i, i + 500).map(f => f.ruta)); if(error) throw error; }
+      for(const v of grupo.filter(x => x.id !== r.id)){ const { error } = await sb.from('mem_memorias').delete().eq('id', v.id); if(error) throw error; }
+      const ahora = new Date().toISOString();
+      const ficha = { ...(def.ficha || {}), nas:{ zip:nombre, fecha:ahora, mb:+mb.toFixed(1), archivos:nArch, disenos:grupo.length, por:S.user.email } };
+      const { error } = await sb.from('mem_memorias').update({ estado:'arch', archivada_en:ahora, paquete:nombre, titulo:def.titulo, ficha, anexos:{}, imagen_path:null, definitiva:true }).eq('id', r.id);
+      if(error) throw error;
+      if(grupo.some(x => x.id === S.m?.id)) S.m = null;
+      cerrar(); toast(`${r.consecutivo} guardada en el NAS: se liberaron ${mb.toFixed(1)} MB.`); renderLista();
+    }catch(e){ b.disabled = false; toast('No se pudo liberar el espacio: ' + (e.message || e)); }
+  };
+}
+async function cargarZipNAS(raizId){
+  const r = S.mems.find(m => m.id === raizId); if(!r) return;
+  const { md, cerrar } = abrirModal(`${hdModal(`📂 Cargar ${esc(r.consecutivo)}`)}
+    <p style="font-size:13px;margin:0 0 10px">Escoja el ZIP guardado en el NAS. La memoria vuelve a la app tal como estaba y puede verla, modificarla o crear una variante como siempre.</p>
+    <div class="doc-log" id="czLog" hidden></div><div id="czErr"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn sm" type="button" data-cerrar>Cancelar</button><button class="btn sm pri" type="button" id="czIr">Escoger el ZIP…</button></div>`);
+  $('#czIr', md).onclick = async () => {
+    const f = await elegirArchivo('.zip,application/zip'); if(!f) return;
+    const lg = $('#czLog', md), b = $('#czIr', md), log = t => { lg.hidden = false; lg.textContent += t + '\n'; lg.scrollTop = lg.scrollHeight; };
+    $('#czErr', md).innerHTML = ''; b.disabled = true;
+    try{
+      const fz = await libZip(), files = fz.unzipSync(new Uint8Array(await f.arrayBuffer()));
+      if(!files['datos.json']) throw new Error('Este archivo no es un ZIP de la app.');
+      const R = JSON.parse(fz.strFromU8(files['datos.json']));
+      if(R.app !== 'generador-memorias-civil' || !Array.isArray(R.memorias)) throw new Error('Este archivo no es un ZIP de la app.');
+      if(!R.memorias.some(m => m.id === r.id)){ const otro = R.consecutivo || R.memorias.find(m => !m.variante_de)?.consecutivo || '?';
+        throw new Error(`Este ZIP es de otro proyecto (${otro}), no de ${r.consecutivo}. Escoja el ZIP correcto.`); }
+      const ids = R.memorias.filter(m => m.id === r.id || m.variante_de === r.id).map(m => m.id);
+      const malos = await restaurarRespaldo(R, files, ids, false, log);
+      if(malos) throw new Error(`Se cargó con ${malos} problema${malos > 1 ? 's' : ''} (ver arriba).`);
+      cerrar(); toast(`${r.consecutivo} cargada de nuevo en la app.`); S.m = null; renderLista();
+    }catch(e){ b.disabled = false; $('#czErr', md).innerHTML = `<div class="note red">${esc(e.message || e)}</div>`; }
+  };
+}

@@ -268,8 +268,14 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Estilos al final de app.css (bloque «ESTILO B»): tarjetas 18 px con sombra suave, botones 11 px, campos 11 px con foco azul, pastillas redondas, ventanas 22 px, observaciones en panel blanco (la primera pendiente resaltada en amarillo).
 
 ## Almacenamiento
-Supabase gratis = 1 GB de archivos. Flujo acordado: al aprobar, se descarga un ZIP (PDF + fuentes + datos_proyecto.json),
-Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archivada en NAS". (Pendiente de construir.)
+Supabase gratis = 1 GB de archivos (aviso al 80 %; Amo NO quiere aviso al 70 % ni medir la base de datos, 20/21-nov).
+Guardar en el NAS (21-nov, versión sencilla de Amo: sin pestaña nueva, sin opciones extra; `respaldo-ui.js` `guardarNAS` / `cargarZipNAS`):
+botón «📦 Guardar en el NAS» en las Terminadas (`data-nas`, solo ingeniero) → descarga `<consecutivo>.zip` con el formato del respaldo
+(`datos.json` {tipo:'nas', raiz, memorias = original + variantes, revisiones, archivos} + `archivos/<id>/…`, SIN el PDF final) → «Ya lo guardé · liberar espacio» / «Después».
+Liberar = borra los archivos de Storage de todo el grupo, borra las filas de las variantes y deja la original como registro: estado 'arch', `archivada_en`, `paquete` = nombre del ZIP,
+`ficha` de la definitiva + `ficha.nas` {zip, fecha, mb, archivos, disenos, por}, `anexos = {}`, `imagen_path = null` (el historial mem_versiones conserva sus copias).
+La pestaña «Terminadas» muestra apr + arch (se quitó la pestaña «Archivadas»); la fila lleva la etiqueta morada `.nas-tag` y solo «📂 Cargar ZIP» (`data-cargarzip`),
+que revisa que el ZIP contenga ese id (si no, dice de qué consecutivo es) y llama a `restaurarRespaldo` con la original y sus variantes: vuelve tal como estaba ('apr').
 
 ## Estado
 - Hecho: login, lista con medidor de espacio, nueva memoria (consecutivo DOC-MEM-DD-MM-AA), ficha con autoguardado,
@@ -284,7 +290,7 @@ Amo lo guarda en su NAS, y la app libera el espacio dejando la ficha como "Archi
 - Hecho: memoria general (capítulos 1–10) con tabla de contenido y listas.
 - Hecho: revisión de cubierta (correas metálicas y de madera) en una página.
 - Hecho: verificación puntual (herramientas con datos a mano).
-- Siguiente: archivo ZIP para el NAS.
+- Hecho: guardar en el NAS (ZIP) y volver a cargar.
 
 ## Pruebas
 El entorno de trabajo no alcanza Supabase por red: probar con Playwright sustituyendo `vendor/supabase.js` por un cliente falso en memoria.

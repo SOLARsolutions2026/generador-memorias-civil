@@ -168,12 +168,14 @@ async function renderLista(){
   const acts = (g) => {
     const m = g.def, [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
     let b = (g.vs.length ? `<button class="chev" type="button" data-chev="${g.r.id}" aria-label="Ver diseños" aria-expanded="false">▾</button>` : '')
-      + `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>`
-      + (m.estado === 'arch' ? pill(c, t) : `<select class="est-sel est-${m.estado}" data-est="${m.id}" aria-label="Cambiar estado">${['wip','pau','apr'].map(k => `<option value="${k}" ${m.estado === k ? 'selected' : ''}>${ESTADOS[k][1]}</option>`).join('')}</select>`);
+      + (m.ficha?.nas ? '' : `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>`)
+      + (m.estado === 'arch' ? (m.ficha?.nas ? '' : pill(c, t)) : `<select class="est-sel est-${m.estado}" data-est="${m.id}" aria-label="Cambiar estado">${['wip','pau','apr'].map(k => `<option value="${k}" ${m.estado === k ? 'selected' : ''}>${ESTADOS[k][1]}</option>`).join('')}</select>`);
     const p1 = m.tipo === 'revision' ? 'R' : 'ficha';
     if(m.estado === 'wip' || m.estado === 'pau') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/${p1}">Continuar</button>`;
     else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Portada</button><button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;
+    else if(m.ficha?.nas) b += esIng() ? `<button class="btn sm" type="button" data-cargarzip="${g.r.id}">📂 Cargar ZIP</button>` : '';
     else b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Ver ficha</button>`;
+    if(m.estado === 'apr' && esIng()) b += `<button class="btn sm pri" type="button" data-nas="${g.r.id}" title="Descargar el proyecto en un ZIP y liberar su espacio en la app">📦 Guardar en el NAS</button>`;
     return b;
   };
   const nomDis = m => m.variante_de ? (m.variante_nom || 'Variante') : (m.variante_nom || 'Inicial');
@@ -193,21 +195,24 @@ async function renderLista(){
   $('#nueva').onclick = nuevaMemoria;
   // Organización de la lista (opción A de Amo, 29-oct): pestañas por estado, buscador, tipo y año; terminadas/archivadas por mes
   const LF = S.lf = S.lf || { tab:(() => { try{ return localStorage.getItem('memTab') || 'wip'; }catch(e){ return 'wip'; } })(), q:'', tipo:'', anio:'' };
-  const TABS = [['wip','En proceso'],['pau','Pausadas'],['apr','Terminadas'],['arch','Archivadas en NAS'],['todas','Todas']];
+  const TABS = [['wip','En proceso'],['pau','Pausadas'],['apr','Terminadas'],['todas','Todas']];   // las guardadas en el NAS van en Terminadas (Amo 21-nov)
+  if(LF.tab === 'arch') LF.tab = 'apr';
+  const enTab = (m, k) => k === 'todas' || (k === 'apr' ? ['apr', 'arch'].includes(m.estado) : (m.estado || 'wip') === k);
   const tipoDe = m => ['revision', 'verificacion', 'revest'].includes(m.tipo) ? m.tipo : 'completo';
-  const fechaDe = m => m.estado === 'arch' ? (m.archivada_en || m.updated_at) : m.updated_at;
+  const fechaDe = m => m.updated_at;
   const anios = [...new Set(grupos.map(g => String(fechaDe(g.def) || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filaHTML = g => { const m = g.def, f = m.ficha || {};
       const lugar = [f.mun, f.depto].filter(Boolean).join(', '), mb = g.todos.reduce((a, x) => a + tamDe(x.id), 0);
       return `<div class="mgrp"><div class="mi"><div><div class="code">${esc(m.consecutivo)}</div><div class="nm">${esc(m.titulo || 'Sin nombre')}${m.tipo === 'revision' ? ' <span class="vtag tipo">🔍 Revisión de cubierta</span>' : m.tipo === 'verificacion' ? ' <span class="vtag tipo">🧰 Verificación puntual</span>' : m.tipo === 'revest' ? ' <span class="vtag tipo">🔎 Revisión estructural</span>' : ' <span class="vtag tipo dis">🏗️ Diseño</span>'}</div>
-        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}` : `${MB(mb).toFixed(1)} MB en la app`} · editada ${fmtFecha(m.updated_at)}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div>
+        <div class="meta">${esc(lugar || 'Sin ubicación')} · ${esc(f.prop || 'Sin propietario')} · ${m.estado==='arch' ? (m.ficha?.nas ? 'guardada en el NAS' : `archivada ${fmtFecha(m.archivada_en)}${m.paquete?` · ${esc(m.paquete)}`:''}`) : `${MB(mb).toFixed(1)} MB en la app · editada ${fmtFecha(m.updated_at)}`}${g.vs.length ? ` · <b>${g.todos.length} diseños</b> (★ ${esc(nomDis(m))})` : ''}</div>
+        ${m.ficha?.nas ? `<div style="margin-top:6px"><span class="nas-tag">📦 En el NAS desde el ${fmtFecha(m.ficha.nas.fecha)} · ${esc(m.ficha.nas.zip)}</span></div>` : ''}
         ${m.estado === 'pau' ? `<div class="meta pausa">⏸ ${esc((f.pausa || '').trim() || 'Pausada sin motivo escrito')}</div>` : ''}</div>
         <div class="acts">${acts(g)}</div></div>
         ${g.vs.length ? `<div class="msub" data-sub="${g.r.id}" hidden>${g.todos.map(x => subFila(g, x)).join('')}</div>` : ''}</div>`; };
   const pintarFil = () => {
-    const cnt = k => k === 'todas' ? grupos.length : grupos.filter(g => (g.def.estado || 'wip') === k).length;
+    const cnt = k => grupos.filter(g => enTab(g.def, k)).length;
     $('#mfil').innerHTML = `<div class="mtabs" role="tablist">${TABS.map(([k, t]) => `<button type="button" role="tab" data-mtab="${k}" class="${LF.tab === k ? 'on' : ''}">${t}<b class="n">${cnt(k)}</b></button>`).join('')}</div>
       <div class="lbar"><input type="search" id="mq" placeholder="🔍 Buscar: cliente, proyecto, municipio, consecutivo…" value="${esc(LF.q)}" aria-label="Buscar memorias"/>
         <div class="mchips">${[['','Todos'],['completo','🏗️ Diseño'],['revision','🔍 Revisión'],['revest','🔎 Rev. estructural'],['verificacion','🧰 Verificación']].map(([k, t]) => `<button type="button" class="mchip ${LF.tipo === k ? 'on' : ''}" data-mtipo="${k}">${t}</button>`).join('')}</div>
@@ -220,7 +225,7 @@ async function renderLista(){
   const pintarLista = () => {
     const q = norm(LF.q).trim();
     let gs = grupos.filter(g => { const m = g.def, f = m.ficha || {};
-      if(LF.tab !== 'todas' && (m.estado || 'wip') !== LF.tab) return false;
+      if(!enTab(m, LF.tab)) return false;
       if(LF.tipo && tipoDe(m) !== LF.tipo) return false;
       if(LF.anio && String(fechaDe(m) || '').slice(0, 4) !== LF.anio) return false;
       return !q || norm([m.consecutivo, m.titulo, f.proyecto, f.prop, f.mun, f.depto, f.dir, f.pausa, ...g.todos.map(x => x.variante_nom)].join(' ')).includes(q); });
@@ -235,6 +240,8 @@ async function renderLista(){
     $('#mlist').innerHTML = h;
     $$('#mlist [data-go]').forEach(b => b.onclick = () => ir(b.dataset.go));
     $$('#mlist [data-borrar]').forEach(b => b.onclick = () => borrarMemoria(S.mems.find(m => m.id === b.dataset.borrar)));
+    $$('#mlist [data-nas]').forEach(b => b.onclick = () => guardarNAS(b.dataset.nas));
+    $$('#mlist [data-cargarzip]').forEach(b => b.onclick = () => cargarZipNAS(b.dataset.cargarzip));
     $$('#mlist [data-chev]').forEach(b => b.onclick = () => { const sub = $(`[data-sub="${b.dataset.chev}"]`); sub.hidden = !sub.hidden; b.textContent = sub.hidden ? '▾' : '▴'; b.setAttribute('aria-expanded', !sub.hidden);
       try{ localStorage.setItem('memAbierta', sub.hidden ? '' : b.dataset.chev); }catch(e){} });
     $$('#mlist [data-est]').forEach(sel => sel.onchange = () => cambiarEstado(S.mems.find(m => m.id === sel.dataset.est), sel.value, sel));
