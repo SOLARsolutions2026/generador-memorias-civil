@@ -223,9 +223,29 @@ function memDoc(ctx, ed){
   H(1, 'Combinaciones de carga');
   if(RK){
     const act = RK.activas.filter(c => ['Resistencia', 'Impacto', 'Otras'].includes(c.grupo));
+    H(2, 'Combinaciones para el diseño por resistencia');
     T('comb', 'Las combinaciones de carga para el diseño por resistencia se toman de B.2.4.2 de la NSR-10. La carga viva de la cubierta se representa con Lr.');
     tabla(['Nombre', 'Combinación', 'Referencia'], act.map(c => [esc(c.id), esc(c.txt), esc(c.ref)]), 'Combinaciones de carga para el diseño por resistencia');
     out(`<p class="m-eq">D = carga muerta · Lr = carga viva de cubierta · W = viento${ctx.sismo && Rk?.R ? ` · E = fuerzas sísmicas reducidas de diseño, E = Fs/R = ${fx(1 / Rk.R, 3)}·Fs` : ''}${K?.impacto ? ' · IMP = impacto vehicular' : ''}</p>`);
+    // Sismo por componentes y envolventes, y servicio (pedido de Amo 21-nov: que se vea cómo se arma E y con qué se revisan derivas y deflexiones)
+    const grp = n => RK.activas.filter(c => c.grupo === n), comp = grp('Sismo: componentes'), env = grp('Sismo: envolventes'), serv = grp('Servicio');
+    if(ctx.sismo && comp.length){
+      H(2, 'Fuerzas sísmicas: componentes y envolventes');
+      T('comb.sis', 'Las fuerzas sísmicas se combinan según A.3.6.3: en cada dirección se toma el 100 % de las fuerzas en esa dirección más el 30 % de las de la dirección perpendicular, con la torsión accidental (T) en los dos sentidos. Así se obtienen 8 componentes en cada dirección, sin dividir por R:');
+      const sx = comp.filter(c => /^SX/.test(c.id)), sy = comp.filter(c => /^SY/.test(c.id)), n = Math.max(sx.length, sy.length);
+      tabla(['Sismo en X', '', 'Sismo en Y', ''], Array.from({ length:n }, (_, i) => [esc(sx[i]?.id || ''), esc(sx[i]?.txt || ''), esc(sy[i]?.id || ''), esc(sy[i]?.txt || '')]), 'Componentes de las fuerzas sísmicas (A.3.6.3)');
+      if(env.length){
+        T('comb.env', `Con ellas se forman ${env.length === 1 ? 'una envolvente, que toma' : 'dos envolventes, que toman'} en cada elemento el valor más desfavorable de sus 8 componentes:`);
+        const usa = (i) => { const d = i === 0 ? 'X' : 'Y', us = act.filter(c => new RegExp(d + '$').test(c.id) && /E/.test(c.txt)).map(c => c.id); return `Derivas, torsión${us.length ? ` y, dividida por R, las combinaciones ${us.join(' y ')}` : ''}`; };
+        tabla(['Nombre', 'Contiene', 'Se usa para'], env.map((c, i) => [esc(c.id), esc(c.txt), usa(i)]), 'Envolventes de las fuerzas sísmicas');
+        T('comb.der', 'Las derivas (capítulo 9) se revisan con las envolventes sin dividir por R, como exige A.6.');
+      }
+    }
+    if(serv.length){
+      H(2, 'Combinaciones de servicio');
+      T('comb.serv', 'Para revisar las deflexiones de los elementos se usan las combinaciones de servicio de B.2.3 de la NSR-10:');
+      tabla(['Nombre', 'Combinación', 'Referencia'], serv.map(c => [esc(c.id), esc(c.txt), esc(c.ref)]), 'Combinaciones de servicio');
+    }
   } else T('comb.no', 'Las combinaciones se definen en el paso «Combinaciones».');
 
   // ══ 9. Análisis y diseño ══

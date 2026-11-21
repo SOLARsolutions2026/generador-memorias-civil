@@ -93,7 +93,7 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   Sismo por envolventes (método de Amo, `metodoE:'env'` por defecto; 'lineal' = combinación por combinación): componentes sin reducir SX1–8 / SY1–8 (±Ex ±Tx ±0.3Ey),
   envolventes `nomEX` «100% X 30% Y» y `nomEY` «30% X 100% Y» (tipo Envelope; sirven para derivas y torsión), U7X/U7Y = 1.2D + ENV/R y U8X/U8Y = 0.9D + ENV/R (Amo aprobó incluir 0.9D).
   Términos que usan otra combinación: `T('@Nombre', f, lbl)`. Tabla para SAP con CaseType (Combination / Linear Static).
-  Impresión: irá en la MEMORIA GENERAL (texto principal; los anexos son el detalle). Pendiente: Amo enviará una memoria general de ejemplo.
+  Impresión: en la MEMORIA GENERAL (capítulos 7 y 8 de `memoria-ui.js`). Capítulo 8 (21-nov, ejemplo aprobado por Amo): 8.1 resistencia (+ impacto y otras), 8.2 «Fuerzas sísmicas: componentes y envolventes» (solo con sismo y si hay componentes: tabla SX/SY lado a lado, tabla de envolventes con «Se usa para» = derivas, torsión y las U7/U8 de esa dirección, frase de derivas sin R) y 8.3 servicio (S1…).
 
 - `anexos.D` (paso D con pestañas `tabD`: met / zap / ped; cálculo `calc/anexoD.js` = `AnexoD`, pantalla `anexoD-ui.js`, biblioteca `data/perfiles.js` = `PERFILES_LAM`
   111 perfiles IPE/IPN/HEA/HEB/HEM de la hoja PERFILES de Amo, en mm: [nombre, fam, h, b, tw, tf, r, A, Ix, Sx, Zx, Iy, Sy, Zy, J, Cw, kg/m]).
@@ -148,7 +148,6 @@ coord, matricula, predial, fecha, titulo_doc, titulo_archivo.
   en la impresión cada uno lleva una marca invisible `.mk` «@@H<id>@@ / @@T<i>@@ / @@F<i>@@»; `gen.impreso` guarda toc/tabs/figs. Separadores «ANEXO X» (`sepAnexo`, marca @@S<L>@@, `gen.op.sep`).
   Paso 2: tabla de contenido (capítulos + anexos + A-1 fichas + archivos F/G), lista de tablas, de figuras y de anexos, paginadas con puntos guía; numeración final = posición + páginas de las listas.
 - PDF que pdf-lib no puede copiar (3-nov, estudio de suelos de La Brasa: protegido o con estructura rara → «—» páginas y no entraba al PDF final): `contarPaginas` (pdf-lib y si falla pdf.js) al subir y, para los ya subidos sin páginas, al abrir el paso FG; al unir, si pdf-lib falla o `isEncrypted`, `paginasComoImagen` dibuja cada página con pdf.js (≈150 ppp, JPEG) en carta vertical (o su tamaño si no es carta) y quita lo que alcanzó a entrar.
-- Pendiente: ZIP para el NAS.
 
 ## Estilo (opción A de Amo, 29-oct: sobrio, «el tamaño ordena, el color solo dice si cumple»)
 Bloque al final de `app.css`: títulos de tarjeta 16 px azul oscuro sin mayúsculas; subtítulos 12.5 px gris oscuro; totales `.wtot` en franja gris con raya azul oscuro (roja si no cumple);
