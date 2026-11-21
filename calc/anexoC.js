@@ -364,6 +364,10 @@ function topologia(texto){
   const giro = new Set((tLoc ? T[tLoc] : []).filter(r => ['AngleA', 'AngleB', 'AngleC'].some(k => Math.abs(num(r[k])) > 1e-6)).map(r => r.Joint));
   Object.defineProperty(out, '_resortes', { value:Object.fromEntries((tSp ? T[tSp] : []).map(r => [r.Joint, { R1:num(r.R1), R2:num(r.R2), R3:num(r.R3), sis:r.CoordSys || '', giro:/local/i.test(r.CoordSys || '') && giro.has(r.Joint) }])), enumerable:false });
   Object.defineProperty(out, '_hayResortes', { value:!!tSp, enumerable:false });
+  // Coordenadas de los nudos y ángulo de los ejes locales de cada elemento (columna fuerte – viga débil, 21-nov)
+  Object.defineProperty(out, '_J', { value:J, enumerable:false });
+  const tAx = Object.keys(T).find(n => /^FRAME LOCAL AXES ASSIGNMENTS 1/i.test(n));
+  Object.defineProperty(out, '_ang', { value:Object.fromEntries((tAx ? T[tAx] : []).map(r => [r.Frame, num(r.Angle)])), enumerable:false });
   return out;
 }
 

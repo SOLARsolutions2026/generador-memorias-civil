@@ -40,10 +40,11 @@ async function ctxMemoria(){
   const met = D.met.map(e => ({ e, R:calcMet(e, G) }));
   let RR = null; try{ RR = await reacModelo(); }catch(e){ console.warn(e); }
   const zap = RR ? D.zap.map(z => ({ z, X:calcCim(z, 'zap', D, RR) })) : [], ped = RR ? D.ped.map(p => ({ p, X:calcCim(p, 'ped', D, RR) })) : [];
-  let con = []; if(E.con.length){ const cx = await ctxE(); con = E.con.map(c => ({ c, X:calcE(c, D, cx) })); }
+  let con = [], scw = null; const des = typeof esDES === 'function' && esDES() && an.C?.modelo;
+  if(E.con.length || des){ const cx = await ctxE(); con = E.con.map(c => ({ c, X:calcE(c, D, cx) })); if(des) try{ scw = scwb(D, cx); }catch(e){ console.warn(e); } }
   const M = datosM(), urls = {};
   for(const [k, im] of Object.entries(M.img)) if(im?.path) urls[k] = await urlDe(im.path);
-  return { m, f, A, RA, B, sismo, RB, K, RK, C:an.C || null, D, met, zap, ped, E, con, M, urls, F:an.F, Gs:an.G };
+  return { m, f, A, RA, B, sismo, RB, K, RK, C:an.C || null, D, met, zap, ped, E, con, scw, M, urls, F:an.F, Gs:an.G };
 }
 
 // ─── Constructor del documento (pantalla «ed» o impresión) ───
@@ -278,6 +279,11 @@ function memDoc(ctx, ed){
         return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr, 3)} / ${fx(fl.mm, 3)}` : `${fx(dem(fl), 2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R), 2)} ${u}`, fx(ch.r, 3), ch.r <= 1 ? 'Cumple' : '<b>No cumple</b>']; }), `Resumen de diseño del elemento ${e.nom}, sección ${nomSec(e)}`);
       ver('D');
     } }
+  if(ctx.scw && ctx.scw.length){ H(3, 'Columna fuerte – viga débil');
+    const nc = ctx.scw.filter(f => scwbEstado(f) === 'No cumple').length;
+    T('scwb', `Por tratarse de un pórtico con disipación especial de energía (DES), en cada nudo se verifica que las columnas sean más fuertes a flexión que las vigas que llegan (NSR-10 F.3, AISC 341-10 E3.4a): ΣM*pc / ΣM*pb > 1.0. ${nc ? `${nc} nudo${nc > 1 ? 's' : ''} no cumple${nc > 1 ? 'n' : ''} esta condición.` : 'Todos los nudos revisados cumplen la condición o están exceptuados.'}`);
+    tabla(['Nudo', 'Sentido', 'ΣM*pc [kN·m]', 'ΣM*pb [kN·m]', 'ΣM*pc / ΣM*pb', 'Resultado'], ctx.scw.map(f => [esc(f.j), f.dir, fx(f.Mpc, 1), fx(f.Mpb, 1), isFinite(f.ratio) ? fx(f.ratio, 2) : '—', scwbEstado(f)]), 'Verificación columna fuerte – viga débil');
+    T('scwb.n', SCWB_NOTA); }
   if(ctx.ped.length || ctx.zap.length){ H(3, 'Diseño de elementos de concreto');
     for(const { p, X } of ctx.ped){ if(!X?.ok) continue;
       H(4, `Pedestal ${p.nom} — ${p.b} × ${p.h} mm`);

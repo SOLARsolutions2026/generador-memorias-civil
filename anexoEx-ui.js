@@ -421,3 +421,64 @@ async function pintarResortes(){
     <div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Conexión</th><th>Dónde</th><th>Qué poner</th><th>Estado en el modelo</th></tr></thead>
     <tbody>${filas.map(f => `<tr>${f.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+
+// ─── Columna fuerte – viga débil (pedido de Amo 21-nov; solo pórticos DES, NSR-10 F.3 = AISC 341-10 E3.4a) ───
+// En cada nudo y en cada sentido (X, Y): ΣM*pc / ΣM*pb > 1. M*pc = Zc·(Fyc − Puc/Ag) de cada columna que llega (Puc = mayor compresión del
+// modelo en ese extremo); M*pb = Σ(1.1·Ry·Fyb·Zb + Muv), Muv = Vpr·(sh + dc/2), Vpr = 2·Mpr/Lh, rótula a sh = db/2 de la cara (sin cortante de gravedad).
+// Eje de la columna según el ángulo de sus ejes locales (0° = peralte paralelo a X). Vigas con M3 liberado en ese extremo no cuentan.
+// Excepción E3.4a(a)(i): último piso (sin columna arriba) con Puc < 0.3·Fy·Ag.
+const esDES = () => String(S.m?.anexos?.K?.sisR || '').toLowerCase() === 'des' && S.m?.anexos?.B?.aplica !== false;
+function scwb(D, ctx){
+  const T = ctx?.T, G = ctx?.G; if(!T || !T._J) return null;
+  const J = T._J, ang = T._ang || {}, PL = window.PERFILES_LAM || [];
+  const elDe = g => D.met.find(e => e.grupo === g && e.tipo === 'I' && e.perfil);
+  const prop = el => { const P = PL.find(x => x[0] === el.perfil); if(!P) return null; const ac = AnexoD.ACEROS[el.acero] || AnexoD.ACEROS['A572 Gr 50'];
+    return { nom:P[0], d:P[2], A:P[7], Zx:P[10], Zy:P[13], Fy:ac[0], Ry:/A36/.test(el.acero || '') ? 1.5 : 1.1 }; };
+  const porNudo = {}; for(const F in T){ const f = T[F]; for(const [e, j] of [['i', f.i], ['j', f.j]]) (porNudo[j] = porNudo[j] || []).push({ F, e, f }); }
+  const out = [];
+  for(const j of Object.keys(porNudo).sort((a, b) => (+a || 0) - (+b || 0))){
+    const lst = porNudo[j], pj = J[j]; if(!pj) continue;
+    const cols = lst.filter(x => /\|Columna$/.test(x.f.g)), vigas = lst.filter(x => /\|Viga$/.test(x.f.g) && relExt(T, { F:x.F, e:x.e }) !== 'lib');
+    if(!cols.length || !vigas.length) continue;
+    for(const dir of ['X', 'Y']){
+      const vs = vigas.filter(v => { const q = J[v.e === 'i' ? v.f.j : v.f.i]; if(!q) return false; const dx = Math.abs(q[0] - pj[0]), dy = Math.abs(q[1] - pj[1]); return dir === 'X' ? dx >= dy : dy > dx; });
+      if(!vs.length) continue;
+      let Mpc = 0, Mpb = 0, arriba = false, PucMax = 0, Pc = Infinity, dc = 0; const tC = [], tB = [], falta = [];
+      for(const c of cols){ const el = elDe(c.f.g), s = el && prop(el); if(!s){ falta.push(`columna ${c.f.g.split('|')[0]} sin perfil I en el Anexo D`); continue; }
+        const q = J[c.e === 'i' ? c.f.j : c.f.i]; if(q && q[2] > pj[2] + 1e-6) arriba = true;
+        const a = (ang[c.F] || 0) * Math.PI / 180, pX = Math.abs(Math.cos(a)) >= Math.abs(Math.sin(a)), fuerte = (dir === 'X') === pX, Z = fuerte ? s.Zx : s.Zy;
+        const fs = (G?.[c.f.g]?.filas || []).filter(r => String(r.F) === String(c.F));
+        const st = fs.length ? (c.e === 'i' ? Math.min(...fs.map(r => r.st)) : Math.max(...fs.map(r => r.st))) : null;
+        const Puc = Math.max(0, ...fs.filter(r => Math.abs(r.st - st) < 1e-6).map(r => -r.P));
+        PucMax = Math.max(PucMax, Puc); Pc = Math.min(Pc, s.Fy * s.A / 1000); dc = Math.max(dc, s.d);
+        Mpc += Math.max(0, Z * (s.Fy - Puc * 1000 / s.A) / 1e6);
+        tC.push(`${s.nom} ${q && q[2] > pj[2] ? 'arriba' : 'abajo'} (eje ${fuerte ? 'fuerte' : 'débil'}, Puc ${fx(Puc, 0)} kN)`); }
+      for(const v of vs){ const el = elDe(v.f.g), s = el && prop(el); if(!s){ falta.push(`viga ${v.f.g.split('|')[0]} sin perfil I en el Anexo D`); continue; }
+        const Mpr = 1.1 * s.Ry * s.Fy * s.Zx / 1e6, sh = s.d / 2000, Lh = Math.max(0.5, (v.f.L || 0) - dc / 1000 - 2 * sh), Vpr = 2 * Mpr / Lh;
+        Mpb += Mpr + Vpr * (sh + dc / 2000); tB.push(`${s.nom} (L ${fx(v.f.L, 2)} m)`); }
+      const ratio = Mpb > 0 ? Mpc / Mpb : Infinity, exc = !arriba && PucMax < 0.3 * Pc;
+      out.push({ j, dir, cols:tC, vigas:tB, Mpc, Mpb, ratio, ok:ratio > 1, exc, falta });
+    }
+  }
+  return out;
+}
+const scwbEstado = f => f.falta.length ? 'Sin datos' : f.ok ? 'Cumple' : f.exc ? 'Exceptuado' : 'No cumple';
+const SCWB_NOTA = 'ΣM*pc = Σ Zc·(Fyc − Puc/Ag) de las columnas que llegan al nudo (Puc = mayor compresión del modelo en ese extremo); ΣM*pb = Σ (1.1·Ry·Fyb·Zb + Muv), con la rótula a db/2 de la cara de la columna y Muv = Vpr·(sh + dc/2), Vpr = 2·Mpr/Lh. No incluye el cortante de gravedad de la viga ni la sobrerresistencia Ω0 en Puc: si la relación queda entre 1.0 y 1.1, revíselo con más detalle. Exceptuado = último piso con Puc < 0.3·Fy·Ag (AISC 341 E3.4a, excepción (a)).';
+function scwbTablaHTML(fs, imp){
+  const pillE = f => { const e = scwbEstado(f); return imp ? e : `<span class="pill ${e === 'Cumple' ? 'ok' : e === 'No cumple' ? 'no' : 'gray'}">${e}</span>`; };
+  return `<div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Nudo</th><th>Sentido</th><th>Columnas</th><th>Vigas</th><th>ΣM*pc [kN·m]</th><th>ΣM*pb [kN·m]</th><th>ΣM*pc / ΣM*pb</th><th>Resultado</th></tr></thead>
+    <tbody>${fs.map(f => `<tr><td>${esc(f.j)}</td><td>${f.dir}</td><td style="text-align:left">${f.cols.map(esc).join('<br/>')}</td><td style="text-align:left">${f.vigas.map(esc).join('<br/>')}${f.falta.length ? `<br/><small>${esc(f.falta.join('; '))}</small>` : ''}</td><td>${fx(f.Mpc, 1)}</td><td>${fx(f.Mpb, 1)}</td><td><b>${isFinite(f.ratio) ? fx(f.ratio, 2) : '—'}</b></td><td>${pillE(f)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function scwbCardHTML(){
+  if(!esDES() || !S.m.anexos?.C?.modelo) return '';
+  return `<div class="card"><details id="eScwb"><summary class="ct" style="cursor:pointer">🏛 Columna fuerte – viga débil <span class="hint" style="text-transform:none;letter-spacing:0">pórtico DES · NSR-10 F.3 (AISC 341 E3.4a)</span></summary><div id="eScwbT"><p class="muted">Calculando…</p></div></details></div>`;
+}
+async function pintarScwb(){
+  const box = $('#eScwbT'); if(!box) return;
+  const fs = scwb(datosD(), await ctxE());
+  if(!fs){ box.innerHTML = '<p class="hint">No se pudo leer el archivo del modelo.</p>'; return; }
+  if(!fs.length){ box.innerHTML = '<p class="hint">No se encontraron nudos donde lleguen columnas y vigas a momento (revise los grupos del Anexo D y las liberaciones del modelo).</p>'; return; }
+  const mal = fs.filter(f => scwbEstado(f) === 'No cumple').length;
+  box.innerHTML = `${mal ? `<div class="note amber" style="margin:8px 0">${mal} nudo${mal > 1 ? 's' : ''} no cumple${mal > 1 ? 'n' : ''}: las rótulas se formarían en las columnas. Aumente la columna o use una viga más liviana (o con sección reducida).</div>` : `<div class="note" style="margin:8px 0">✓ ${fs.some(f => scwbEstado(f) === 'Exceptuado') ? 'Todos los nudos cumplen o están exceptuados (último piso con poca carga axial: ahí la norma permite que la columna sea más débil).' : 'En todos los nudos las columnas son más fuertes que las vigas.'}</div>`}
+    ${scwbTablaHTML(fs)}<p class="hint" style="margin-top:6px">${SCWB_NOTA}</p>`;
+}
