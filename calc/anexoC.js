@@ -340,9 +340,16 @@ function topologia(texto){
   const T = leer(texto);
   const J = {}; for(const r of T['JOINT COORDINATES'] || []) J[r.Joint] = [num(r.GlobalX ?? r.XorR), num(r.GlobalY ?? r.Y), num(r.GlobalZ ?? r.Z)];
   const sec = {}; for(const r of T['FRAME SECTION ASSIGNMENTS'] || []) sec[r.Frame] = r.AnalSect || r.DesignSect || '?';
+  // Liberaciones de momento (Assign → Frame → Releases/Partial Fixity): rel = 'lib' (M3 liberado), 'parc' (rigidez parcial) o 'emp' (sin liberar = empotrado)
+  const tRel = Object.keys(T).find(n => /^FRAME RELEASE ASSIGNMENTS 1/i.test(n)), tPar = Object.keys(T).find(n => /^FRAME RELEASE ASSIGNMENTS 2/i.test(n));
+  const si = v => /^(yes|y|si|sí|true)$/i.test(String(v ?? '').trim());
+  const rel = {}; for(const r of T[tRel] || []) rel[r.Frame] = { i:si(r.M3I) ? 'lib' : 'emp', j:si(r.M3J) ? 'lib' : 'emp', pf:si(r.PartialFix) };
+  for(const r of T[tPar] || []){ const o = rel[r.Frame] = rel[r.Frame] || { i:'emp', j:'emp' }; if(num(r.M3I) > 0) o.i = 'parc'; if(num(r.M3J) > 0) o.j = 'parc'; }
+  const conAsig = !!(T['FRAME SECTION ASSIGNMENTS'] || []).length;   // si se exportaron las asignaciones y no hay tabla de liberaciones, no hay ninguna
   const out = {};
-  for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ];
-    out[r.Frame] = { i:r.JointI, j:r.JointJ, L:a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0, g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b) }; }
+  for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ], q = rel[r.Frame];
+    out[r.Frame] = { i:r.JointI, j:r.JointJ, L:a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0, g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b),
+      ri:q ? q.i : conAsig ? 'emp' : '?', rj:q ? q.j : conAsig ? 'emp' : '?' }; }
   return out;
 }
 

@@ -14,6 +14,21 @@ const CX_EMP = ['empalme', 'empZ'];
 const CX_DESC = { aleta:'Viga a columna o a viga, a cortante', angular:'Viga a columna o a viga, a cortante', testaV:'Viga a columna o a viga, a cortante', asiento:'Viga apoyada sobre un angular',
   testa:'Viga a columna a momento', ras:'Viga a columna a momento', soldada:'Viga soldada a la columna a momento', empalme:'Unión de dos tramos de viga', empZ:'Unión soldada de dos tramos de viga',
   cartela:'Diagonal a una placa', grupo:'Grupo de pernos con carga excéntrica (cargas a mano)', base:'Columna sobre pedestal (reacciones del modelo)' };
+const CX_CORT = ['aleta', 'angular', 'testaV', 'asiento'];                        // conexiones a cortante (extremo articulado)
+const REL_ICO = { lib:' · articulado', parc:' · rigidez parcial', emp:' · empotrado', '?':'' };
+const REL_TXT = { lib:'M3 liberado en el modelo (articulado)', parc:'Rigidez parcial en el modelo', emp:'Sin liberar en el modelo: el extremo trabaja a momento', '?':'El archivo no trae las liberaciones' };
+const relExt = (T, x) => (x.e === 'i' ? T?.[x.F]?.ri : T?.[x.F]?.rj) || '?';
+// Coherencia entre el tipo de conexión y el modelo (pedido de Amo 20-nov): si la viga no tiene liberación (releases / partial fixity),
+// el modelo la supone empotrada → la conexión debe ser a momento; una a cortante solo vale si se libera M3 en el modelo.
+function avisoRel(c, ext, T){
+  if(!T || !ext.length) return '';
+  const est = ext.map(x => relExt(T, x)), n = k => est.filter(r => r === k).length, nud = k => [...new Set(ext.filter((x, i) => est[i] === k).map(x => x.j))].join(', ');
+  if(CX_CORT.includes(c.tipo) && n('emp')) return `<div class="note" style="margin-top:8px;border-left:3px solid #b91c1c;background:#fef2f2;color:#991b1b"><b>Esta conexión es a cortante, pero en el modelo la viga está empotrada en ${n('emp') === ext.length ? 'todos los nudos' : 'los nudos ' + esc(nud('emp'))}</b> (no tiene liberación de momento): ahí el modelo supone una unión a momento. Use una conexión a momento (chapa de testa, soldada…), o, si usa esta, libere M3 en ese extremo de la viga en el modelo (Assign → Frame → Releases/Partial Fixity), vuelva a correrlo y súbalo de nuevo.</div>`;
+  if(CX_CORT.includes(c.tipo) && n('parc')) return `<div class="note amber" style="margin-top:8px">En los nudos ${esc(nud('parc'))} la viga tiene rigidez parcial en el modelo: una conexión a cortante supone el extremo articulado. Revise que sea coherente.</div>`;
+  if(['testa', 'ras', 'soldada'].includes(c.tipo) && n('lib')) return `<div class="note amber" style="margin-top:8px">En los nudos ${esc(nud('lib'))} la viga tiene M3 liberado en el modelo (articulada), pero esta conexión es a momento: el diseño queda del lado seguro, aunque el modelo no refleja la rigidez real del nudo. Revise que sea lo que quiere.</div>`;
+  if(est.every(r => r === '?')) return '<p class="hint" style="margin-top:6px">El archivo no trae las liberaciones de los elementos (exporte MODEL DEFINITION → Frame Assignments completo) para revisar si el extremo es articulado o empotrado.</p>';
+  return '';
+}
 const cxPre = t => ({ aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB' }[t] || 'CX');
 const cxNombre = t => ConUI.NOMBRES[t] || t;
 let _topo = null, _cxCtx = null;
@@ -106,12 +121,16 @@ function calcCx(c, D, ctx){
     const mag = f._man ? 0 : Math.abs(f.M3 ?? f.Mx ?? 0) + Math.abs(f.V2 ?? f.Vx ?? 0) + Math.abs(f.P ?? 0) + Math.abs(f.M2 ?? f.My ?? 0);
     const m = (isFinite(r.max) ? r.max : 99) + 1e-7 * Math.min(mag, 1e4); if(m > pR){ pR = m; peor = f; } }
   const inp = peor._man ? z : { ...z, ...cargasDeFila(c.tipo, peor) }, R = Conex.calc(inp);
-  if(['aleta', 'angular', 'testaV', 'asiento'].includes(c.tipo) && c.cargas !== 'manual'){ const mM = Math.max(0, ...filas.map(f => Math.abs(f.M3 || 0)));
-    if(mM > 1) avisos.push(`El modelo tiene momento en el extremo de la viga (M3 hasta ${fx(mM, 1)} kN·m), pero esta conexión es a cortante (extremo articulado): libere los momentos de ese extremo en el modelo o use una conexión a momento.`); }
-  R.av = [...avisos, ...(R.av || [])];
+  if(CX_CORT.includes(c.tipo) && c.cargas !== 'manual'){ const mM = Math.max(0, ...filas.map(f => Math.abs(f.M3 || 0)));
+    const emp = ctx.T ? [...new Set(filas.filter(f => f._F && relExt(ctx.T, { F:f._F, e:f._e }) === 'emp').map(f => f._j))] : [];
+    if(emp.length) avisos.push(`NO USAR ESTA CONEXIÓN TAL COMO ESTÁ EL MODELO: en los nudos ${emp.join(', ')} la viga no tiene liberación de momento (está empotrada${mM > 0.05 ? `, M3 hasta ${fx(mM, 1)} kN·m` : ''}), así que el modelo supone una unión a momento. Use una conexión a momento, o libere M3 en ese extremo en el modelo (Assign → Frame → Releases/Partial Fixity), vuelva a correrlo y suba el archivo de nuevo.`);
+    else if(mM > 1) avisos.push(`El modelo tiene momento en el extremo de la viga (M3 hasta ${fx(mM, 1)} kN·m), pero esta conexión es a cortante (extremo articulado): libere los momentos de ese extremo en el modelo o use una conexión a momento.`); }
+  if(avisos.some(a => a.startsWith('NO USAR'))) R.req = [['Coherencia con el modelo: extremo de la viga liberado (articulado) para una conexión a cortante', false, 'en el modelo está empotrado'], ...(R.req || [])];
+  const rojo = avisos.filter(a => a.startsWith('NO USAR'));
+  R.av = [...avisos.filter(a => !a.startsWith('NO USAR')), ...(R.av || [])];
   const ratio = isFinite(R.max) ? R.max : 99;
   c.res = { ok:true, ratio:+ratio.toFixed(3), cumple:!!R.ok, fecha:new Date().toISOString() };
-  return { ok:true, tipo:'cx', R, inp, ratio, cumple:!!R.ok, _filas:filas, ctrl:peor, avisos:R.av };
+  return { ok:true, tipo:'cx', R, inp, ratio, cumple:!!R.ok, _filas:filas, ctrl:peor, avisos:R.av, rojo };
 }
 
 // ─── Galería y creación ───
@@ -157,7 +176,8 @@ function uneHTML(c, D, T){
       : !de || !a ? '<p class="hint" style="margin:2px 0 0">Escoja los dos elementos.</p>'
       : !nudos.length ? `<div class="note amber" style="margin-top:6px">En el modelo, ${esc(de.nom)} (${esc(de.grupo || 'sin grupo')}) no llega a ${esc(a.nom)} (${esc(a.grupo || 'sin grupo')}) en ningún nudo. Revise los grupos en el Anexo D.</div>`
       : `<p class="hint" style="margin:4px 0 0">En el modelo, ${esc(de.nom)} llega a ${esc(a.nom)} en <b>${nudos.length} nudo${nudos.length > 1 ? 's' : ''}</b>. Toque un nudo para quitarlo si esa unión es de otro tipo:</p>
-        <div class="chips">${ext.map(x => `<button type="button" class="chip ${off.has(String(x.j)) ? 'off' : ''}" data-cxnudo="${esc(x.j)}" ${ro_}>nudo ${esc(x.j)} · E${esc(x.F)} (${x.e})</button>`).join('')}</div>`}</div>`;
+        <div class="chips">${ext.map(x => { const r = relExt(T, x); return `<button type="button" class="chip ${off.has(String(x.j)) ? 'off' : ''} ${CX_CORT.includes(c.tipo) && r === 'emp' ? 'rig' : ''}" data-cxnudo="${esc(x.j)}" ${ro_} title="${esc(REL_TXT[r])}">nudo ${esc(x.j)} · E${esc(x.F)} (${x.e})${REL_ICO[r]}</button>`; }).join('')}</div>
+        ${avisoRel(c, ext.filter(x => !off.has(String(x.j))), T)}`}</div>`;
 }
 async function crearCx(t){
   const E = datosE(), D = datosD(), c = nuevaCx(t, E, D);
@@ -220,7 +240,7 @@ function pintarCx(c, D){
   $$('#form [data-k]').forEach(el => { if(lock.has(el.dataset.k)){ el.disabled = true; el.dataset.lock = '1'; el.title = 'Viene del Anexo D'; } });
   const R = X?.ok ? X.R : null;
   $('#dib').innerHTML = R && !R.error ? ConUI.dibujo(inp, R) : '';
-  box.innerHTML = !X ? '<p class="muted">Calculando…</p>' : !X.ok ? `<div class="note amber">${esc(X.error)}</div>` : ConUI.resHTML(inp, R) + (X.ctrl && !X.ctrl._man ? `<p class="hint" style="margin-top:6px">Fila que controla: ${esc(X.ctrl._t || '')}</p>` : '');
+  box.innerHTML = !X ? '<p class="muted">Calculando…</p>' : !X.ok ? `<div class="note amber">${esc(X.error)}</div>` : (X.rojo || []).map(a => `<div class="note" style="margin-bottom:10px;border-left:4px solid #b91c1c;background:#fef2f2;color:#991b1b"><b>⚠ ${esc(a)}</b></div>`).join('') + ConUI.resHTML(inp, R) + (X.ctrl && !X.ctrl._man ? `<p class="hint" style="margin-top:6px">Fila que controla: ${esc(X.ctrl._t || '')}</p>` : '');
   if($('#eTag')) $('#eTag').textContent = etiquetaE(c, D);
   const li = document.querySelector(`[data-sele="${c.id}"]`); if(li){ const p = li.querySelector('.pill'); if(p) p.outerHTML = pillRes(c.res); const l = li.querySelector('.e-lbl'); if(l) l.textContent = etiquetaE(c, D); }
   activarCx(c, D); pintarListo();
@@ -263,7 +283,7 @@ function cxPrintSec(c, X, D, num){
     <div class="ax-mapas"><figure style="grid-column:1/-1">${ConUI.dibujo(inp, R)}</figure></div>
     ${ConUI.datosPrint(inp).replace('<table class="t kv">', '<table class="ax-kv">').replace(/<tr><th>/g, '<tr><td>').replace(/<\/th><td>/g, '</td><td>').replace(/<tr><td>Cargas<\/td><td>[^<]*<\/td><\/tr>/, '')}
     <table class="ax-kv"><tr><td>Cargas</td><td>${carg}</td></tr></table>
-    ${ConUI.chequeosHTML(R)}${R.av.length ? `<p class="ax-nota"><b>Observaciones:</b> ${R.av.map(esc).join(' ')}</p>` : ''}
+    ${(X.rojo || []).map(a => `<p class="ax-nota"><b>${esc(a)}</b></p>`).join('')}${ConUI.chequeosHTML(R)}${R.av.length ? `<p class="ax-nota"><b>Observaciones:</b> ${R.av.map(esc).join(' ')}</p>` : ''}
     <h4>Requisitos de geometría y detallado</h4>${ConUI.reqHTML(R)}
     <div class="ax-box">Relación máxima = ${fx(X.ratio, 3)} — ${X.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>
     <h4>Cálculo</h4><div class="calc">${R.pasos.map(esc).join('<br/>')}</div></section>`;

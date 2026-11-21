@@ -53,7 +53,7 @@ function guiaExportHTML(){
       ${it(1, 'Other Definitions', 'no se usa', false)}
       ${it(1, 'Load Case Definitions', 'casos de carga')}${it(1, 'Connectivity Data', 'nudos y elementos')}
       ${it(1, 'Joint Assignments', 'apoyos y cargas en nudos')}
-      <div class="gx-i gx-1 on">Frame Assignments</div>${it(2, 'Frame Item Assignments', 'secciones de cada elemento')}${it(2, 'Frame Load Assignments', 'cargas en elementos')}${it(2, 'Frame Design Assignments', 'opcional')}
+      <div class="gx-i gx-1 on">Frame Assignments</div>${it(2, 'Frame Item Assignments', 'secciones y liberaciones (releases) de cada elemento')}${it(2, 'Frame Load Assignments', 'cargas en elementos')}${it(2, 'Frame Design Assignments', 'opcional')}
       ${it(1, 'Options/Preferences Data · Miscellaneous Data', 'no se usan', false)}
       <div class="gx-h">ANALYSIS RESULTS <span class="gx-why">solo estas</span></div>
       ${it(1, 'Run Information', '', false)}
