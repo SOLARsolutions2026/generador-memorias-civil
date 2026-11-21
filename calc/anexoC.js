@@ -201,8 +201,10 @@ function revisar(M, RA, RB, CB, sisR){
     if(malos.length) out.push({ grupo:'Diseño en acero del software', estado:'no', txt:`${malos.length} elemento${malos.length > 1 ? 's' : ''} con relación mayor que 1.0 en el software: ${malos.slice(0, 12).map(([id, o]) => `${id} (${o.ratio})`).join(', ')}${malos.length > 12 ? '…' : ''}.` });
     if(Dz.norma && !/360-10/.test(Dz.norma)) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`El diseño del software está con la norma «${Dz.norma}». La memoria usa NSR-10 Título F, basado en AISC 360-10: conviene escoger esa norma en las preferencias de diseño.` });
     const esp = ({ des:'SMF', dmo:'IMF', dmi:'OMF' })[sisR];
-    const momento = Dz.porticos.filter(p => /^(S|I|O)MF$/i.test(String(p).trim()));
-    const otros = momento.filter(p => String(p).trim().toUpperCase() !== esp);
+    // El software escribe el nombre completo («Special Moment Frame») o la sigla (SMF): se pasa todo a sigla
+    const sigla = p => { const t = String(p).trim(), m = /^(Special|Intermediate|Ordinary)\s+Moment\s+Frame$/i.exec(t); return m ? m[1][0].toUpperCase() + 'MF' : t.toUpperCase(); };
+    const momento = [...new Set(Dz.porticos.map(sigla).filter(p => /^(S|I|O)MF$/.test(p)))];
+    const otros = momento.filter(p => p !== esp);
     if(esp && otros.length) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`Tipo de pórtico en el software: ${otros.join(', ')}. Con el sistema escogido en Combinaciones (${({ des:'DES', dmo:'DMO', dmi:'DMI' })[sisR]}) debería ser ${esp}.` });
     else if(esp && momento.length) out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El tipo de pórtico del software (${esp}) coincide con el sistema escogido en Combinaciones.` });
   }
