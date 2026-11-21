@@ -270,7 +270,7 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos (aviso al 80 %; Amo NO quiere aviso al 70 % ni medir la base de datos, 20/21-nov).
 Guardar en el NAS (21-nov, versión sencilla de Amo: sin pestaña nueva, sin opciones extra; `respaldo-ui.js` `guardarNAS` / `cargarZipNAS`):
-botón «📦 Guardar en el NAS» en las Terminadas (`data-nas`, solo ingeniero) → descarga `<consecutivo>.zip` con el formato del respaldo
+botón «📦 Guardar en el NAS» (discreto, no azul) en las Terminadas (`data-nas`, solo ingeniero; las terminadas solo tienen estado, Abrir y este botón: sin Portada ni Crear variante, que aparece al pasar a En proceso o Pausada — Amo 21-nov) → descarga `<consecutivo>.zip` con el formato del respaldo
 (`datos.json` {tipo:'nas', raiz, memorias = original + variantes, revisiones, archivos} + `archivos/<id>/…`, SIN el PDF final) → «Ya lo guardé · liberar espacio» / «Después».
 Liberar = borra los archivos de Storage de todo el grupo, borra las filas de las variantes y deja la original como registro: estado 'arch', `archivada_en`, `paquete` = nombre del ZIP,
 `ficha` de la definitiva + `ficha.nas` {zip, fecha, mb, archivos, disenos, por}, `anexos = {}`, `imagen_path = null` (el historial mem_versiones conserva sus copias).

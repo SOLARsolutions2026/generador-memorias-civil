@@ -168,14 +168,14 @@ async function renderLista(){
   const acts = (g) => {
     const m = g.def, [c,t] = ESTADOS[m.estado] || ESTADOS.wip;
     let b = (g.vs.length ? `<button class="chev" type="button" data-chev="${g.r.id}" aria-label="Ver diseños" aria-expanded="false">▾</button>` : '')
-      + (m.ficha?.nas ? '' : `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>`)
+      + (m.estado === 'wip' || m.estado === 'pau' ? `<button class="btn sm" type="button" data-variante="${g.r.id}" title="Duplicar para probar otro diseño sin tocar este">⧉ Crear variante</button>` : '')   // terminada: sin variantes (Amo 21-nov)
       + (m.estado === 'arch' ? (m.ficha?.nas ? '' : pill(c, t)) : `<select class="est-sel est-${m.estado}" data-est="${m.id}" aria-label="Cambiar estado">${['wip','pau','apr'].map(k => `<option value="${k}" ${m.estado === k ? 'selected' : ''}>${ESTADOS[k][1]}</option>`).join('')}</select>`);
     const p1 = m.tipo === 'revision' ? 'R' : 'ficha';
     if(m.estado === 'wip' || m.estado === 'pau') b += `<button class="btn sm danger" type="button" data-borrar="${g.r.id}" aria-label="Eliminar memoria">Eliminar</button><button class="btn sm pri" type="button" data-go="#/m/${m.id}/${p1}">Continuar</button>`;
-    else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/portada">Portada</button><button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;
+    else if(m.estado === 'apr') b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Abrir</button>`;   // sin botón de portada (Amo 21-nov)
     else if(m.ficha?.nas) b += esIng() ? `<button class="btn sm" type="button" data-cargarzip="${g.r.id}">📂 Cargar ZIP</button>` : '';
     else b += `<button class="btn sm" type="button" data-go="#/m/${m.id}/ficha">Ver ficha</button>`;
-    if(m.estado === 'apr' && esIng()) b += `<button class="btn sm pri" type="button" data-nas="${g.r.id}" title="Descargar el proyecto en un ZIP y liberar su espacio en la app">📦 Guardar en el NAS</button>`;
+    if(m.estado === 'apr' && esIng()) b += `<button class="btn sm" type="button" data-nas="${g.r.id}" title="Descargar el proyecto en un ZIP y liberar su espacio en la app">📦 Guardar en el NAS</button>`;
     return b;
   };
   const nomDis = m => m.variante_de ? (m.variante_nom || 'Variante') : (m.variante_nom || 'Inicial');
