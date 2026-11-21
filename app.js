@@ -1007,6 +1007,8 @@ function pintarLateral(){
     // Respaldo y Configuración solo arriba, como íconos (Amo 21-nov)
   }
   slot.innerHTML = html;
+  // Memoria abierta en el computador: memoria arriba y avance abajo fijos; solo los pasos se deslizan (pedido de Amo 21-nov)
+  sbar.classList.toggle('sb-fija', !!(enMem && nav) && matchMedia('(min-width:901px)').matches);
   if(nav){ slot.appendChild(nav);
     const pas = [...nav.querySelectorAll('.step:not(:disabled)')], ok = pas.filter(b => b.querySelector('.dot.ok')), fal = pas.filter(b => !b.querySelector('.dot.ok'));
     const nom = b => (b.querySelector('.lbl')?.firstChild?.textContent || '').replace(/^Anexo /, '').replace(/ —.*/, '').trim();

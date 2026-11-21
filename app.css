@@ -859,3 +859,9 @@ body.con-sb .fila-mem:not(:has(>.btn:not(#back):not(#btnHist),>.pill)){display:n
 /* Respaldo y Configuración arriba solo con el ícono (Amo 21-nov) */
 .tbtn.solo-ico{position:relative;padding-left:9px;padding-right:9px;justify-content:center}
 .tbtn.solo-ico .rdot{position:absolute;top:5px;right:5px}
+/* Barra lateral con partes fijas en la memoria abierta (Amo 21-nov): marca y memoria arriba, avance abajo; los pasos se deslizan */
+.sbar.sb-fija{overflow:hidden}
+.sbar.sb-fija .sb-slot{min-height:0;flex:1;display:flex;flex-direction:column}
+.sbar.sb-fija .sb-slot>.steps{flex:1 1 auto;min-height:80px;overflow-y:auto;margin:8px -14px 0;padding:6px 14px 8px;border-top:1px solid #eef2f7;scrollbar-width:thin}
+.sbar.sb-fija .sb-slot>.steps .step.on::before{left:-14px}
+.sbar.sb-fija .sb-av{flex:0 0 auto;margin-top:10px}
