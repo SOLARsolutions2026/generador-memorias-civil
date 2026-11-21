@@ -127,7 +127,8 @@ function sisProyecto(p){
   return p.datos.sismo;
 }
 function aplicarSis(p){ const s = sisProyecto(p), v = ['DMO', 'DES'].includes(s) ? s : 'no';
-  p.datos.con.forEach(c => { if(TIENE_SIS.includes(c.tipo)) c.sismo = v; }); (p.datos.nudos || []).forEach(n => { n.sismo = s; }); }
+  p.datos.con.forEach(c => { if(TIENE_SIS.includes(c.tipo)) c.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : v; });   // empalmes de vigas de gravedad: sin sismo (Amo 21-nov)
+  (p.datos.nudos || []).forEach(n => { n.sismo = s; }); }
 const noPrecal = (p, t) => (NO_PRECAL[sisProyecto(p)] || []).includes(t);
 function renderProyecto(){
   const p = S.p, F = p.ficha, ro = esIng() ? '' : 'disabled';
@@ -192,6 +193,7 @@ function renderEditor(){
       if(k === 'destaje' && c.dct == null) Object.assign(c, { dct:35, dcb:35, cDes:110, LevB:38 });
       if(k === 'unSop' && c.wS == null) Object.assign(c, { wS:6, electrodo:c.electrodo || 'E70XX' });
       if(k === 'rig' && c.rig && c.ts == null) Object.assign(c, { ts:12.7, W:+c.bh || 102, hs:+c.bv || 152, aceroRig:c.aceroAng || 'A36', wR:6, electrodo:c.electrodo || 'E70XX' });
+      if(k === 'vigaGrav'){ aplicarSis(S.p); recalcular(c); renderEditor(); guardar(); return; }
       if(['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw', 'diag', 'colTipo', 'cortante', 'refT', 'refV', 'mortero'].includes(k) || (['unSop', 'destaje'].includes(k) && c.tipo !== 'grupo')){ renderEditor(); guardar(); return; }
       if(['viga', 'soporte', 'soldAla', 'ambos', 'filas', 'nL', 'miembro', 'union'].includes(k) && c.tipo !== 'grupo'){ if(k === 'viga'){ const v = Conex.perfil(c.viga); if(v && c.soporte === 'viga'){} } renderEditor(); guardar(); return; }
       if(k === 'nom' || k === 'desc'){ const b = $(`[data-sel="${c.id}"] b`); if(b && k === 'nom') b.textContent = c.nom; guardar(); return; }

@@ -17,7 +17,7 @@ function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r
 function campo(c, k, l, opt = {}){
   const ro = esIng() ? '' : 'disabled';
   // En la app de conexiones el sismo se escoge una vez para todo el proyecto (Amo 21-nov)
-  if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">Se escoge arriba, en «Disipación de energía» del proyecto</div></div>`;
+  if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">${c.vigaGrav ? 'Viga de gravedad (marcada abajo)' : typeof G.ConSisProy === 'string' ? G.ConSisProy : 'Se escoge arriba, en «Disipación de energía» del proyecto'}</div></div>`;
   if(opt.sel) return `<div class="f"><label>${l}</label><select data-k="${k}" ${ro}>${opt.sel.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(c[k]) === String(v) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
   return `<div class="f"><label>${l}</label><input data-k="${k}" ${opt.num === false ? '' : 'inputmode="decimal" data-num="1"'} value="${esc(c[k] ?? '')}" ${ro}/>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
 }
@@ -192,7 +192,8 @@ function seccionesDe0(c){
         campo(c, 'vMedia', 'Cortante que pasa por la media alma cortada', { sel:[['todo', 'V2 completo (conservador)'], ['mitad', 'V2/2 (la otra mitad sigue entera)']] }))],
     ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · empalme a ${c.xEmp || '—'} mm de la cara de la columna` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
-        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))] ];
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))
+      + `<div class="f"><label class="ck"><input type="checkbox" data-k="vigaGrav" ${c.vigaGrav ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Esta viga NO hace parte del pórtico sísmico (viga de gravedad): el empalme va sin requisitos sísmicos</label></div>`] ];
   const RIGS = { auto:'Automático (las diseña si hacen falta)', si:'Sí, siempre', no:'No poner' }, tub = c.miembro === 'tubo';
   if(c.tipo === 'soldada') return [
     ['miem', 'Miembro soldado', () => c.miembro === 'tubo' ? `Tubo ${c.H}×${c.B}×${c.tt} mm · ${c.aceroViga}` : `${c.viga} · ${c.aceroViga}`,
@@ -297,7 +298,8 @@ function seccionesDe0(c){
       + (c.desliz ? g3(campo(c, 'claseSup', 'Superficie de contacto', { sel:[['A', 'Clase A (μ = 0.30): limpia de laminado o con granallado y pintura clase A'], ['B', 'Clase B (μ = 0.50): granallada sin pintar o con pintura clase B']] })) : '')],
     ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · empalme a ${c.xEmp || '—'} mm de la cara de la columna` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
-        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))] ];
+        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))
+      + `<div class="f"><label class="ck"><input type="checkbox" data-k="vigaGrav" ${c.vigaGrav ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Esta viga NO hace parte del pórtico sísmico (viga de gravedad): el empalme va sin requisitos sísmicos</label></div>`] ];
   if(c.tipo === 'cartela'){ const tbo = c.diag === 'tubo'; return [
     ['diag', 'Diagonal', () => tbo ? `Tubo ${c.Bt}×${c.Bt}×${c.tt} mm · ${c.aceroT} · ranurado y soldado` : `${+c.nL === 1 ? 'L' : '2L'} ${c.bL}×${c.bL}×${c.tL} mm · ${c.aceroL}`,
       g3(campo(c, 'diag', 'Tipo de diagonal', { sel:[['L', 'Angulares atornillados'], ['tubo', 'Tubo cuadrado ranurado y soldado']] }),

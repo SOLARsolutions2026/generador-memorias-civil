@@ -84,8 +84,13 @@ function filasCx(c, D, ctx){
 }
 // Datos de la conexión con los perfiles del Anexo D (lo que tiene candado)
 const CX_LOCK = {};
+// Sismo de las conexiones del Anexo E = el del paso «Combinaciones» (sistema estructural; pedido de Amo 21-nov); los empalmes de vigas de gravedad van sin sismo
+window.ConSisProy = 'Sale del paso «Combinaciones» (sistema estructural de la memoria)';
+const CX_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'base', 'empCol'];
+function sisMemoria(){ const an = S.m?.anexos || {}, k = String(an.K?.sisR || '').toLowerCase(); return an.B && an.B.aplica !== false ? (k === 'des' ? 'DES' : k === 'dmo' ? 'DMO' : 'no') : 'no'; }
 function entradaCx(c, D, T){
   const z = { ...c }, lock = new Set(), avisos = [];
+  if(CX_SIS.includes(c.tipo)) z.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : sisMemoria();
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), sd = de ? secDe(de) : null, sa = a ? secDe(a) : null;
   const ponI = (k, kA, el, s) => { if(el && s?.tipo === 'I'){ z[k] = el.perfil; z[kA] = el.acero || z[kA]; lock.add(k); lock.add(kA); return true; } return false; };
   if(CX_VC.includes(c.tipo)){
