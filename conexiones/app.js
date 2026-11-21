@@ -43,6 +43,10 @@ async function cargarBase(){
     sb.from('mem_config').select('*').eq('id', 1).maybeSingle(),
     sb.from('mem_perfiles_pie').select('*').order('nombre') ]);
   S.rol = u.data?.rol || 'consulta'; S.cfg = c.data || {}; S.perfiles = pf.data || [];
+  // Respaldo y Configuración (íconos arriba, igual que el generador; Amo 21-nov): llevan a esas pantallas del generador
+  if(S.rol === 'ingeniero'){ document.getElementById('btnResp').hidden = false; document.getElementById('btnCfg').hidden = false;
+    const ult = S.cfg.ultimo_respaldo, dias = ult ? (Date.now() - new Date(ult).getTime()) / 86400000 : Infinity;
+    document.getElementById('respDot').hidden = dias <= (+S.cfg.respaldo_dias || 15); }
   $('#userbox').hidden = false;
 }
 window.addEventListener('hashchange', ruta);
@@ -62,7 +66,7 @@ async function renderLista(){
   S.lista = data || [];
   $('#app').innerHTML = `<div class="main-hd"><div><h2>Diseño de conexiones metálicas</h2>
       <p class="lead">NSR-10 Título F.2 (AISC 360-10, LRFD). Cada proyecto agrupa las conexiones de una estructura y se imprime como memoria.</p></div>
-      <div class="nav-btns"><a class="btn" href="../">← Memorias de cálculo</a>${esIng() ? '<button class="btn pri" type="button" id="nuevo">+ Nuevo proyecto</button>' : ''}</div></div>
+      <div class="nav-btns">${esIng() ? '<button class="btn pri" type="button" id="nuevo">+ Nuevo proyecto</button>' : ''}</div></div>
     <div class="lbar"><input type="search" id="q" placeholder="🔍 Buscar: proyecto, cliente, municipio, consecutivo…" value="${esc(S.q)}"/></div>
     <div id="cl"></div>`;
   const pinta = () => {

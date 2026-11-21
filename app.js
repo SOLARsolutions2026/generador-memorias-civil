@@ -127,6 +127,7 @@ async function route(){
   document.body.classList.remove('notas-on');
   const h = location.hash.replace(/^#\/?/, '').split('/');
   window.scrollTo({ top:0 });
+  if(h[0] === 'respaldo'){ history.replaceState(null, '', '#/'); if(esIng()) setTimeout(() => modalRespaldo(), 300); return esIng() ? renderLista() : renderConsulta(); }   // desde la app de conexiones
   if(h[0] === 'config' && esIng()) return renderConfig();
   if(h[0] === 'm' && h[1]) return abrirMemoria(h[1], h[2] || (esIng() ? 'ficha' : 'portada'));
   return esIng() ? renderLista() : renderConsulta();
