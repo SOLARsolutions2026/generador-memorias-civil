@@ -47,17 +47,22 @@ function guiaExportHTML(){
   return `${hdModal('📋 Cómo exportar el modelo')}
     <p class="hint" style="margin:0 0 8px">En el software: <b>File → Export → .s2k Text File…</b> Se abre la ventana «Choose Tables for Export to Text File». Marque las casillas en <b class="gx-ok">verde</b>.</p>
     <div class="gx"><div class="gx-tree">
-      <div class="gx-h on">MODEL DEFINITION <span class="gx-why">marque la casilla de arriba: queda todo</span></div>
-      ${it(1, 'System Data', 'versión y unidades')}${it(1, 'Property Definitions', 'materiales y secciones')}${it(1, 'Load Pattern Definitions', 'patrones D, Lr, W, E…')}
-      ${it(1, 'Other Definitions', 'combinaciones')}${it(1, 'Load Case Definitions', 'casos y combinaciones')}${it(1, 'Connectivity Data', 'nudos y elementos')}
-      ${it(1, 'Joint Assignments', 'apoyos y cargas en nudos')}${it(1, 'Frame Assignments', 'secciones y cargas en elementos')}${it(1, 'Options/Preferences Data', '')}${it(1, 'Miscellaneous Data', '')}
+      <div class="gx-h on">MODEL DEFINITION <span class="gx-why">lo más fácil: marque la casilla de arriba y queda todo</span></div>
+      ${it(1, 'System Data', 'versión y unidades')}${it(1, 'Property Definitions', 'materiales y secciones')}
+      <div class="gx-i gx-1 on">Load Pattern Definitions</div>${it(2, 'Load Patterns', 'patrones D, Lr, W, E…')}${it(2, 'Response Combinations', 'combinaciones (las que revisa la app)')}${it(2, 'Auto Wave Loads · Response Spectrum · Time History · Power Spectral · Steady State', 'no se usan', false)}
+      ${it(1, 'Other Definitions', 'no se usa', false)}
+      ${it(1, 'Load Case Definitions', 'casos de carga')}${it(1, 'Connectivity Data', 'nudos y elementos')}
+      ${it(1, 'Joint Assignments', 'apoyos y cargas en nudos')}
+      <div class="gx-i gx-1 on">Frame Assignments</div>${it(2, 'Frame Item Assignments', 'secciones de cada elemento')}${it(2, 'Frame Load Assignments', 'cargas en elementos')}${it(2, 'Frame Design Assignments', 'opcional')}
+      ${it(1, 'Options/Preferences Data · Miscellaneous Data', 'no se usan', false)}
       <div class="gx-h">ANALYSIS RESULTS <span class="gx-why">solo estas</span></div>
       ${it(1, 'Run Information', '', false)}
       <div class="gx-i gx-1">Joint Output</div>${it(2, 'Displacements', 'derivas (C-8) y torsión')}${it(2, 'Reactions', 'zapatas, pedestales y placa base')}
       <div class="gx-i gx-1">Element Output</div><div class="gx-i gx-2">Frame Output</div>${it(3, 'Element Forces - Frames', 'fuerzas del Anexo D y conexiones')}
       ${it(1, 'Structure Output', '', false)}
       <div class="gx-h">DESIGN DATA <span class="gx-why">solo si corrió el diseño en acero (opcional)</span></div>
-      <div class="gx-i gx-1">Steel Design</div>${it(2, 'Summary Data', 'longitudes, K y Cb por elemento')}${it(2, 'PMM Details', '')}
+      ${it(1, 'Design Forces', '', false)}
+      <div class="gx-i gx-1">Steel Frame</div>${it(2, 'Summary Data', 'longitudes, K y Cb por elemento')}${it(2, 'PMM Details', '')}
     </div><div class="gx-notas">
       <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> marque las combinaciones de resistencia (U…), las de servicio y las envolventes de sismo (100%X 30%Y y 30%X 100%Y). Las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí.</div>
       <div class="tip-l"><b>Load Patterns (Model Def.):</b> déjelos todos («Select Load Patterns…» → todos).</div>
