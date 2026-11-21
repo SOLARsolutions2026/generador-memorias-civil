@@ -157,7 +157,7 @@ function compRig(c, D, X, T){
     const m = est.includes('emp') ? 'emp' : est.includes('lib') ? 'lib' : 'parc';
     if(g.clase === 'rigida' && m === 'emp') return { tono:'ok', txt:`La base es rígida (K = ${fx(g.K, 1)}) y en el modelo está empotrada: coherente.` };
     if(g.clase === 'art' && m === 'lib') return { tono:'ok', txt:'La base es articulada y en el modelo está articulada: coherente.' };
-    return { tono:'amber', txt:`La base es ${nom} (K = ${fx(g.K, 1)}), pero en el modelo el apoyo está ${m === 'emp' ? 'empotrado' : m === 'lib' ? 'articulado' : 'con algunas rotaciones libres'}. Para acercar el modelo a la realidad ${g.clase === 'semi' && res ? `use en ese apoyo un resorte a rotación (Assign → Joint → Springs, R2/R3) de ${fmt(res)} kN·m/rad (Sj,ini/η, η = 3)` : g.clase === 'rigida' ? 'empotre el apoyo' : 'libere las rotaciones del apoyo'}.` };
+    return { tono:'amber', txt:`La base es ${nom} (K = ${fx(g.K, 1)}), pero en el modelo el apoyo está ${m === 'emp' ? 'empotrado' : m === 'lib' ? 'articulado' : 'con algunas rotaciones libres'}. Para acercar el modelo a la realidad ${g.clase === 'semi' && res ? `use en ese apoyo un resorte a rotación de ${fmt(res)} kN·m/rad (Sj,ini/η, η = 3): Assign → Joint → Springs, casilla «Rotation about ${c.ori !== 'x' ? '1' : '2'}» (giro de la columna en su eje fuerte, con el peralte paralelo a ${c.ori !== 'x' ? 'Y' : 'X'}), y en Assign → Joint → Restraints deje libre esa rotación (si queda restringida, el resorte no trabaja)` : g.clase === 'rigida' ? 'empotre el apoyo' : 'libere las rotaciones del apoyo'}.` };
   }
   const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
   if(!ext.length) return null;
