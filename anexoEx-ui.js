@@ -162,7 +162,11 @@ function compRig(c, D, X, T){
       if(h.clase === 'rigida') (todos ? ok : mal).push(todos ? `eje ${kN}: «Rotation about ${n}» restringida` : `eje ${kN}: restrinja «Rotation about ${n}» en Restraints`);
       else if(h.clase === 'art') (ning ? ok : mal).push(ning ? `eje ${kN}: «Rotation about ${n}» libre` : `eje ${kN}: libere «Rotation about ${n}» en Restraints`);
       else if(todos) mal.push(`eje ${kN}: en el modelo está empotrado; libere «Rotation about ${n}» en Restraints y en Joint Springs escriba ${fmt(rs)} kN·m/rad en «Rotation about ${n}»`);
-      else mal.push(`eje ${kN}: «Rotation about ${n}» está libre; confirme que en Joint Springs tenga ${fmt(rs)} kN·m/rad (la app todavía no lee los resortes del archivo)`);
+      else { const sp = T._resortes || {}, vals = nudos.map(j => sp[j]?.[R] || 0), gir = nudos.filter(j => sp[j]?.giro);
+        if(gir.length) mal.push(`eje ${kN}: ${gir.join(', ')} tiene ejes locales girados; asigne el resorte con «Direction = Global» o revise el eje`);
+        else if(vals.every(v => v > 0 && Math.abs(v - rs) <= 0.3 * rs)) ok.push(`eje ${kN}: resorte «Rotation about ${n}» = ${vals.map(fmt).join(', ')} kN·m/rad, cerca de Sj,ini/η = ${fmt(rs)}`);
+        else if(!T._hayResortes) mal.push(`eje ${kN}: «Rotation about ${n}» está libre pero el archivo no trae resortes; en Joint Springs escriba ${fmt(rs)} kN·m/rad`);
+        else mal.push(`eje ${kN}: «Rotation about ${n}» está libre y el resorte del modelo es ${vals.map(fmt).join(', ')} kN·m/rad; escriba ${fmt(rs)} kN·m/rad (Sj,ini/η)`); }
     }
     if(!ejes.length) return null;
     const pre = `Base en ${nudos.length > 1 ? 'los nudos' : 'el nudo'} ${nudos.join(', ')} (peralte de la columna paralelo a ${oy ? 'Y' : 'X'}): `;

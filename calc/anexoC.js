@@ -359,6 +359,11 @@ function topologia(texto){
   // Apoyos (para la placa base): rotaciones restringidas en el nudo
   const si2 = v => /^(yes|y|si|sí|true)$/i.test(String(v ?? '').trim());
   Object.defineProperty(out, '_apoyos', { value:Object.fromEntries((T['JOINT RESTRAINT ASSIGNMENTS'] || []).map(r => [r.Joint, { R1:si2(r.R1), R2:si2(r.R2), R3:si2(r.R3) }])), enumerable:false });
+  // Resortes de los nudos (Assign → Joint → Springs; tabla confirmada con un export de Amo 20-nov: «JOINT SPRING ASSIGNMENTS 1 - UNCOUPLED» Joint, CoordSys, U1…R3)
+  const tSp = Object.keys(T).find(n => /^JOINT SPRING ASSIGNMENTS 1/i.test(n)), tLoc = Object.keys(T).find(n => /^JOINT LOCAL AXES/i.test(n));
+  const giro = new Set((tLoc ? T[tLoc] : []).filter(r => ['AngleA', 'AngleB', 'AngleC'].some(k => Math.abs(num(r[k])) > 1e-6)).map(r => r.Joint));
+  Object.defineProperty(out, '_resortes', { value:Object.fromEntries((tSp ? T[tSp] : []).map(r => [r.Joint, { R1:num(r.R1), R2:num(r.R2), R3:num(r.R3), sis:r.CoordSys || '', giro:/local/i.test(r.CoordSys || '') && giro.has(r.Joint) }])), enumerable:false });
+  Object.defineProperty(out, '_hayResortes', { value:!!tSp, enumerable:false });
   return out;
 }
 
