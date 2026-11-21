@@ -345,11 +345,17 @@ function topologia(texto){
   const si = v => /^(yes|y|si|sí|true)$/i.test(String(v ?? '').trim());
   const rel = {}; for(const r of T[tRel] || []) rel[r.Frame] = { i:si(r.M3I) ? 'lib' : 'emp', j:si(r.M3J) ? 'lib' : 'emp', pf:si(r.PartialFix) };
   for(const r of T[tPar] || []){ const o = rel[r.Frame] = rel[r.Frame] || { i:'emp', j:'emp' }; if(num(r.M3I) > 0) o.i = 'parc'; if(num(r.M3J) > 0) o.j = 'parc'; }
-  const conAsig = !!(T['FRAME SECTION ASSIGNMENTS'] || []).length;   // si se exportaron las asignaciones y no hay tabla de liberaciones, no hay ninguna
+  // Sin la tabla de liberaciones (no se exportó o no hay ninguna) se deduce de las fuerzas: |M3| ≈ 0 en todas las combinaciones = articulado
+  const Lf = {}; for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ]; Lf[r.Frame] = a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0; }
+  const mE = {}; for(const r of T['ELEMENT FORCES - FRAMES'] || []){ const st = num(r.Station), L = Lf[r.Frame], m = Math.abs(num(r.M3));
+    const o = mE[r.Frame] = mE[r.Frame] || { i:0, j:0, max:0 }; o.max = Math.max(o.max, m);
+    const e = Math.abs(st) < 1e-6 ? 'i' : L && Math.abs(st - L) < 1e-3 ? 'j' : null; if(e) o[e] = Math.max(o[e], m); }
+  // articulado si el momento del extremo es despreciable: < 0.05 kN·m o < 2 % del mayor momento del elemento
+  const ded = (F, e) => mE[F] ? (mE[F][e] < Math.max(0.05, 0.02 * mE[F].max) ? 'lib' : 'emp') : '?';
   const out = {};
   for(const r of T['CONNECTIVITY - FRAME'] || []){ const a = J[r.JointI], b = J[r.JointJ], q = rel[r.Frame];
-    out[r.Frame] = { i:r.JointI, j:r.JointJ, L:a && b ? Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) : 0, g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b),
-      ri:q ? q.i : conAsig ? 'emp' : '?', rj:q ? q.j : conAsig ? 'emp' : '?' }; }
+    out[r.Frame] = { i:r.JointI, j:r.JointJ, L:Lf[r.Frame], g:(sec[r.Frame] || '?') + '|' + funcionElem(a, b),
+      ri:q ? q.i : tRel ? 'emp' : ded(r.Frame, 'i'), rj:q ? q.j : tRel ? 'emp' : ded(r.Frame, 'j'), rDed:!tRel }; }
   return out;
 }
 
