@@ -367,3 +367,52 @@ function debilTxt(g){
   const h = g.debil, nom = { rigida:'rígida', semi:'semirrígida', art:'articulada' }[h.clase];
   return ` Los valores anteriores corresponden al eje fuerte de la columna; en el eje débil Sj,ini = ${Math.round(h.Sj).toLocaleString('es-CO')} kN·m/rad${h.K != null ? `, K = ${fx(h.K, 1)} (con la inercia del eje débil) y la base se clasifica como ${nom}` : ''}${h.clase === 'semi' ? `, con un resorte de ${Math.round(h.Sj / g.eta).toLocaleString('es-CO')} kN·m/rad` : ''}.`;
 }
+
+// ─── Resortes para el modelo (pedido de Amo 20-nov, opción A: un valor por detalle, sin carga axial) ───
+// Una fila por conexión (cada conexión del Anexo E = un detalle que puede cubrir varios nudos): qué poner en el modelo por eje y,
+// en cada nudo o extremo, si el archivo del modelo ya lo tiene (✓) o falta (✗).
+function resortesCardHTML(){
+  if(!S.m.anexos?.C?.modelo || !datosE().con.some(esCx)) return '';
+  return `<div class="card"><details id="eRes"><summary class="ct" style="cursor:pointer">🔧 Resortes para el modelo <span class="hint" style="text-transform:none;letter-spacing:0">qué poner en cada nudo y si el modelo ya lo tiene</span></summary>
+    <div id="eResT"><p class="muted">Calculando…</p></div></details></div>`;
+}
+async function pintarResortes(){
+  const box = $('#eResT'); if(!box) return;
+  const E = datosE(), D = datosD(), ctx = await ctxE(), T = ctx.T, fmt = v => Math.round(v).toLocaleString('es-CO');
+  if(!T){ box.innerHTML = '<p class="hint">No se pudo leer el archivo del modelo.</p>'; return; }
+  const ap = T._apoyos || {}, sp = T._resortes || {}, filas = [];
+  const chip = (txt, ok, t) => `<span title="${esc(t || '')}" style="display:inline-block;margin:2px 4px 2px 0;padding:1px 8px;border-radius:999px;font-size:12px;white-space:nowrap;${ok ? 'background:#ecfdf3;color:#166534;border:1px solid #bbf7d0' : 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca'}">${esc(txt)} ${ok ? '✓' : '✗'}${ok ? '' : ` <small>(${esc(t || '')})</small>`}</span>`;
+  for(const c of E.con.filter(esCx)){
+    let X = null; try{ X = calcE(c, D, ctx); }catch(e){ console.warn(e); }
+    let g = X?.R?.rigid; const nom = `<b>${esc(c.nom)}</b><br/><small>${esc(cxNombre(c.tipo))}</small>`;
+    if(g && g.tipo === 'cortante' && !g.clase) g = { ...g, clase:'art', _req:true };
+    if(!g || !g.clase){ filas.push([nom, '—', `<span class="hint">${X && !X.ok ? 'sin calcular: ' + esc(X.error || '') : 'sin clasificar (falta la longitud)'}</span>`, '']); continue; }
+    if(g.tipo === 'base'){
+      const p = pedDe(D, c.eA), nudos = p?.nudos || [], oy = c.ori !== 'x';
+      for(const [ej, h, R] of [['fuerte', g, oy ? 'R1' : 'R2'], ['débil', g.debil, oy ? 'R2' : 'R1']]){
+        if(!h || !h.clase) continue;
+        const n = R === 'R1' ? '1' : '2', rs = h.Sj / 3;
+        const que = h.clase === 'rigida' ? `Rotation ${n} restringida` : h.clase === 'art' ? `Rotation ${n} libre` : `Rotation ${n} libre + resorte <b>${fmt(rs)}</b> kN·m/rad`;
+        const est = nudos.map(j => { const a = ap[j]; if(!a) return chip(j, false, 'el nudo no es apoyo en el modelo');
+          const v = sp[j]?.[R] || 0, ok = h.clase === 'rigida' ? a[R] : h.clase === 'art' ? !a[R] : !a[R] && v > 0 && Math.abs(v - rs) <= 0.3 * rs;
+          return chip(j, ok, a[R] ? 'restringida' : v ? `resorte ${fmt(v)}` : 'libre sin resorte'); }).join('');
+        filas.push([nom, `Nudos (Joint Springs)<br/><small>eje ${ej} · K = ${fx(h.K, 1)}</small>`, que, est || '<span class="hint">sin nudos</span>']);
+      }
+      continue;
+    }
+    const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
+    const rs = g.tipo === 'cortante' ? null : g.Sj / g.eta;
+    const que = g.clase === 'rigida' ? 'Extremo empotrado (sin liberar)' : g.clase === 'art' ? `M3 liberado${g._req ? '<br/><small style="color:#b45309">no cumple todos los requisitos de detallado</small>' : ''}` : `Partial Fixity M3 = <b>${fmt(rs)}</b> kN·m/rad`;
+    const est = ext.map(x => { const r = relExt(T, x), k = x.e === 'i' ? T[x.F]?.ki : T[x.F]?.kj;
+      const ok = g.clase === 'rigida' ? r === 'emp' : g.clase === 'art' ? r === 'lib' : r === 'parc' && k > 0 && Math.abs(k - rs) <= 0.3 * rs;
+      return chip(`${x.F}-${x.e} (n ${x.j})`, ok, (r === 'emp' ? 'empotrado' : r === 'lib' ? 'M3 liberado' : r === 'parc' ? `resorte ${fmt(k || 0)}` : '?') + (T[x.F]?.rDed ? ' (deducido de las fuerzas: el archivo no trae la tabla de liberaciones)' : '')); }).join('');
+    if(ext.some(x => T[x.F]?.rDed)) T._ded = true;
+    filas.push([nom, `Extremos de viga (Frame Releases)<br/><small>${g.K != null && isFinite(g.K) ? `K = ${fx(g.K, 1)}` : g.tipo === 'cortante' ? 'conexión simple' : ''}</small>`, que, est || '<span class="hint">sin extremos del modelo</span>']);
+  }
+  const mal = (box.innerHTML = '', filas.reduce((s, f) => s + (f[3].match(/✗/g) || []).length, 0));
+  box.innerHTML = `<p class="hint" style="margin:6px 0">Valores sin carga axial (solo momento): dependen solo del detalle, así que todos los nudos de una misma conexión llevan el mismo valor; en el software seleccione esos nudos o elementos juntos y asígnelo una vez. Los chips dicen cómo está cada uno en el archivo cargado: ✓ correcto, ✗ falta (pase el cursor para ver qué tiene). En los extremos «F-i (n N)» = elemento F, extremo i, nudo N. Resorte = Sj,ini/η (EN 1993-1-8 §5.1.2); se acepta ±30 %.</p>
+    ${T._ded ? '<p class="hint" style="margin:0 0 6px">El archivo no trae la tabla de liberaciones de los elementos: el estado de las vigas se dedujo de las fuerzas (no distingue resortes). Exporte con las liberaciones (Frame Item Assignments) para confirmarlo.</p>' : ''}
+    ${mal ? `<div class="note amber" style="margin-bottom:8px">Faltan ${mal} nudo${mal > 1 ? 's' : ''} o extremo${mal > 1 ? 's' : ''} por ajustar en el modelo. Después de ajustarlos, vuelva a correr y cargue el archivo en el Anexo C.</div>` : '<div class="note" style="margin-bottom:8px">✓ El modelo tiene todos los resortes y liberaciones de acuerdo con las conexiones.</div>'}
+    <div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Conexión</th><th>Dónde</th><th>Qué poner</th><th>Estado en el modelo</th></tr></thead>
+    <tbody>${filas.map(f => `<tr>${f.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}

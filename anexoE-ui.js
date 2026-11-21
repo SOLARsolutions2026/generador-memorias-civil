@@ -313,8 +313,9 @@ function paneAnexoE(){
       <small class="e-lbl">${esc(etiquetaE(c, D))}</small>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span>${pillRes(c.res)}</button>`).join('')}
     ${!E.con.length ? '<p class="hint">Aún no hay conexiones.</p>' : ''}
     ${ing && E.con.length > 1 ? '<button class="btn sm" type="button" id="eOrdenar" style="width:100%;margin-top:6px">↓ Ordenar por nombre (menor a mayor)</button>' : ''}`;
-  pane(`${gal}<div class="d-grid"><div class="d-lista">${lista}</div><div id="eDet">${sel ? (esCx(sel) ? detCxHTML(sel, D) : detEHTML(sel, D)) : '<div class="card"><p class="muted">Agrega una conexión desde la galería.</p></div>'}</div></div>`);
+  pane(`${gal}${resortesCardHTML()}<div class="d-grid"><div class="d-lista">${lista}</div><div id="eDet">${sel ? (esCx(sel) ? detCxHTML(sel, D) : detEHTML(sel, D)) : '<div class="card"><p class="muted">Agrega una conexión desde la galería.</p></div>'}</div></div>`);
   $$('[data-sele]').forEach(b => b.onclick = () => { selE = b.dataset.sele; tabE = 0; paneAnexoE(); });
+  if($('#eRes')) $('#eRes').ontoggle = () => { if($('#eRes').open) pintarResortes(); };
   if(ing){
     $$('[data-nuevacx]').forEach(b => b.onclick = () => crearCx(b.dataset.nuevacx));
     $$('[data-nueva]').forEach(b => b.onclick = () => { const c = nuevaCon(b.dataset.nueva, E, D); E.con.push(c); selE = c.id; tabE = 0; guardarMemoria(); paneAnexoE(); toast(`${c.nom} creada: ${etiquetaE(c, D)}.`); });

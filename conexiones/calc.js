@@ -1994,12 +1994,14 @@ function rigidez(c, R){
     const As = 0.76 * Math.PI * da * da / 4, Lb = 8 * da + (c.mortero ? (+c.grout || 25) : 0) + tp + 6 + 0.4 * da, k16 = 2.0 * nB * As / Lb;
     const kt = 1 / (inv(k15) + inv(k16)), zt = S1 / 2, zc = cl.d / 2 - cl.tf / 2, z = zt + zc;
     kc('Concreto en compresión bajo el ala (k13)', k13); kc('Placa a flexión del lado en tensión (k15)', k15); kc(`Pernos de anclaje en tensión, ${nB} por fila (k16)`, k16);
-    const P = +c.P || 0, Mx = Math.abs(+c.Mx || 0), sb = sjBase(E, P, Mx, zc, zt, k13, kt), Sj = sb.Sj;
-    if(sb.txt) pasos.push('Con carga axial: ' + sb.txt);
+    // Opción A de Amo (20-nov): el valor para el modelo se calcula SIN carga axial (solo momento): depende solo de la geometría,
+    // así todas las bases con el mismo detalle llevan el mismo resorte y no cambia entre corridas; la carga axial queda de referencia.
+    const P = +c.P || 0, Mx = Math.abs(+c.Mx || 0), Sj = sjBase(E, 0, 1, zc, zt, k13, kt).Sj, sb = sjBase(E, P, Mx, zc, zt, k13, kt);
+    if(sb.txt) pasos.push(`Referencia con la carga axial de la fila que controla (no se usa para el modelo): ${sb.txt} → Sj = ${r2(sb.Sj / 1e6)} kN·m/rad`);
     pasos.push(`Concreto: Ec = 4700√f'c = ${Math.round(Ec)} MPa, fjd ≈ ⅔·0.85·f'c·√(A2/A1) = ${r2(fjd)} MPa, c = tp·√(Fy/(3·fjd)) = ${r1(cc)} mm → T equivalente ${r1(beffC)} × ${r1(leffC)} mm → k13 = Ec·√(beff·leff)/(1.275·E) = ${r2(k13)} mm`);
     pasos.push(`Placa: m = (S1 − d)/2 − 0.8·w = ${r1(m)} mm, leff = ${r1(leff)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15)} mm (sin palanca: anclajes largos)`);
     pasos.push(`Anclajes: As ≈ ${r1(As)} mm², Lb = 8d + mortero + tp + arandela + ½ tuerca = ${r1(Lb)} mm → k16 = 2.0·n·As/Lb = ${r2(k16)} mm`);
-    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = ${r2(Sj / 1e6)} kN·m/rad (sentido N, eje fuerte de la columna)`);
+    pasos.push(`z = zt + zc = ${r1(zt)} + ${r1(zc)} = ${r1(z)} mm → Sj,ini = ${r2(Sj / 1e6)} kN·m/rad (sentido N, eje fuerte de la columna; solo momento, sin carga axial)`);
     const Lc = +c.Lcol > 0 ? +c.Lcol * 1000 : null;
     // Eje débil (pedido de Amo 20-nov): momento en el sentido B (My). Tensión = los 2 pernos de la columna extrema (uno por fila);
     // compresión bajo las puntas de las 2 alas (perfil I) o bajo la pared lateral (tubo); m = distancia del perno al contorno de la columna.
@@ -2017,8 +2019,8 @@ function rigidez(c, R){
       const mw = Math.max(Math.hypot(dN, dB) - 0.8 * w, 0.5 * da), nT = 2;
       const leffw = Math.min(N, nT * Math.min(2 * Math.PI * mw, 4 * mw + 1.25 * aB)), k15w = 0.425 * leffw * tp ** 3 / mw ** 3, k16w = 2.0 * nT * As / Lb;
       kw('Concreto en compresión (k13)', k13w); kw('Placa a flexión del lado en tensión (k15)', k15w); kw('Pernos de anclaje en tensión, 2 de la columna extrema (k16)', k16w);
-      const ktw = 1 / (inv(k15w) + inv(k16w)), zt = S2 / 2, zw = zt + zc, My = Math.abs(+c.My || 0), sw = sjBase(E, P, My, zc, zt, k13w, ktw), Sjw = sw.Sj;
-      if(sw.txt) pw.push('Con carga axial: ' + sw.txt);
+      const ktw = 1 / (inv(k15w) + inv(k16w)), zt = S2 / 2, zw = zt + zc, My = Math.abs(+c.My || 0), Sjw = sjBase(E, 0, 1, zc, zt, k13w, ktw).Sj, sw = sjBase(E, P, My, zc, zt, k13w, ktw);
+      if(sw.txt) pw.push(`Referencia con la carga axial (no se usa para el modelo): ${sw.txt} → Sj = ${r2(sw.Sj / 1e6)} kN·m/rad`);
       pw.push(`Concreto ${txtC} → k13 = ${r2(k13w)} mm`);
       pw.push(`Placa: m = √(${r1(dN)}² + ${r1(dB)}²) − 0.8·w = ${r1(mw)} mm (perno extremo al contorno de la columna), leff = ${r1(leffw)} mm → k15 = 0.425·leff·tp³/m³ = ${r2(k15w)} mm`);
       pw.push(`Anclajes: 2 pernos en tensión → k16 = 2.0·2·As/Lb = ${r2(k16w)} mm${nB > 2 ? ' (los pernos intermedios de la fila, más cerca del eje, no se cuentan: del lado seguro)' : ''}`);
