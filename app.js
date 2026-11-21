@@ -998,7 +998,7 @@ function pintarLateral(){
   else {
     const it = (k, ic, t, s, on, extra = '') => `<button type="button" class="sb-it ${on ? 'on' : ''}" data-sb="${k}"><span class="tile">${ico(ic)}</span><span class="lbl">${t}<small>${s}</small></span>${extra}</button>`;
     html += `<div class="ph">Memorias</div>${it('lista', 'doc', 'Memorias de cálculo', 'Lista, estados y variantes', h[0] !== 'config')}${it('con', 'bolt', 'Conexiones', 'App de conexiones metálicas')}`;
-    if(esIng()) html += `<div class="ph">Administración</div>${it('resp', 'shield', 'Respaldo', 'Copia de seguridad (.zip)', false, `<span class="ydot" ${diasDesde(S.cfg.ultimo_respaldo) > 7 ? '' : 'hidden'}></span>`)}${it('cfg', 'gear', 'Configuración', 'Firma, membretes, biblioteca', h[0] === 'config')}`;
+    // Respaldo y Configuración solo arriba, como íconos (Amo 21-nov)
   }
   slot.innerHTML = html;
   if(nav){ slot.appendChild(nav);
