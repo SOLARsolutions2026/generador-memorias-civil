@@ -164,18 +164,22 @@ function seccionesDe0(c){
   const g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
   const pernosTipo = [campo(c, 'd', 'Diámetro', { sel:SEL_DIAM }), campo(c, 'grado', 'Grado', { sel:Object.keys(Conex.PERNOS) }), campo(c, 'rosca', 'Rosca en el plano de corte', { sel:[['N', 'Incluida (N)'], ['X', 'Excluida (X)']] }),
     `<div class="f"><label class="ck"><input type="checkbox" data-k="cizalla" ${c.cizalla ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Bordes cortados con cizalla</label><div class="hint">Borde mínimo ${Conex.BORDE_CIZ[+c.d] ?? '—'} mm (con soplete o laminado ${Conex.BORDE_MIN[+c.d] ?? '—'} mm), Tabla F.2.10.3-4</div></div>`];
-  if(c.tipo === 'aleta') return [
+  if(c.tipo === 'aleta'){ const des = c.destaje || 'no'; return [
     ['viga', 'Viga apoyada', () => `${c.viga} · ${c.aceroViga} · holgura ${c.holgura} mm`,
       g3(campo(c, 'viga', 'Perfil', { sel:(window.PERFILES_LAM || []).map(x => x[0]) }), campo(c, 'aceroViga', 'Acero', { sel:SEL_ACERO }), campo(c, 'holgura', 'Holgura viga–soporte [mm]', { h:'Del extremo de la viga a la cara del soporte' }))],
+    ['des', 'Destaje de la viga', () => des === 'no' ? 'sin destaje' : `${des === 'sup' ? 'ala superior' : 'las dos alas'} · dc ${c.dct}${des === 'ambos' ? ` / ${c.dcb}` : ''} mm · c ${c.cDes} mm`,
+      g3(campo(c, 'destaje', 'Destaje', { sel:[['no', 'Sin destaje'], ['sup', 'Ala superior'], ['ambos', 'Las dos alas']], h:'Recorte de las alas para que la viga entre en el soporte (p. ej. al alma de una viga principal)' }),
+        ...(des === 'no' ? [] : [campo(c, 'dct', 'Profundidad arriba dc [mm]', { h:'Desde el borde superior de la viga' }), ...(des === 'ambos' ? [campo(c, 'dcb', 'Profundidad abajo [mm]')] : []),
+          campo(c, 'cDes', 'Largo del destaje c [mm]', { h:'Desde el extremo de la viga' }), campo(c, 'LevB', 'Perno superior al corte LevB [mm]', { h:'Borde en el alma de la viga, hacia el destaje' })]))],
     ['sop', 'Soporte', () => `${SOPN[c.soporte]} · t ${c.tSop} mm · ${c.aceroSop}`,
       g3(campo(c, 'soporte', 'Se suelda a', { sel:Object.entries(SOPN) }), campo(c, 'tSop', 'Espesor del soporte [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO }))
       + (c.soporte !== 'ala' ? `<div class="f"><label class="ck"><input type="checkbox" data-k="dosLados" ${c.dosLados ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Hay otra conexión al otro lado del alma</label></div>` : '')],
     ['chapa', 'Chapa', () => `PL ${c.tp} mm · ${c.aceroPl} · a = ${c.a} mm`,
       g3(campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }), campo(c, 'a', 'a: soporte a la línea de pernos [mm]', { h:'Convencional: a ≤ 89 mm (3½")' }))],
-    ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · bordes ${c.Lev}/${c.Leh}`,
-      g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), '<div></div>', campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'Leh', 'Borde horizontal Leh [mm]'))],
+    ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · bordes ${c.Lev}/${c.Leh}${c.agujeros === 'SSLT' ? ' · ranura corta' : ''}`,
+      g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n', { h:'De 2 a 12, en una columna' }), campo(c, 's', 'Separación s [mm]'), campo(c, 'agujeros', 'Agujeros', { sel:[['STD', 'Estándar'], ['SSLT', 'Ranura corta horizontal']], h:'Ranura perpendicular a la carga' }), campo(c, 'Lev', 'Borde vertical Lev [mm]'), campo(c, 'Leh', 'Borde horizontal Leh [mm]', { h:'≥ 2d' }))],
     ['sold', 'Soldadura chapa–soporte', () => `filete ${c.w} mm ${c.electrodo} por ambas caras`,
-      g3(campo(c, 'w', 'Pierna del filete w [mm]', { h:'Recomendado ≥ 5/8·tp' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))] ];
+      g3(campo(c, 'w', 'Pierna del filete w [mm]', { h:'Mínimo 5/8·tp (Manual AISC parte 10)' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))] ]; }
   const SELP = (k, l, vacio) => campo(c, k, l, { sel:[...(vacio ? [['', vacio]] : []), ...(window.PERFILES_LAM || []).map(x => [x[0], x[0]])] });
   const ck = (k, t) => `<div class="f"><label class="ck"><input type="checkbox" data-k="${k}" ${c[k] ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> ${t}</label></div>`;
   const solds = () => ['sold', 'Soldaduras viga–placa', () => `alas ${c.soldAla === 'cjp' ? 'penetración completa' : `filete ${c.wAla} mm`} · alma filete ${c.wAlma} mm · ${c.electrodo}`,
@@ -776,10 +780,14 @@ function dibAleta(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, Leh = +c.Leh, a = +c.a, hol = +c.holgura || 0, tp = +c.tp;
   const W = a + Leh + 160, H = vg.d + 40, k = Math.min(300 / W, 330 / H);
   const X = v => 92 + v * k, Y = v => 50 + v * k;
-  const yb = (vg.d - g.Lp) / 2;                                   // chapa centrada en el alma
+  const yb = g.yb ?? (vg.d - g.Lp) / 2;                           // chapa centrada en el alma (o bajo el destaje)
+  const dct = g.dct || 0, dcb = g.dcb || 0, xc = hol + (g.cD || 0), xe = a + Leh + 140;
   const sup = `<rect x="${X(-24)}" y="${Y(-12)}" width="${24 * k}" height="${(vg.d + 24) * k}" class="sop"/>`;
-  const viga = `<rect x="${X(hol)}" y="${Y(0)}" width="${(a + Leh + 140 - hol) * k}" height="${vg.d * k}" class="vg"/>
-    <line x1="${X(hol)}" y1="${Y(vg.tf)}" x2="${X(a + Leh + 140)}" y2="${Y(vg.tf)}" class="vgl"/><line x1="${X(hol)}" y1="${Y(vg.d - vg.tf)}" x2="${X(a + Leh + 140)}" y2="${Y(vg.d - vg.tf)}" class="vgl"/>`;
+  const contorno = (dct || dcb) ? `M${X(hol)},${Y(dct)} L${X(xc)},${Y(dct)} L${X(xc)},${Y(0)} L${X(xe)},${Y(0)} L${X(xe)},${Y(vg.d)} L${X(xc)},${Y(vg.d)} L${X(xc)},${Y(vg.d - dcb)} L${X(hol)},${Y(vg.d - dcb)} Z`
+    : `M${X(hol)},${Y(0)} L${X(xe)},${Y(0)} L${X(xe)},${Y(vg.d)} L${X(hol)},${Y(vg.d)} Z`;
+  const viga = `<path d="${contorno}" class="vg"/>
+    <line x1="${X(dct ? xc : hol)}" y1="${Y(vg.tf)}" x2="${X(xe)}" y2="${Y(vg.tf)}" class="vgl"/><line x1="${X(dcb ? xc : hol)}" y1="${Y(vg.d - vg.tf)}" x2="${X(xe)}" y2="${Y(vg.d - vg.tf)}" class="vgl"/>`
+    + (dct ? cotaV(X(xc) + 10, Y(0), Y(dct), `dc ${dct}`, 1) + cotaH(Y(vg.d) + 40, X(hol), X(xc), `destaje c = ${g.cD}`) : '') + (dcb ? cotaV(X(xc) + 10, Y(vg.d - dcb), Y(vg.d), `${dcb}`, 1) : '');
   const ch = `<rect x="${X(0)}" y="${Y(yb)}" width="${(a + Leh) * k}" height="${g.Lp * k}" class="pl"/>`;
   const sold = `<path d="M${X(0)} ${Y(yb)} l${6} ${0} l${-6} ${6} z M${X(0)} ${Y(yb + g.Lp)} l6 0 l-6 -6 z" class="wld"/><line x1="${X(0)}" y1="${Y(yb)}" x2="${X(0)}" y2="${Y(yb + g.Lp)}" class="wl"/>`;
   const per = Array.from({ length:n }, (_, i) => `<circle cx="${X(a)}" cy="${Y(yb + Lev + i * s)}" r="${Math.max(3, g.dh / 2 * k)}" class="bolt"/>`).join('');
@@ -789,8 +797,8 @@ function dibAleta(c, r){
   const txt = `<text x="${X(a + Leh + 100)}" y="${Y(vg.d / 2)}" class="lbl" text-anchor="middle">${esc(vg.nom)}</text><text x="${X(-12)}" y="${Y(vg.d + 10)}" class="lbl" text-anchor="middle">soporte</text>
     <text x="${X((a + Leh) / 2)}" y="${Y(yb) + 12}" class="lbl" text-anchor="middle">PL ${tp} · w ${c.w}</text>`;
   const V = `<g class="carga"><line x1="${X(a)}" y1="${Y(yb + g.Lp) + 10}" x2="${X(a)}" y2="${Y(yb + g.Lp) + 34}"/><path d="M${X(a) - 5} ${Y(yb + g.Lp) + 28} L${X(a)} ${Y(yb + g.Lp) + 36} L${X(a) + 5} ${Y(yb + g.Lp) + 28} Z"/></g>`;
-  return `<svg viewBox="0 0 ${X(a + Leh + 140) + 10} ${Y(vg.d) + 44}" class="dsvg" role="img" aria-label="Elevación de la chapa de aleta">${sup}${viga}${ch}${sold}${per}${cot}${txt}${V}</svg>
-    <div class="hint" style="text-align:center">Elevación · la flecha marca Vu = ${f2(+c.Vu, 1)} kN</div>`;
+  return `<svg viewBox="0 0 ${X(a + Leh + 140) + 10} ${Y(vg.d) + (dct ? 62 : 44)}" class="dsvg" role="img" aria-label="Elevación de la chapa de aleta">${sup}${viga}${ch}${sold}${per}${cot}${txt}${V}</svg>
+    <div class="hint" style="text-align:center">Elevación · la flecha marca Vu = ${f2(+c.Vu, 1)} kN · configuración ${g.conv ? 'convencional' : 'extendida'} (pernos con e = ${f2(g.eB, 0)} mm)${g.des && g.des !== 'no' ? ` · destaje ho = ${f2(g.ho, 0)} mm` : ''}</div>`;
 }
 function dibGrupo(c, r){
   const g = r.geo, nf = +c.filas, nc = +c.cols, s = +c.s, gg = +c.g, Lev = +c.Lev, Leh = +c.Leh, e = +c.e, ang = +c.ang || 0;
@@ -823,7 +831,8 @@ function datosPrint(c){
     ${t('Placa', `${c.tp} × ${c.bp} mm · ${esc(c.aceroPl)} · extensión ${c.ambos ? 'arriba y abajo' : 'arriba'}`)}${t('Pernos', `${c.ambos ? 8 : 4 + (+c.nbc || 0)} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} pretensionados · g = ${c.g} mm`)}
     ${t('Distancias', `pfo = ${c.pfo} · pfi = ${c.pfi} · de = ${c.de} mm`)}${t('Soldaduras', `alas: ${c.soldAla === 'cjp' ? 'penetración completa' : `filete ${c.wAla} mm`} · alma: filete ${c.wAlma} mm · ${esc(c.electrodo)}`)}</table>`;
   if(c.tipo === 'aleta') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)}`)}${t('Soporte', `${{ ala:'Ala de columna', alma:'Alma de columna', viga:'Alma de viga' }[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}
-    ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)} · a = ${c.a} mm`)}${t('Pernos', `${c.n} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} · s = ${c.s} mm`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}${t('Soldadura', `filete ${c.w} mm por ambas caras · ${esc(c.electrodo)}`)}</table>`;
+    ${c.destaje && c.destaje !== 'no' ? t('Destaje', `${c.destaje === 'sup' ? 'ala superior' : 'las dos alas'}: dc = ${c.dct}${c.destaje === 'ambos' ? ` / ${c.dcb}` : ''} mm, c = ${c.cDes} mm, perno superior a ${c.LevB} mm del corte`) : ''}
+    ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)} · a = ${c.a} mm`)}${t('Pernos', `${c.n} × ${dn} ${esc(c.grado)}-${esc(c.rosca)} · s = ${c.s} mm · agujeros ${c.agujeros === 'SSLT' ? 'de ranura corta horizontal' : 'estándar'}`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}${t('Soldadura', `filete ${c.w} mm por ambas caras · ${esc(c.electrodo)}`)}</table>`;
   return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Pernos', `${c.filas} × ${c.cols} de ${dn} ${esc(c.grado)}-${esc(c.rosca)}`)}${t('Separaciones', `s = ${c.s} · g = ${c.g} mm`)}${t('Bordes', `Lev = ${c.Lev} · Leh = ${c.Leh} mm`)}
     ${t('Chapa', `${c.tp} mm · ${esc(c.aceroPl)}`)}${t('Soporte', `t = ${c.tSop} mm · ${esc(c.aceroSop)}`)}</table>`;
 }

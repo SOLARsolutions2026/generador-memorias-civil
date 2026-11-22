@@ -86,6 +86,8 @@ function aplast(lc, t, d, Fu){
 }
 
 // ── Chapa de aleta en el alma (shear tab, una columna de pernos) ─────────────────
+// Revisión con Amo (22-nov): configuración convencional / extendida (Manual AISC 15.ª ed., parte 10, Tabla 10-9 y ec. 10-3),
+// requisitos completos, soldadura de 5/8·tp (el momento solo en la extendida), viga con destaje y 💡.
 function defaultsAleta(){
   return { tipo:'aleta', nom:'', desc:'',
     Vu:80, Nu:0,
@@ -93,8 +95,9 @@ function defaultsAleta(){
     soporte:'ala', tSop:10.7, aceroSop:'A572 Gr 50', dosLados:false,        // ala | alma (de columna) | viga (alma de viga principal)
     n:3, s:75, Lev:38, Leh:38, a:76, holgura:13,
     tp:9.5, aceroPl:'A36',
-    d:19.1, grado:'A325', rosca:'N',
-    w:6, electrodo:'E70XX' };
+    d:19.1, grado:'A325', rosca:'N', agujeros:'STD',                       // STD estándar | SSLT ranura corta horizontal (perpendicular a la carga)
+    w:6, electrodo:'E70XX',
+    destaje:'no', dct:35, dcb:35, cDes:110, LevB:38 };                      // viga con destaje: no | sup | ambos
 }
 function perfil(nom){
   const P = (G.PERFILES_LAM || []).find(x => x[0] === nom);
@@ -102,45 +105,93 @@ function perfil(nom){
   const [n, fam, h, b, tw, tf, r] = P;
   return { nom:n, fam, d:h, bf:b, tw, tf, r, T:h - 2 * (tf + r) };
 }
-function calcAleta(c){
+// Coeficiente C' del grupo con momento solo (centro instantáneo en el centroide), en mm: Manual AISC parte 7
+function cMomento(pernos){
+  const n = pernos.length, cy = pernos.reduce((a, p) => a + p.y, 0) / n, cx = pernos.reduce((a, p) => a + p.x, 0) / n;
+  const c = pernos.map(p => Math.hypot(p.x - cx, p.y - cy)), cm = Math.max(...c);
+  return cm > 0 ? c.reduce((a, ci) => a + Math.pow(1 - Math.exp(-10 * 0.34 * ci / cm), 0.55) * ci, 0) : 0;
+}
+function calcAleta(c, sinSug){
   const ch = [], av = [], pasos = [];
-  const V = +c.Vu || 0, d = +c.d, n = Math.max(1, Math.round(+c.n || 1)), s = +c.s, Lev = +c.Lev, Leh = +c.Leh, a = +c.a, tp = +c.tp;
+  const V = +c.Vu || 0, d = +c.d, n = Math.max(1, Math.round(+c.n || 1)), s = +c.s, Lev = +c.Lev, Leh = +c.Leh, a = +c.a, tp = +c.tp, hol = +c.holgura || 0;
   const pl = ACEROS[c.aceroPl], ac = ACEROS[c.aceroViga], sp = ACEROS[c.aceroSop], FEXX = ELECTRODOS[c.electrodo];
   const vg = perfil(c.viga); if(!vg) return { error:'Escoja el perfil de la viga.' };
-  const dh = agujero(d), dn = anchoNeto(d), Lp = (n - 1) * s + 2 * Lev, LehB = a - (+c.holgura || 0);
+  const ssl = c.agujeros === 'SSLT', des = ['sup', 'ambos'].includes(c.destaje) ? c.destaje : 'no';
+  const dh = agujero(d), dn = anchoNeto(d), Lp = (n - 1) * s + 2 * Lev, LehB = a - hol;
   const add = (grupo, nombre, ref, dem, cap, ud, extra) => ch.push({ grupo, nombre, ref, dem, cap, ud, ratio: cap > 0 ? dem / cap : Infinity, extra });
+  // Destaje: profundidades dct (arriba) y dcb (abajo), largo c desde el extremo de la viga, borde LevB del perno superior al corte
+  const dct = des !== 'no' ? +c.dct || 0 : 0, dcb = des === 'ambos' ? +c.dcb || 0 : 0, cD = des !== 'no' ? +c.cDes || 0 : 0, LevB = +c.LevB || 0;
+  const ho = vg.d - dct - dcb, yb = des !== 'no' ? dct + LevB - Lev : (vg.d - Lp) / 2;
   pasos.push(`Altura de la chapa Lp = (n − 1)·s + 2·Lev = (${n} − 1)·${s} + 2·${Lev} = ${r1(Lp)} mm`);
-  pasos.push(`Agujero estándar dh = d + 1.6 = ${r1(dh)} mm; para área neta se usa dh + 1.6 = ${r1(dn)} mm`);
+  pasos.push(`Agujero ${ssl ? 'de ranura corta horizontal (perpendicular a la carga): en el sentido de la carga mide' : 'estándar'} dh = d + 1.6 = ${r1(dh)} mm; para área neta se usa dh + 1.6 = ${r1(dn)} mm`);
+  if(des !== 'no') pasos.push(`Destaje ${des === 'sup' ? 'del ala superior' : 'de las dos alas'}: dc = ${dct}${dcb ? ` / ${dcb}` : ''} mm, c = ${cD} mm → altura del alma que queda ho = ${r1(ho)} mm; perno superior a ${LevB} mm del corte`);
 
-  // Requisitos geométricos (configuración convencional, Manual AISC parte 10)
+  // ── Configuración (Manual AISC 15.ª ed., parte 10): convencional si a ≤ 89 mm (3½"), 2 a 12 pernos y el espesor de la Tabla 10-9 ──
+  const tmaxC = n <= 5 ? (ssl ? Infinity : d / 2 + 1.6) : (ssl ? d / 2 + 1.6 : d / 2 - 1.6);
+  const espOk = tp <= tmaxC + 0.05 || vg.tw <= tmaxC + 0.05;
+  const geoConv = a <= 89 + 0.5 && n >= 2 && n <= 12;
+  const conv = geoConv && espOk;
+  const eB = conv ? (n >= 6 && !ssl ? a : a / 2) : a;
+  if(conv) pasos.push(`Configuración CONVENCIONAL (Manual AISC Tabla 10-9): a = ${a} ≤ 89 mm, n = ${n}, agujeros ${ssl ? 'de ranura corta' : 'estándar'} → excentricidad de los pernos e = ${eB === a ? 'a' : 'a/2'} = ${r1(eB)} mm; espesor máximo de la chapa o del alma ${tmaxC === Infinity ? 'sin límite' : `${r1(tmaxC)} mm`}`);
+  else { const pq = [!(a <= 89 + 0.5) && `a = ${a} mm > 89 mm`, !(n <= 12) && `n = ${n} > 12`, geoConv && !espOk && `ni la chapa (${tp} mm) ni el alma (${vg.tw} mm) cumplen el espesor máximo de la convencional (${r1(tmaxC)} mm)`].filter(Boolean).join('; ');
+    pasos.push(`Configuración EXTENDIDA (Manual AISC parte 10) porque ${pq || 'no cumple la convencional'}: pernos con e = a = ${a} mm y la chapa debe fluir antes de que fallen los pernos (espesor máximo, ec. 10-3)`);
+    av.push(`Se revisa como configuración EXTENDIDA (${pq || 'no cumple la convencional'}): pernos con e = a, soldadura con el momento Vu·a y espesor máximo de la ec. 10-3.`); }
+
+  // ── Requisitos de detallado ──
   const req = [];
   const bm = bordeMin(d);
   req.push(['Distancia al borde vertical Lev ≥ mín. Tabla F.2.10.3-4', Lev >= bm, `${Lev} ≥ ${bm} mm`]);
   req.push(['Distancia al borde horizontal de la chapa Leh ≥ 2d', Leh >= 2 * d - 0.5, `${Leh} ≥ ${r1(2 * d)} mm`]);
   req.push(['Distancia al borde en el alma de la viga Leh,v ≥ 2d', LehB >= 2 * d - 0.5, `${r1(LehB)} ≥ ${r1(2 * d)} mm (a − holgura)`]);
-  req.push(['Separación entre pernos s ≥ 3d (mín. 2.67d)', s >= 2.67 * d, `${s} ≥ ${r1(3 * d)} mm`]);
-  req.push(['Número de pernos entre 2 y 12', n >= 2 && n <= 12, `n = ${n}`]);
-  req.push(['Chapa o alma delgada (ductilidad): tp ≤ d/2 + 1.6 o tw ≤ d/2 + 1.6', tp <= d / 2 + 1.6 || vg.tw <= d / 2 + 1.6, `tp = ${tp}, tw = ${vg.tw}, d/2 + 1.6 = ${r1(d / 2 + 1.6)} mm`]);
-  req.push(['La chapa cabe en el alma recta de la viga: Lp ≤ T', Lp <= vg.T + 0.5, `${r1(Lp)} ≤ ${r1(vg.T)} mm`]);
+  req.push(['Separación entre pernos s ≥ 3d (mín. 2.67d)', n < 2 || s >= 2.67 * d, `${s} ≥ ${r1(3 * d)} mm`]);
+  req.push(['Una columna de 2 a 12 pernos', n >= 2 && n <= 12, `n = ${n}`]);
+  if(conv) req.push([`Espesor máximo (Tabla 10-9): tp ≤ ${tmaxC === Infinity ? '—' : r1(tmaxC)} o tw ≤ ${tmaxC === Infinity ? '—' : r1(tmaxC)} mm`, espOk, tmaxC === Infinity ? 'sin límite (ranura corta, n ≤ 5)' : `tp = ${tp}, tw = ${vg.tw} mm`]);
+  else {
+    // ec. 10-3: tmax = 6·Mmax/(Fy·Lp²), Mmax = (Fnv/0.90)·Ab·C'
+    const pcR = pernoCorte(d, c.grado, c.rosca, 1), Cp = cMomento(Array.from({ length:n }, (_, i) => ({ x:0, y:-i * s })));
+    const Mmax = pcR.Fnv / 0.9 * pcR.Ab * Cp;                             // N·mm
+    const tP = 6 * Mmax / (pl.Fy * Lp * Lp), tW = 6 * Mmax / (ac.Fy * Lp * Lp);
+    pasos.push(`Espesor máximo (ec. 10-3): C' (momento solo) = ${r1(Cp)} mm; Mmax = (Fnv/0.90)·Ab·C' = (${pcR.Fnv}/0.90)·${r1(pcR.Ab)}·${r1(Cp)} = ${r2(Mmax / 1e6)} kN·m; tmax = 6·Mmax/(Fy·Lp²) = ${r1(tP)} mm (chapa), ${r1(tW)} mm (alma)`);
+    req.push(['Extendida: la chapa o el alma fluyen antes que los pernos, tp ≤ tmax o tw ≤ tmax (ec. 10-3)', tp <= tP + 0.05 || vg.tw <= tW + 0.05, `tp = ${tp} ≤ ${r1(tP)} o tw = ${vg.tw} ≤ ${r1(tW)} mm`]);
+  }
+  const yTop = des !== 'no' ? dct : vg.tf + vg.r, yBot = des === 'ambos' ? vg.d - dcb : vg.d - vg.tf - vg.r;
+  if(des === 'no') req.push(['La chapa cabe en el alma recta de la viga: Lp ≤ T', Lp <= vg.T + 0.5, `${r1(Lp)} ≤ ${r1(vg.T)} mm`]);
+  else req.push(['La chapa cabe en el alma bajo el destaje', yb >= yTop - 0.5 && yb + Lp <= yBot + 0.5, `de ${r1(yb)} a ${r1(yb + Lp)} mm (alma libre de ${r1(yTop)} a ${r1(yBot)} mm)`]);
   req.push(['Estabilidad de la viga en el apoyo: Lp ≥ T/2', Lp >= vg.T / 2 - 0.5, `${r1(Lp)} ≥ ${r1(vg.T / 2)} mm`]);
   req.push(['Soldadura que desarrolla la chapa: w ≥ 5/8·tp (dos filetes)', +c.w >= 0.625 * tp - 0.05, `${c.w} ≥ ${r1(0.625 * tp)} mm`]);
+  { const tmin = Math.min(tp, +c.tSop || tp), wmin = tmin <= 6 ? 3 : tmin <= 13 ? 5 : tmin <= 19 ? 6 : 8;
+    req.push(['Filete mínimo Tabla J2.4 (parte más delgada)', +c.w >= wmin, `${c.w} ≥ ${wmin} mm`]); }
+  if(des !== 'no'){
+    req.push(['Borde del perno superior al corte del destaje LevB ≥ mín.', LevB >= bm, `${LevB} ≥ ${bm} mm`]);
+    req.push(['Largo del destaje c ≤ 2d (validez de las ecuaciones del Manual AISC parte 9)', cD <= 2 * vg.d, `${cD} ≤ ${2 * vg.d} mm`]);
+    if(des === 'sup') req.push(['Profundidad del destaje dc ≤ d/2', dct <= vg.d / 2, `${dct} ≤ ${r1(vg.d / 2)} mm`]);
+    else req.push(['Profundidades del destaje dc ≤ 0.2d (arriba y abajo)', Math.max(dct, dcb) <= 0.2 * vg.d, `${Math.max(dct, dcb)} ≤ ${r1(0.2 * vg.d)} mm`]);
+    if(cD < a + Leh) av.push(`Revise que el destaje libre el ala del soporte: c = ${cD} mm (la chapa llega a a + Leh = ${r1(a + Leh)} mm de la cara).`);
+  }
+  if(ssl) av.push('Agujeros de ranura corta: van solo en la chapa o solo en el alma, con la ranura horizontal (perpendicular a la carga).');
   req.filter(r => !r[1]).forEach(r => av.push(`${r[0]}: ${r[2]}`));
 
-  // 1. Pernos: grupo excéntrico con e = a (método del centro instantáneo), conservador (configuración extendida)
+  // 1. Pernos: grupo excéntrico (método del centro instantáneo) con la excentricidad de la configuración
   const pernos = Array.from({ length:n }, (_, i) => ({ x:0, y:-i * s }));
-  const ic = icr(pernos, a, 0);
+  const ic = icr(pernos, eB, 0);
   const pc = pernoCorte(d, c.grado, c.rosca, 1);
   const lcE = Lev - dh / 2, lcI = s - dh;
-  const bpE = aplast(lcE, tp, d, pl.Fu), bpI = aplast(lcI, tp, d, pl.Fu), bv = aplast(lcI, vg.tw, d, ac.Fu);
-  const rn = Math.min(pc.phiRn, bpE.phiRn, bpI.phiRn, bv.phiRn);
-  const cual = rn === pc.phiRn ? 'cortante del perno' : rn === bv.phiRn ? 'aplastamiento en el alma de la viga' : 'aplastamiento en la chapa';
+  const bpE = aplast(lcE, tp, d, pl.Fu), bpI = aplast(n > 1 ? lcI : 1e6, tp, d, pl.Fu), bv = aplast(n > 1 ? lcI : 1e6, vg.tw, d, ac.Fu);
+  // con destaje la carga sube contra el borde del corte: el perno superior desgarra el alma hacia el destaje
+  const bvE = des !== 'no' ? aplast(LevB - dh / 2, vg.tw, d, ac.Fu) : bv;
+  // perno por perno (como el grupo excéntrico): la chapa empuja hacia abajo (borde inferior en el perno de abajo) y el alma de la viga
+  // hacia arriba (borde del destaje en el perno de arriba); capacidad = C·rn − Σ(rn − rnᵢ)·C/n
+  const rN = Math.min(pc.phiRn, bpI.phiRn, bv.phiRn);
+  const rI = pernos.map((_, i) => Math.min(pc.phiRn, i === n - 1 ? bpE.phiRn : bpI.phiRn, i === 0 ? bvE.phiRn : bv.phiRn));
+  const rn = rN, capP = ic.C * rN - rI.reduce((q, x) => q + (rN - x), 0) * ic.C / n, rMin = Math.min(...rI);
+  const cual = rMin === pc.phiRn ? 'cortante del perno' : rMin === bvE.phiRn || rMin === bv.phiRn ? 'aplastamiento en el alma de la viga' : 'aplastamiento en la chapa';
   pasos.push(`Cortante de un perno (F.2.10.3.6): φrn = 0.75·Fnv·Ab = 0.75·${pc.Fnv}·${r1(pc.Ab)} = ${r2(pc.phiRn)} kN`);
   pasos.push(`Aplastamiento en la chapa (F.2.10.3.10): borde lc = ${r1(lcE)} mm → ${r2(bpE.phiRn)} kN; interior lc = ${r1(lcI)} mm → ${r2(bpI.phiRn)} kN`);
-  pasos.push(`Aplastamiento en el alma de la viga: lc = ${r1(lcI)} mm, tw = ${vg.tw} mm → ${r2(bv.phiRn)} kN`);
-  pasos.push(`Centro instantáneo con e = a = ${a} mm: C = ${r3(ic.C)} (${ic.metodo}); φRn = C·φrn,mín = ${r3(ic.C)}·${r2(rn)} = ${r2(ic.C * rn)} kN (controla ${cual})`);
-  add('pernos', 'Pernos con excentricidad (centro instantáneo): cortante y aplastamiento', 'F.2.10.3 (J3-1, J3-6) · Manual AISC parte 7', V, ic.C * rn, 'kN', `C = ${r2(ic.C)} · φrn = ${r2(rn)} kN, el menor de: corte ${r2(pc.phiRn)}; aplastamiento chapa borde ${r2(bpE.phiRn)} / interior ${r2(bpI.phiRn)}; alma de la viga ${r2(bv.phiRn)} kN → controla ${cual}`);
+  pasos.push(`Aplastamiento en el alma de la viga: lc = ${r1(lcI)} mm, tw = ${vg.tw} mm → ${r2(bv.phiRn)} kN${des !== 'no' ? `; perno junto al destaje lc = ${r1(LevB - dh / 2)} mm → ${r2(bvE.phiRn)} kN` : ''}`);
+  pasos.push(`Centro instantáneo con e = ${r1(eB)} mm: C = ${r3(ic.C)} (${ic.metodo}); por perno ${rI.map(x => r2(x)).join(' · ')} kN (de arriba hacia abajo) → φRn = C·rn − Σ(rn − rnᵢ)·C/n = ${r2(capP)} kN (rn = ${r2(rn)} kN; el más débil por ${cual})`);
+  add('pernos', `Pernos con excentricidad e = ${eB === a ? 'a' : 'a/2'} (centro instantáneo, perno por perno): cortante y aplastamiento`, `F.2.10.3 (J3-1, J3-6) · Manual AISC ${conv ? 'Tabla 10-9' : 'parte 10 (extendida)'}`, V, capP, 'kN', `C = ${r2(ic.C)}; corte ${r2(pc.phiRn)}; aplastamiento chapa borde inferior ${r2(bpE.phiRn)} / interior ${r2(bpI.phiRn)}; alma de la viga ${r2(bv.phiRn)}${des !== 'no' ? ` / perno superior junto al destaje ${r2(bvE.phiRn)}` : ''} kN`);
 
-  // 2. Chapa
+  // 2. Chapa (flexión con Mu = Vu·a en las dos configuraciones: del lado seguro)
   const Agv = Lp * tp, Anv = (Lp - n * dn) * tp;
   const vy = 1.0 * 0.6 * pl.Fy * Agv / 1000, vr = 0.75 * 0.6 * pl.Fu * Anv / 1000;
   add('chapa', 'Fluencia por cortante', 'F.2.10.4.2 (J4-3)', V, vy, 'kN', `1.0·0.6·Fy·Agv, Agv = ${r1(Agv)} mm²`);
@@ -161,10 +212,12 @@ function calcAleta(c){
   const phiMb = 0.9 * Q * pl.Fy * Sg / 1e6;
   add('chapa', 'Pandeo de la chapa por flexión', 'Manual AISC (9-14 a 9-18)', Mu, phiMb, 'kN·m', `λ = ${r3(lam)}, Q = ${r3(Q)}; φMn = 0.9·Q·Fy·S`);
 
-  // 3. Soldadura chapa–soporte: dos filetes de longitud Lp con cortante y momento Vu·a
+  // 3. Soldadura chapa–soporte: dos filetes de longitud Lp. Convencional: solo cortante (los filetes de 5/8·tp desarrollan la chapa, Manual parte 10);
+  //    extendida: cortante + momento Vu·a (del lado seguro, decisión de Amo 22-nov)
   const qw = 0.75 * 0.6 * FEXX * 0.707 * (+c.w) / 1000;                   // kN/mm por filete
-  const fv = V / (2 * Lp), fm = Mu * 1000 / (2 * Lp * Lp / 6), fr = Math.hypot(fv, fm);
-  add('soldadura', 'Resistencia de los filetes (cortante + flexión)', 'F.2.10.2.4 (J2-4)', fr, qw, 'kN/mm', `f = √(fv² + fm²); fv = ${r3(fv)}, fm = ${r3(fm)} kN/mm; φ·0.6·FEXX·0.707·w`);
+  const fv = V / (2 * Lp), fm = conv ? 0 : Mu * 1000 / (2 * Lp * Lp / 6), fr = Math.hypot(fv, fm);
+  if(conv) add('soldadura', 'Resistencia de los filetes (cortante)', 'F.2.10.2.4 (J2-4) · Manual AISC parte 10', fr, qw, 'kN/mm', `fv = Vu/(2·Lp) = ${r3(fv)} kN/mm; φ·0.6·FEXX·0.707·w (con w ≥ 5/8·tp la soldadura es más fuerte que la chapa)`);
+  else add('soldadura', 'Resistencia de los filetes (cortante + flexión Vu·a)', 'F.2.10.2.4 (J2-4)', fr, qw, 'kN/mm', `f = √(fv² + fm²); fv = ${r3(fv)}, fm = ${r3(fm)} kN/mm; φ·0.6·FEXX·0.707·w`);
   // metal base: la chapa recibe un filete por cada cara → cada filete cuenta con la mitad de su espesor (rotura por cortante, J4-4)
   const qbCh = 0.75 * 0.6 * pl.Fu * tp / 2 / 1000;
   add('soldadura', 'Metal base de la chapa junto a los filetes', 'F.2.10.2.4 (J2-2) · J4-4', fr, qbCh, 'kN/mm', `0.75·0.6·Fu·tp/2 por filete (un filete en cada cara)`);
@@ -173,11 +226,69 @@ function calcAleta(c){
   // soporte: rotura por cortante a lo largo de cada filete; si hay conexión al otro lado del alma, cada lado cuenta con la mitad
   const qbS = 0.75 * 0.6 * sp.Fu * (+c.tSop) / (c.dosLados ? 2 : 1) / 1000;
   add('soporte', (c.soporte === 'ala' ? 'Ala de la columna' : 'Alma del soporte') + ': rotura bajo la soldadura', 'F.2.10.2.4 (J2-2) · Manual AISC (9-2)', fr, qbS, 'kN/mm', `0.75·0.6·Fu·t${c.dosLados ? '/2 (conexión a ambos lados)' : ''} por filete`);
-  const vb = 1.0 * 0.6 * ac.Fy * vg.d * vg.tw / 1000;
-  add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', V, vb, 'kN', `0.6·Fy·d·tw = 0.6·${ac.Fy}·${vg.d}·${vg.tw}`);
+  if(des === 'no'){
+    const vb = 1.0 * 0.6 * ac.Fy * vg.d * vg.tw / 1000;
+    add('viga', 'Cortante del alma de la viga', 'F.2.7.2 (G2-1), φv = 1.0', V, vb, 'kN', `0.6·Fy·d·tw = 0.6·${ac.Fy}·${vg.d}·${vg.tw}`);
+  } else {
+    const tw = vg.tw;
+    add('viga', 'Alma con destaje: fluencia por cortante', 'F.2.10.4.2 (J4-3)', V, 1.0 * 0.6 * ac.Fy * ho * tw / 1000, 'kN', `0.6·Fy·ho·tw, ho = ${r1(ho)} mm`);
+    add('viga', 'Alma con destaje: rotura por cortante', 'F.2.10.4.2 (J4-4)', V, 0.75 * 0.6 * ac.Fu * (ho - n * dn) * tw / 1000, 'kN', `Anv = (ho − n·${r1(dn)})·tw = ${r1((ho - n * dn) * tw)} mm²`);
+    const agv = (LevB + (n - 1) * s) * tw, anv = agv - (n - 0.5) * dn * tw, ant = (LehB - 0.5 * dn) * tw;
+    add('viga', 'Alma con destaje: bloque de cortante', 'F.2.10.4.3 (J4-5), Ubs = 1.0 · Manual AISC parte 9', V, 0.75 * Math.min(0.6 * ac.Fu * anv + ac.Fu * ant, 0.6 * ac.Fy * agv + ac.Fu * ant) / 1000, 'kN', `Agv = ${r1(agv)}, Anv = ${r1(anv)}, Ant = ${r1(ant)} mm² (hacia el destaje y el extremo de la viga)`);
+    // Sección en la cara del destaje: T (ala inferior + alma) si se corta arriba; rectángulo si se cortan las dos alas
+    const tf = vg.tf, bf = vg.bf, hw = des === 'sup' ? ho - tf : ho;
+    const partes = des === 'sup' ? [{ b:bf, h:tf, y:tf / 2 }, { b:tw, h:hw, y:tf + hw / 2 }] : [{ b:tw, h:ho, y:ho / 2 }];
+    const A = partes.reduce((q, p) => q + p.b * p.h, 0), yc = partes.reduce((q, p) => q + p.b * p.h * p.y, 0) / A;
+    const I = partes.reduce((q, p) => q + p.b * p.h ** 3 / 12 + p.b * p.h * (p.y - yc) ** 2, 0), Snet = I / Math.max(yc, ho - yc);
+    let yp; if(des === 'sup'){ yp = bf * tf >= A / 2 ? A / 2 / bf : tf + (A / 2 - bf * tf) / tw; } else yp = ho / 2;
+    const Znet = partes.reduce((q, p) => { const y0 = p.y - p.h / 2, y1 = p.y + p.h / 2;
+      const ab = Math.max(0, Math.min(y1, yp) - y0), ar = Math.max(0, y1 - Math.max(y0, yp));
+      return q + p.b * ab * (yp - (y0 + ab / 2)) + p.b * ar * ((Math.max(y0, yp) + ar / 2) - yp); }, 0);
+    const e = cD + hol, MuD = V * e / 1000;
+    let Fcr, txt;
+    if(des === 'sup'){
+      const f = cD / vg.d <= 1 ? 2 * cD / vg.d : 1 + cD / vg.d, k = cD / ho <= 1 ? 2.2 * Math.pow(ho / Math.max(cD, 1), 1.65) : 2.2 * ho / cD;
+      const Fe = 180700 * (tw / ho) ** 2 * f * k; Fcr = Math.min(ac.Fy, Fe);
+      txt = `ala superior: f = ${r3(f)}, k = ${r3(k)}, Fcr = 26 210 ksi·(tw/ho)²·f·k = ${r1(Fe)} ≤ Fy → ${r1(Fcr)} MPa (Manual AISC 9-6)`;
+    } else {
+      const Fyk = ac.Fy / 6.89476, lm = ho * Math.sqrt(Fyk) / (10 * tw * Math.sqrt(475 + 280 * (ho / Math.max(cD, 1)) ** 2));
+      const Qd = lm <= 0.7 ? 1 : lm <= 1.41 ? 1.34 - 0.486 * lm : 1.30 / (lm * lm); Fcr = ac.Fy * Qd;
+      txt = `dos alas: λ = ${r3(lm)}, Q = ${r3(Qd)}, Fcr = Fy·Q = ${r1(Fcr)} MPa (Manual AISC 9-14 a 9-16)`;
+    }
+    pasos.push(`Sección en la cara del destaje: A = ${r1(A)} mm², ȳ = ${r1(yc)} mm, I = ${Math.round(I)} mm⁴, Snet = ${Math.round(Snet)} mm³, Znet = ${Math.round(Znet)} mm³; e = c + holgura = ${r1(e)} mm → Mu = Vu·e = ${r3(MuD)} kN·m`);
+    add('viga', 'Alma con destaje: fluencia por flexión y pandeo local', 'Manual AISC parte 9 (9-6 / 9-14) · φb = 0.90', MuD, 0.9 * Fcr * Snet / 1e6, 'kN·m', txt);
+    add('viga', 'Alma con destaje: rotura por flexión', 'Manual AISC (9-4) · φ = 0.75', MuD, 0.75 * ac.Fu * Znet / 1e6, 'kN·m', `0.75·Fu·Znet`);
+    av.push('Viga con destaje: el borde cortado debe quedar con esquinas redondeadas (radio ≥ 13 mm, F.2.10 / J1.6) y sin muescas.');
+  }
 
   const max = ch.reduce((m, x) => Math.max(m, x.ratio), 0);
-  return { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ Lp, dh, LehB, pernos, vg, ic, a }, Mu };
+  const R = { ok:max <= 1 && !req.some(r => !r[1]), max, ch, req, av, pasos, geo:{ Lp, dh, LehB, pernos, vg, ic, a, yb, ho, dct, dcb, cD, des, conv, eB }, Mu };
+  if(sinSug || c._sinSug) return R;
+  // 💡 (revisión con Amo 22-nov): la solución más liviana que cumple todo (también las 6 fuerzas), cambiando
+  //    diámetro, número de pernos, espesor de la chapa y filete (5/8·tp); s y bordes a los mínimos si hace falta
+  if(Conex.calc({ ...c, _sinSug:true }).ok) return R;
+  const WS = [5, 6, 8, 10, 12, 14, 16], wDe = t => WS.find(x => x >= 0.625 * t - 0.05) || 16;
+  const dA = DIAM.map(x => x[1]).filter(x => x >= Math.min(+c.d, 19.1) - 1e-6 && x <= 25.4 + 1e-6);
+  let best = null;
+  for(const dd of dA){
+    for(let nn = 2; nn <= 12; nn++){
+      for(const t of ESP_PL.filter(x => x <= 19.1 + 1e-6)){
+        const o = { d:dd, n:nn, tp:t, w:Math.max(wDe(t), +c.w || 0) };
+        if(+c.s < 3 * dd) o.s = Math.ceil(3 * dd / 5) * 5;
+        const bmn = bordeMin(dd); if(+c.Lev < bmn) o.Lev = bmn; if(+c.Leh < 2 * dd) o.Leh = Math.ceil(2 * dd);
+        if(des !== 'no' && +c.LevB < bmn) o.LevB = bmn;
+        // con destaje también se prueba bajar la chapa lo más posible (perno superior más lejos del corte)
+        const Lp2 = (nn - 1) * (o.s || s) + 2 * (o.Lev || Lev), LevMax = Math.floor(yBot - Lp2 - dct + (o.Lev || Lev));
+        const ops = des !== 'no' && LevMax > (o.LevB || LevB) ? [o, { ...o, LevB:LevMax }] : [o];
+        const okO = ops.find(x => { const r = Conex.calc({ ...c, ...x, _sinSug:true }); return !r.error && r.ok; });
+        if(okO){ const peso = nn * dd * dd * 0.02 + t * Lp2 * 0.01;
+          if(!best || peso < best.peso) best = { ...okO, peso }; break; } }
+    }
+  }
+  if(best){ const { peso, ...o } = best, dnm = (DIAM.find(x => x[1] === o.d) || [o.d + ' mm'])[0];
+    R.sug = { tipo:'sold', ok:true, ...o, txt:`💡 Usar ${o.n} pernos de ${dnm}, chapa de ${o.tp} mm y filete de ${o.w} mm${o.s && o.s !== s ? ` (s = ${o.s} mm)` : ''}${o.LevB && o.LevB !== LevB ? ` con el perno superior a ${o.LevB} mm del destaje` : ''}` }; }
+  else R.av.push('No se encontró una chapa de aleta que cumpla (hasta 12 pernos de 1" y chapa de 19 mm): use doble angular, chapa de testa a cortante o revise la viga.');
+  return R;
 }
 
 // ── Grupo de pernos excéntrico (ménsula de chapa atornillada) ─────────────
