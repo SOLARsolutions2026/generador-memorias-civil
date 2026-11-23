@@ -59,7 +59,8 @@ function leerModelo(texto){
       const k = pat[c] || root.AnexoC.categoria(c, ''); if(k in o) o[k] = true; o.max = Math.max(o.max, Math.abs(f)); }
     return o; };
   const casos = Object.keys(est);
-  const serv = casos.filter(c => cb[c] && !/envelope/i.test(tipoCb[c] || '') && (i => i.D && !i.E && !i.N && i.max <= 1.0001)(info(c)));
+  // la Tabla C.9.5(b) es para cargas de gravedad: las de servicio con viento (D + W, 0.6D + W) no entran
+  const serv = casos.filter(c => cb[c] && !/envelope/i.test(tipoCb[c] || '') && (i => i.D && !i.E && !i.N && !i.W && i.max <= 1.0001)(info(c)));
   const viva = casos.filter(c => !cb[c] && (pat[c] || root.AnexoC.categoria(c, '')) === 'L');
   return { fr, J, G:root.AnexoC.ejesDe ? root.AnexoC.ejesDe(T) : null, apoyo, enNudo, M, U, casos, serv, viva, hayU:Object.keys(U).length > 0, vanos:vanos(fr, apoyo, enNudo, J) };
 }

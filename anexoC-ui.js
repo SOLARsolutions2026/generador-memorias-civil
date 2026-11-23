@@ -48,7 +48,7 @@ function guiaExportHTML(){
     <p class="hint" style="margin:0 0 8px">En el software: <b>File → Export → .s2k Text File…</b> Se abre la ventana «Choose Tables for Export to Text File». Marque las casillas en <b class="gx-ok">verde</b>.</p>
     <div class="gx"><div class="gx-tree">
       <div class="gx-h on">MODEL DEFINITION <span class="gx-why">lo más fácil: marque la casilla de arriba y queda todo</span></div>
-      ${it(1, 'System Data', 'versión y unidades')}${it(1, 'Property Definitions', 'materiales y secciones')}
+      ${it(1, 'System Data', 'versión, unidades y ejes (Grid Lines)')}${it(1, 'Property Definitions', 'materiales y secciones')}
       <div class="gx-i gx-1 on">Load Pattern Definitions</div>${it(2, 'Load Patterns', 'patrones D, Lr, W, E…')}${it(2, 'Response Combinations', 'combinaciones (las que revisa la app)')}${it(2, 'Auto Wave Loads · Response Spectrum · Time History · Power Spectral · Steady State', 'no se usan', false)}
       ${it(1, 'Other Definitions', 'no se usa', false)}
       ${it(1, 'Load Case Definitions', 'casos de carga')}${it(1, 'Connectivity Data', 'nudos y elementos')}
@@ -57,15 +57,20 @@ function guiaExportHTML(){
       ${it(1, 'Options/Preferences Data · Miscellaneous Data', 'no se usan', false)}
       <div class="gx-h">ANALYSIS RESULTS <span class="gx-why">solo estas</span></div>
       ${it(1, 'Run Information', '', false)}
-      <div class="gx-i gx-1">Joint Output</div>${it(2, 'Displacements', 'derivas (C-8) y torsión')}${it(2, 'Reactions', 'zapatas, pedestales y placa base')}
-      <div class="gx-i gx-1">Element Output</div><div class="gx-i gx-2">Frame Output</div>${it(3, 'Element Forces - Frames', 'fuerzas del Anexo D y conexiones')}
+      <div class="gx-i gx-1">Joint Output</div>${it(2, 'Displacements', 'derivas (C-8), torsión y voladizos (deflexiones)')}${it(2, 'Reactions', 'zapatas, pedestales y placa base')}
+      <div class="gx-i gx-1">Element Output</div><div class="gx-i gx-2">Frame Output</div>${it(3, 'Element Forces - Frames', 'fuerzas del Anexo D, conexiones y deflexiones')}
       ${it(1, 'Structure Output', '', false)}
       <div class="gx-h">DESIGN DATA <span class="gx-why">solo si corrió el diseño en acero (opcional)</span></div>
       ${it(1, 'Design Forces', '', false)}
       <div class="gx-i gx-1">Steel Frame</div>${it(2, 'Summary Data', 'longitudes, K y Cb por elemento')}${it(2, 'PMM Details', '')}
     </div><div class="gx-notas">
-      <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> marque las combinaciones de resistencia (U…), las de servicio y las envolventes de sismo (100%X 30%Y y 30%X 100%Y). Las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí.</div>
-      <div class="tip-l"><b>Para las deflexiones (Anexo D):</b> marque también las combinaciones de servicio (S…) y el caso de viva sola (Lr). Antes de correr el modelo, ponga más puntos de salida en las vigas: <b>Assign → Frame → Output Stations</b> → «Max Station Spacing» 0.5 m (con los 3 puntos que vienen por defecto la flecha es aproximada).</div>
+      <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí. Marque:
+        <ul style="margin:4px 0 0 16px;padding:0">
+          <li><b>U1 … U8</b> (resistencia): Anexo D y conexiones. U1 = 1.4D también le sirve a la app para separar la carga muerta (columna fuerte – viga débil).</li>
+          <li><b>S1 … S5</b> (servicio): S2 = D + Lr es la de las deflexiones; S1 = D ayuda a separar la gravedad; zapatas.</li>
+          <li><b>Las dos envolventes de sismo</b> (100%X 30%Y y 30%X 100%Y): derivas y torsión.</li>
+          <li><b>El caso de viva sola</b> (el patrón Lr, p. ej. «LIVE»): deflexión por carga viva.</li></ul></div>
+      <div class="tip-l"><b>Antes de correr el modelo</b> ponga más puntos de salida en las vigas: <b>Assign → Frame → Output Stations</b> → «Max Station Spacing» = 0.5 m. Con los 3 puntos que vienen por defecto la flecha queda aproximada.</div>
       <div class="tip-l"><b>Load Patterns (Model Def.):</b> déjelos todos («Select Load Patterns…» → todos).</div>
       <div class="tip-l"><b>Unidades:</b> antes de exportar ponga <b>KN, m, C</b> (abajo a la derecha de la pantalla del software).</div>
       <div class="tip-l gx-ft"><b>Diseño en acero → Preferences → «Framing Type»</b> (debe ser el mismo sistema escogido en Combinaciones):
