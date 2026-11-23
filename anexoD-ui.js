@@ -25,6 +25,76 @@ function filasDe(el, G){
   const g = S.m.anexos?.C?.modelo?.fuerzas?.grupos?.find(x => x.sec + '|' + x.fun === el.grupo);   // sin descarga: filas críticas guardadas
   return g ? [...Object.values(g.crit), ...Object.values(g.env).flatMap(e => [e.max, e.min])].filter(Boolean) : [];
 }
+// ═══ Deflexiones (pedido de Amo 22-nov; calc/flechas.js, límites de la Tabla C.9.5(b)) ═══
+let _flm = null;
+async function flModelo(){
+  const C = S.m.anexos?.C; if(!C?.archivo || typeof Flechas === 'undefined') return null;
+  if(_flm?.clave === C.archivo.fecha) return _flm.Mo;
+  const Mo = Flechas.leerModelo(await textoModelo(C)); _flm = { clave:C.archivo.fecha, Mo }; return Mo;
+}
+// Configuración del elemento (se crea la primera vez: las vigas se revisan por defecto)
+function flCfg(e){
+  if(!e.flecha) e.flecha = { on:/\|Viga$/.test(e.grupo || '') || /viga/i.test(e.desc || ''), tipoEl:'cub', noEst:'si', cons:'', origen:'modelo', man:{ d:'', L:'', vol:false } };
+  e.flecha.man = e.flecha.man || { d:'', L:'', vol:false };
+  return e.flecha;
+}
+function calcFl(e, Mo){
+  if(!e.res) return null;
+  const cfg = flCfg(e);
+  if(!cfg.on){ delete e.res.fl; if(e.res.ok) e.res.cumple = e.res.cumpleR ?? e.res.cumple; return null; }
+  const lim = Flechas.limite(cfg), cons = cfg.cons || lim.cons, manual = cfg.origen === 'manual' || e.fuerzas === 'manual' || !Mo;
+  let fl;
+  if(manual){
+    const d = parseFloat(cfg.man.d), L = parseFloat(cfg.man.L);
+    if(!(d >= 0) || !(L > 0)) fl = { ok:false, error:'Escriba la flecha del software [mm] y la luz [m].' };
+    else { const Ll = cfg.man.vol ? 2 * L : L, dl = Ll * 1000 / lim.den;
+      fl = { ok:true, manual:true, cumple:d <= dl, ratio:d / dl, d, dl, Ll, L, tipo:cfg.man.vol ? 'voladizo' : 'vano', caso:cfg.man.caso || '', avisos:[] }; }
+  } else {
+    const r = Flechas.revisarGrupo(Mo, e.grupo, { ...cfg, cons });
+    if(!r.ok) fl = { ok:false, error:r.error };
+    else { const p = r.peor;
+      fl = { ok:true, cumple:r.cumple, ratio:r.ratio, d:p.d * 1000, dl:p.dl * 1000, Ll:p.Ll, L:p.L, tipo:p.tipo, caso:p.caso, F:p.F, xF:p.xF, nVanos:r.nVanos, nVol:r.nVol, avisos:r.avisos };
+      if(cfg.noEst !== 'no' && Mo.viva.length){ const v = Flechas.revisarGrupo(Mo, e.grupo, { tipoEl:cfg.tipoEl, noEst:'no' });
+        if(v.ok) fl.ref = { d:v.peor.d * 1000, dl:v.peor.dl * 1000, den:v.lim.den, ratio:v.ratio, caso:v.peor.caso, F:v.peor.F, xF:v.peor.xF, L:v.peor.L, Ll:v.peor.Ll, tipo:v.peor.tipo }; } }
+  }
+  Object.assign(fl, { den:lim.den, fila:lim.fila, txt:lim.txt, cons, tipoEl:cfg.tipoEl, noEst:cfg.noEst });
+  e.res.fl = fl;
+  if(e.res.ok) e.res.cumple = (e.res.cumpleR ?? e.res.cumple) && (!fl.ok || fl.cumple);
+  return fl;
+}
+const flDesc = fl => `${fl.tipoEl === 'ent' ? 'Entrepiso' : 'Cubierta'}, ${fl.noEst === 'dano' ? 'con elementos no estructurales que se pueden dañar' : fl.noEst === 'si' ? 'con elementos no estructurales que no se dañan' : 'sin elementos no estructurales susceptibles de daño'}`;
+function flFilas(fl){
+  const f = [[fl.cons === 'viva' ? 'Solo viva' : 'Total de servicio', esc(fl.caso || '—'),
+    fl.manual ? 'escrita a mano' : `E${esc(fl.F)} · ${fl.tipo === 'voladizo' ? 'punta del voladizo' : `a ${fx(fl.xF, 2)} m`}`, fl.tipo === 'voladizo' ? `2 × ${fx(fl.L, 2)}` : fx(fl.L, 2),
+    fx(fl.d, 1), `${fx(fl.dl, 1)} (ℓ/${fl.den})`, fl.ratio, fl.cumple]];
+  if(fl.ref) f.push(['Solo viva (referencia)', esc(fl.ref.caso), `E${esc(fl.ref.F)} · ${fl.ref.tipo === 'voladizo' ? 'punta del voladizo' : `a ${fx(fl.ref.xF, 2)} m`}`, fl.ref.tipo === 'voladizo' ? `2 × ${fx(fl.ref.L, 2)}` : fx(fl.ref.L, 2), fx(fl.ref.d, 1), `${fx(fl.ref.dl, 1)} (ℓ/${fl.ref.den})`, fl.ref.ratio, fl.ref.ratio <= 1]);
+  return f;
+}
+function flHTML(e){
+  const fl = e.res?.fl; if(!fl) return '';
+  if(!fl.ok) return `<div class="note amber">${esc(fl.error)}</div>`;
+  const filas = flFilas(fl).map(([a, b, c, d, dd, l, r, ok]) => { const col = r > 1 ? '#dc2626' : r > 0.9 ? '#d97706' : '#10b981';
+    return [a, b, c, d, dd, l, `<span class="bar-d"><i style="width:${Math.min(100, r * 100)}%;background:${col}"></i></span> <b>${fx(r, 3)}</b>`, pill(ok ? 'ok' : 'no', ok ? 'Cumple' : 'No cumple')]; });
+  return `${tabla(['Revisión', 'Combinación', 'Dónde', 'ℓ [m]', 'Flecha [mm]', 'Límite [mm]', 'Relación', ''], filas)}
+    ${fl.manual ? '' : `<div class="hint" style="margin-top:6px">Calculada con los momentos del modelo a lo largo de cada vano (κ = M/EI integrada dos veces) y medida respecto a la línea entre sus apoyos${fl.nVol ? '; en los voladizos, la punta respecto al apoyo' : ''}. Se revisaron ${fl.nVanos} vano${fl.nVanos === 1 ? '' : 's'} y se muestra el que controla. Para corroborarla, en el software vea la deformada con «${esc(fl.caso)}» en el elemento ${esc(fl.F)}.</div>`}
+    ${(fl.avisos || []).map(a => `<div class="note amber" style="margin-top:6px">${esc(a)}</div>`).join('')}`;
+}
+function flFormHTML(e){
+  const c = flCfg(e), ro_ = esIng() ? '' : 'disabled', hayMod = e.fuerzas !== 'manual' && !!S.m.anexos?.C?.archivo;
+  const op = (v, t, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(t)}</option>`;
+  const sel = (a, l, ops, cur, h) => `<div class="f"><label>${l}</label><select data-a="flecha.${a}" ${ro_}>${ops.map(([v, t]) => op(v, t, cur)).join('')}</select>${h ? `<div class="hint">${h}</div>` : ''}</div>`;
+  const lim = Flechas.limite(c), man = c.origen === 'manual' || !hayMod;
+  return `<h4 class="sub">Deflexión (servicio) · Tabla C.9.5(b)</h4>${fChk(e, 'flecha.on', 'Revisar la deflexión de este elemento')}
+    ${c.on ? `<div class="fg g3" style="margin-top:6px">${sel('tipoEl', 'Tipo de elemento', [['cub', 'Cubierta'], ['ent', 'Entrepiso']], c.tipoEl)}
+      ${sel('noEst', '¿Soporta elementos no estructurales?', [['no', 'No'], ['si', 'Sí, que NO se dañan (lámina, paneles)'], ['dano', 'Sí, que se dañan (drywall, vidrio, muros)']], c.noEst)}
+      ${hayMod ? sel('origen', 'Origen de la flecha', [['modelo', 'Calculada con el modelo'], ['manual', 'Escrita a mano (valor del software)']], c.origen) : '<div></div>'}
+      ${sel('cons', 'Deflexión considerada', [['', `Automática: ${lim.cons === 'viva' ? 'viva sola' : 'total de servicio'}`], ['total', 'Total de servicio (D + L)'], ['viva', 'Solo viva']], c.cons, lim.cons === 'total' ? 'Total: del lado seguro, el acero no tiene flujo plástico' : '')}
+      <div class="f"><label>Límite</label><input value="ℓ / ${lim.den}" disabled/><div class="hint">Tabla C.9.5(b), fila ${lim.fila}</div></div>
+      ${man ? fIn(e, 'flecha.man.d', 'Flecha del software [mm]') + fIn(e, 'flecha.man.L', 'Luz ℓ [m]', { h:'Entre apoyos' }) + fIn(e, 'flecha.man.caso', 'Combinación', { num:false, ph:'D + Lr' }) : ''}</div>
+      ${man ? fChk(e, 'flecha.man.vol', 'Es un voladizo (ℓ = 2 × largo)') : ''}
+      <div id="dFl" style="margin-top:8px"></div>` : ''}`;
+}
+
 // Diseño en acero del software (Anexo C), si el archivo lo trae
 const disenoSw = () => { const Dz = S.m.anexos?.C?.modelo?.diseno; return Dz?.n ? Dz : null; };
 // Longitudes [m], K y Cb que usó el software en un elemento del modelo, con los cambios a mano (✎) del ingeniero
@@ -62,7 +132,7 @@ function calcMet(el, G){
       u:Ri.ok ? { Lx:+(Ri.Lx/1000).toFixed(3), Ly:+(Ri.Ly/1000).toFixed(3), Lb:+(Ri.Lb/1000).toFixed(3), Kx:Ri.Kx, Ky:Ri.Ky, Cb:Ri.Cb } : null,
       sw:v ? { Lx:v.Lx, Ly:v.Ly, Lb:v.Lb, Kx:v.Kx, Ky:v.Ky, Cb:v.Cb } : null, ed:v?.ed || {} }));
   } else { R = AnexoD.revisar(el, filas); R._uso = { el, filas }; }
-  el.res = R.ok ? { ok:true, ratio:+R.ratio.toFixed(3), cumple:R.cumple, n:R.filas, fecha:new Date().toISOString(), Fc:R.Fc || null, fuente:sw ? 'programa' : 'manual',
+  el.res = R.ok ? { ok:true, ratio:+R.ratio.toFixed(3), cumple:R.cumple, cumpleR:R.cumple, n:R.filas, fecha:new Date().toISOString(), Fc:R.Fc || null, fuente:sw ? 'programa' : 'manual',
     rp: porEl && porEl.some(x => x.rp != null) ? Math.max(...porEl.map(x => x.rp ?? 0)) : null, porEl,
     checks:Object.fromEntries(Object.entries(R.checks).map(([k, v]) => [k, { r:+v.r.toFixed(4), f:v.f }])), avisos:R.avisos } : { ok:false, error:R.error, porEl };
   return R;
@@ -217,7 +287,8 @@ function detMetHTML(e){
           <div class="hint">Se revisan todas las filas del grupo en las combinaciones de resistencia del Anexo C y se toma la que controla en cada chequeo.</div></div>`
       : '<div class="note amber">No hay fuerzas del modelo: súbelo con resultados en el Anexo C o escríbelas a mano.</div>'}
     <div id="dProg"></div>
-    <div id="dRes" style="margin-top:12px"><p class="muted">Calculando…</p></div></div>`;
+    <div id="dRes" style="margin-top:12px"><p class="muted">Calculando…</p></div>
+    ${typeof Flechas !== 'undefined' && e.tipo !== 'BAR' ? flFormHTML(e) : ''}</div>`;
 }
 
 
@@ -324,6 +395,8 @@ async function pintarResMet(e){
   if($('#dSec')) $('#dSec').innerHTML = seccionHTML(e);
   let G = null; try{ G = await filasModelo(); }catch(err){ console.warn(err); }
   const R = calcMet(e, G);
+  if(flCfg(e).on){ let Mo = null; if(e.fuerzas !== 'manual' && e.flecha.origen !== 'manual') try{ Mo = await flModelo(); }catch(err){ console.warn(err); } calcFl(e, Mo); } else calcFl(e, null);
+  if($('#dFl')) $('#dFl').innerHTML = flHTML(e);
   const b = $('#dRes'); if(!b || selMet !== e.id) return;
   if($('#dProg')){ $('#dProg').innerHTML = progHTML(e); activarProg(e); }
   if(!R || !R.ok){ b.innerHTML = `<div class="note amber">${esc(e.res?.error || 'Faltan datos.')}</div>`; return; }
@@ -374,7 +447,7 @@ function activarMet(e){
   $('#dDet [data-a="nom"]')?.addEventListener('change', () => paneAnexoD());
   $$('#dDet [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', debounce(() => {
     setP(e, inp.dataset.a, inp.type === 'checkbox' ? inp.checked : inp.value);
-    if(['perfil','grupo','acero'].includes(inp.dataset.a)) paneAnexoD(); else re();
+    if(['perfil','grupo','acero','flecha.on','flecha.origen','flecha.noEst','flecha.man.vol'].includes(inp.dataset.a)) paneAnexoD(); else re();
   }, 350)));
   $$('[data-tipo]').forEach(b => b.onclick = () => { e.tipo = b.dataset.tipo; guardarMemoria(); paneAnexoD(); });
   $$('[data-fz]').forEach(b => b.onclick = () => { e.fuerzas = b.dataset.fz; guardarMemoria(); paneAnexoD(); });
@@ -382,12 +455,22 @@ function activarMet(e){
   pintarResMet(e);
 }
 
+// Flechas de todos los elementos (impresión y memoria general)
+async function calcFlTodos(met){
+  let Mo = null; if(met.some(e => flCfg(e).on && e.fuerzas !== 'manual' && e.flecha.origen !== 'manual')) try{ Mo = await flModelo(); }catch(err){ console.warn(err); }
+  for(const e of met) calcFl(e, Mo);
+}
+const flPrintHTML = (e, tb) => { const fl = e.res?.fl; if(!fl?.ok) return '';
+  return `<h4>Deflexión (servicio)</h4><p>${esc(flDesc(fl))}: límite ℓ/${fl.den} (NSR-10 Tabla C.9.5(b), fila ${fl.fila}, criterio adoptado). ${fl.manual ? 'Flecha tomada del modelo estructural.' : `Flecha calculada con los momentos del modelo a lo largo de cada vano, medida respecto a la línea entre sus apoyos${fl.nVol ? ' (en voladizos, la punta respecto al apoyo, con ℓ = 2 veces el largo)' : ''}; se presenta el vano que controla.`}</p>
+    ${tb(['Revisión', 'Combinación', 'Dónde', 'ℓ [m]', 'Flecha [mm]', 'Límite [mm]', 'Relación', 'Resultado'], flFilas(fl).map(([a, b, c, d, dd, l, r, ok]) => [a, b, c, d, dd, l, fx(r, 3), ok ? 'Cumple' : '<b>No cumple</b>']))}`; };
+
 // ═══ Páginas imprimibles del Anexo D (elementos metálicos) ═══
 async function imprimirD(){
   const D = datosD(); if(!D.met.length && !D.zap.length && !D.ped.length) return toast('No hay elementos para imprimir.');
   let G = null; toast('Calculando todos los elementos…', 20000);
   if(D.met.length) try{ G = await filasModelo(); }catch(e){ console.warn(e); }
   const Rs = D.met.map(e => ({ e, R:calcMet(e, G) }));
+  await calcFlTodos(D.met);
   const conc = await conPrintHTML(D, 'D'); guardarMemoria();
   $('#print-area').innerHTML = anexoDPrintHTML(Rs, conc);
   await document.fonts.ready; toast('Listo.', 800); imprimirConMargen(`${S.m.consecutivo}_ANEXO_D`);
@@ -403,7 +486,8 @@ function anexoDPrintHTML(Rs, conc=''){
       <tr><td><b>Proyecto No.:</b></td><td>${esc(m.consecutivo)}</td><td><b>Fecha:</b></td><td>${esc(fecha)}</td></tr></table></div>
     ${Rs.length ? `<h3>${L}-1 Elementos metálicos — resumen</h3>
     <p>Los elementos se diseñan por el método de resistencia (NSR-10 F.2) con las fuerzas del modelo estructural en las combinaciones de resistencia. Para cada chequeo se revisan todas las filas de resultados del grupo y se presenta la que controla; la interacción de carga axial y flexión se evalúa con las ecuaciones H1-1 con fuerzas que actúan simultáneamente.</p>
-    ${tb(['Elemento','Sección','Descripción','Acero','Relación D/C','Resultado'], Rs.map(({ e, R }) => [`<b>${esc(e.nom)}</b>`, esc(nomSec(e)), esc(e.desc || ''), esc(e.acero), R?.ok ? fx(R.ratio,3) : '—', R?.ok ? (R.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}` : ''}
+    ${tb(['Elemento','Sección','Descripción','Acero','Relación D/C', ...(Rs.some(x => x.e.res?.fl?.ok) ? ['Deflexión'] : []), 'Resultado'], Rs.map(({ e, R }) => [`<b>${esc(e.nom)}</b>`, esc(nomSec(e)), esc(e.desc || ''), esc(e.acero), R?.ok ? fx(R.ratio,3) : '—',
+      ...(Rs.some(x => x.e.res?.fl?.ok) ? [e.res?.fl?.ok ? `${fx(e.res.fl.ratio, 3)} (ℓ/${e.res.fl.den})` : '—'] : []), R?.ok ? (e.res?.cumple ? 'Cumple' : '<b>No cumple</b>') : 'Sin datos']))}` : ''}
   </section>
   ${ok.map(({ e, R }, i) => `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(e.nom)} — ${esc(nomSec(e))}${e.desc ? ' (' + esc(e.desc) + ')' : ''}</h3>
     <div class="ax-mapas" style="grid-template-columns:1fr 1.5fr;align-items:center"><figure>${svgSeccion(R.s)}</figure>
@@ -416,6 +500,7 @@ function anexoDPrintHTML(Rs, conc=''){
     ${tb(['Chequeo','Demanda','Capacidad φRn','Relación','Fila que controla'], Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => { const ch = R.checks[k], fl = ch.f;
       return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr,3)} / ${fx(fl.mm,3)}` : `${fx(dem(fl),2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R),2)} ${u}`, fx(ch.r,3), filaTxt(fl)]; }))}
     <div class="ax-box">Relación máxima = ${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div>
+    ${flPrintHTML(e, tb)}
     ${R.avisos.map(a => `<p class="ax-nota">${esc(a)}</p>`).join('')}
     ${detalleMetHTML(R, true)}</section>`).join('')}${conc}</div>`;
 }

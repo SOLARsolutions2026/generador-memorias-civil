@@ -38,6 +38,7 @@ async function ctxMemoria(){
   const D = datosD(), E = datosE();
   let G = null; if(D.met.length) try{ G = await filasModelo(); }catch(e){ console.warn(e); }
   const met = D.met.map(e => ({ e, R:calcMet(e, G) }));
+  try{ await calcFlTodos(D.met); }catch(e){ console.warn(e); }
   let RR = null; try{ RR = await reacModelo(); }catch(e){ console.warn(e); }
   const zap = RR ? D.zap.map(z => ({ z, X:calcCim(z, 'zap', D, RR) })) : [], ped = RR ? D.ped.map(p => ({ p, X:calcCim(p, 'ped', D, RR) })) : [];
   let con = [], scw = null; const des = typeof esDES === 'function' && esDES() && an.C?.modelo;
@@ -277,6 +278,9 @@ function memDoc(ctx, ed){
       fig('met.' + e.id, `Elemento ${e.nom}: combinación con mayor solicitación`, '');
       tabla(['Chequeo', 'Demanda', 'Capacidad φRn', 'Relación', 'Verificación'], Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => { const ch = R.checks[k], fl = ch.f;
         return [`${n} (${k === 'int' ? fl.ec : ref})`, k === 'int' ? `${fx(fl.pr, 3)} / ${fx(fl.mm, 3)}` : `${fx(dem(fl), 2)} ${u}`, k === 'int' ? '≤ 1.00' : `${fx(cap(R), 2)} ${u}`, fx(ch.r, 3), ch.r <= 1 ? 'Cumple' : '<b>No cumple</b>']; }), `Resumen de diseño del elemento ${e.nom}, sección ${nomSec(e)}`);
+      const fd = e.res?.fl; if(fd?.ok){
+        T('fl.' + e.id, `Deflexión: ${flDesc(fd).toLowerCase()}, por lo que el límite es ℓ/${fd.den} (NSR-10 Tabla C.9.5(b), criterio adoptado para los elementos de acero). Con ${fd.caso ? `la combinación ${fd.caso}` : 'las cargas de servicio'} la flecha máxima es ${fx(fd.d, 1)} mm frente a ${fx(fd.dl, 1)} mm admisibles (relación ${fx(fd.ratio, 3)}): ${fd.cumple ? 'cumple' : 'NO cumple'}.`);
+        tabla(['Revisión', 'Combinación', 'ℓ [m]', 'Flecha [mm]', 'Límite [mm]', 'Relación', 'Verificación'], flFilas(fd).map(([a, b, c, d, dd, l, r, ok]) => [a, b, d, dd, l, fx(r, 3), ok ? 'Cumple' : '<b>No cumple</b>']), `Deflexión del elemento ${e.nom}`); }
       ver('D');
     } }
   if(ctx.scw && ctx.scw.length){ H(3, 'Columna fuerte – viga débil');

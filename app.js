@@ -562,7 +562,7 @@ const ANEXOS_LISTO = {
   D: { n:'Anexo D', huella: an => { const sin = l => (l || []).map(e => ({ ...e, res:undefined })); return huella(sin(an.D?.met), sin(an.D?.zap), sin(an.D?.ped), an.D?.cServ, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res); }, faltan(an){
     const met = an.D?.met || [], f = [];
     if(!met.length && !an.D?.zap?.length && !an.D?.ped?.length) f.push('elementos');
-    for(const e of [...met, ...(an.D?.zap || []), ...(an.D?.ped || [])]){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple && !esRevEst()) f.push(e.res.ratio > 1 ? `${e.nom} no cumple (relación ${e.res.ratio})` : `${e.nom} no cumple un requisito (separación, núcleo, esbeltez o anclaje)`); }
+    for(const e of [...met, ...(an.D?.zap || []), ...(an.D?.ped || [])]){ if(!e.res?.ok) f.push(`${e.nom}: ${e.res?.error || 'sin calcular'}`); else if(!e.res.cumple && !esRevEst()) f.push(e.res.fl?.ok && !e.res.fl.cumple && e.res.ratio <= 1 ? `${e.nom} no cumple la deflexión (relación ${fx(e.res.fl.ratio, 2)})` : e.res.ratio > 1 ? `${e.nom} no cumple (relación ${e.res.ratio})` : `${e.nom} no cumple un requisito (separación, núcleo, esbeltez o anclaje)`); }
     return f; } },
   E: { n:'Anexo E', huella: an => huella((an.E?.con || []).map(c => ({ ...c, res:undefined })), (an.D?.met || []).map(e => ({ ...e, res:undefined })), an.D?.ped, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res), faltan(an){
     const con = an.E?.con || [], f = [];

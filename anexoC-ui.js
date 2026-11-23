@@ -65,6 +65,7 @@ function guiaExportHTML(){
       <div class="gx-i gx-1">Steel Frame</div>${it(2, 'Summary Data', 'longitudes, K y Cb por elemento')}${it(2, 'PMM Details', '')}
     </div><div class="gx-notas">
       <div class="tip-l"><b>Load Cases (Results) → «Select Load Cases…»:</b> marque las combinaciones de resistencia (U…), las de servicio y las envolventes de sismo (100%X 30%Y y 30%X 100%Y). Las fuerzas, reacciones y desplazamientos solo salen para lo que marque aquí.</div>
+      <div class="tip-l"><b>Para las deflexiones (Anexo D):</b> marque también las combinaciones de servicio (S…) y el caso de viva sola (Lr). Antes de correr el modelo, ponga más puntos de salida en las vigas: <b>Assign → Frame → Output Stations</b> → «Max Station Spacing» 0.5 m (con los 3 puntos que vienen por defecto la flecha es aproximada).</div>
       <div class="tip-l"><b>Load Patterns (Model Def.):</b> déjelos todos («Select Load Patterns…» → todos).</div>
       <div class="tip-l"><b>Unidades:</b> antes de exportar ponga <b>KN, m, C</b> (abajo a la derecha de la pantalla del software).</div>
       <div class="tip-l gx-ft"><b>Diseño en acero → Preferences → «Framing Type»</b> (debe ser el mismo sistema escogido en Combinaciones):
