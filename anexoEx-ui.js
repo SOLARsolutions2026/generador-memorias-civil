@@ -247,7 +247,7 @@ function uneHTML(c, D, T){
       : !de || !a ? '<p class="hint" style="margin:2px 0 0">Escoja los dos elementos.</p>'
       : !nudos.length ? `<div class="note amber" style="margin-top:6px">En el modelo, ${esc(de.nom)} (${esc(de.grupo || 'sin grupo')}) no llega a ${esc(a.nom)} (${esc(a.grupo || 'sin grupo')}) en ningún nudo. Revise los grupos en el Anexo D.</div>`
       : `<p class="hint" style="margin:4px 0 0">En el modelo, ${esc(de.nom)} llega a ${esc(a.nom)} en <b>${nudos.length} nudo${nudos.length > 1 ? 's' : ''}</b>. Toque un nudo para quitarlo si esa unión es de otro tipo:</p>
-        <div class="chips">${ext.map(x => { const r = relExt(T, x); return `<button type="button" class="chip ${off.has(String(x.j)) ? 'off' : ''} ${CX_CORT.includes(c.tipo) && r === 'emp' ? 'rig' : ''}" data-cxnudo="${esc(x.j)}" ${ro_} title="${esc(REL_TXT[r])}">nudo ${esc(x.j)} · E${esc(x.F)} (${x.e})${REL_ICO[r]}</button>`; }).join('')}</div>
+        <div class="chips">${ext.map(x => { const r = relExt(T, x); return `<button type="button" class="chip ${off.has(String(x.j)) ? 'off' : ''} ${CX_CORT.includes(c.tipo) && r === 'emp' ? 'rig' : ''}" data-cxnudo="${esc(x.j)}" ${ro_} title="${esc(REL_TXT[r])}">nudo ${esc(x.j)}${ejeNudo(T, x.j) ? ` · ${esc(ejeNudo(T, x.j))}` : ''} · E${esc(x.F)} (${x.e})${REL_ICO[r]}</button>`; }).join('')}</div>
         ${avisoRel(c, ext.filter(x => !off.has(String(x.j))), T)}`}</div>`;
 }
 async function crearCx(t){
@@ -403,9 +403,9 @@ async function pintarResortes(){
         if(!h || !h.clase) continue;
         const n = R === 'R1' ? '1' : '2', rs = h.Sj / 3;
         const que = h.clase === 'rigida' ? `Rotation ${n} restringida` : h.clase === 'art' ? `Rotation ${n} libre` : `Rotation ${n} libre + resorte <b>${fmt(rs)}</b> kN·m/rad`;
-        const est = nudos.map(j => { const a = ap[j]; if(!a) return chip(j, false, 'el nudo no es apoyo en el modelo');
+        const est = nudos.map(j => { const a = ap[j]; if(!a) return chip(j + (ejeNudo(T, j) ? ` · ${ejeNudo(T, j)}` : ''), false, 'el nudo no es apoyo en el modelo');
           const v = sp[j]?.[R] || 0, ok = h.clase === 'rigida' ? a[R] : h.clase === 'art' ? !a[R] : !a[R] && v > 0 && Math.abs(v - rs) <= 0.3 * rs;
-          return chip(j, ok, a[R] ? 'restringida' : v ? `resorte ${fmt(v)}` : 'libre sin resorte'); }).join('');
+          return chip(j + (ejeNudo(T, j) ? ` · ${ejeNudo(T, j)}` : ''), ok, a[R] ? 'restringida' : v ? `resorte ${fmt(v)}` : 'libre sin resorte'); }).join('');
         filas.push([nom, `Nudos (Joint Springs)<br/><small>eje ${ej} · K = ${fx(h.K, 1)}</small>`, que, est || '<span class="hint">sin nudos</span>']);
       }
       continue;
@@ -415,7 +415,7 @@ async function pintarResortes(){
     const que = g.clase === 'rigida' ? 'Extremo empotrado (sin liberar)' : g.clase === 'art' ? `M3 liberado${g._req ? '<br/><small style="color:#b45309">no cumple todos los requisitos de detallado</small>' : ''}` : `Partial Fixity M3 = <b>${fmt(rs)}</b> kN·m/rad`;
     const est = ext.map(x => { const r = relExt(T, x), k = x.e === 'i' ? T[x.F]?.ki : T[x.F]?.kj;
       const ok = g.clase === 'rigida' ? r === 'emp' : g.clase === 'art' ? r === 'lib' : r === 'parc' && k > 0 && Math.abs(k - rs) <= 0.3 * rs;
-      return chip(`${x.F}-${x.e} (n ${x.j})`, ok, (r === 'emp' ? 'empotrado' : r === 'lib' ? 'M3 liberado' : r === 'parc' ? `resorte ${fmt(k || 0)}` : '?') + (T[x.F]?.rDed ? ' (deducido de las fuerzas: el archivo no trae la tabla de liberaciones)' : '')); }).join('');
+      return chip(`${x.F}-${x.e} (n ${x.j}${ejeNudo(T, x.j) ? ` · ${ejeNudo(T, x.j)}` : ''})`, ok, (r === 'emp' ? 'empotrado' : r === 'lib' ? 'M3 liberado' : r === 'parc' ? `resorte ${fmt(k || 0)}` : '?') + (T[x.F]?.rDed ? ' (deducido de las fuerzas: el archivo no trae la tabla de liberaciones)' : '')); }).join('');
     if(ext.some(x => T[x.F]?.rDed)) T._ded = true;
     filas.push([nom, `Extremos de viga (Frame Releases)<br/><small>${g.K != null && isFinite(g.K) ? `K = ${fx(g.K, 1)}` : g.tipo === 'cortante' ? 'conexión simple' : ''}</small>`, que, est || '<span class="hint">sin extremos del modelo</span>']);
   }
@@ -426,6 +426,9 @@ async function pintarResortes(){
     <div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Conexión</th><th>Dónde</th><th>Qué poner</th><th>Estado en el modelo</th></tr></thead>
     <tbody>${filas.map(f => `<tr>${f.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+
+// Ubicación de un nudo por los ejes del modelo (pedido de Amo 22-nov): «Ejes 1 y B»
+const ejeNudo = (T, j) => T?._G && T._J?.[j] ? AnexoC.ubicar(T._G, T._J[j]) : '';
 
 // ─── Columna fuerte – viga débil (pedido de Amo 21-nov; solo pórticos DES, NSR-10 F.3 = AISC 341-10 E3.4a) ───
 // En cada nudo y en cada sentido (X, Y): ΣM*pc / ΣM*pb > 1. M*pc = Zc·(Fyc − Puc/Ag) de cada columna que llega (Puc = mayor compresión del
@@ -462,7 +465,7 @@ function scwb(D, ctx){
         const Mpr = 1.1 * s.Ry * s.Fy * s.Zx / 1e6, sh = s.d / 2000, Lh = Math.max(0.5, (v.f.L || 0) - dc / 1000 - 2 * sh), Vpr = 2 * Mpr / Lh;
         Mpb += Mpr + Vpr * (sh + dc / 2000); tB.push(`${s.nom} (L ${fx(v.f.L, 2)} m)`); }
       const ratio = Mpb > 0 ? Mpc / Mpb : Infinity, exc = !arriba && PucMax < 0.3 * Pc;
-      out.push({ j, dir, cols:tC, vigas:tB, Mpc, Mpb, ratio, ok:ratio > 1, exc, falta });
+      out.push({ j, eje:ejeNudo(T, j), dir, cols:tC, vigas:tB, Mpc, Mpb, ratio, ok:ratio > 1, exc, falta });
     }
   }
   return out;
@@ -472,7 +475,7 @@ const SCWB_NOTA = 'ΣM*pc = Σ Zc·(Fyc − Puc/Ag) de las columnas que llegan a
 function scwbTablaHTML(fs, imp){
   const pillE = f => { const e = scwbEstado(f); return imp ? e : `<span class="pill ${e === 'Cumple' ? 'ok' : e === 'No cumple' ? 'no' : 'gray'}">${e}</span>`; };
   return `<div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Nudo</th><th>Sentido</th><th>Columnas</th><th>Vigas</th><th>ΣM*pc [kN·m]</th><th>ΣM*pb [kN·m]</th><th>ΣM*pc / ΣM*pb</th><th>Resultado</th></tr></thead>
-    <tbody>${fs.map(f => `<tr><td>${esc(f.j)}</td><td>${f.dir}</td><td style="text-align:left">${f.cols.map(esc).join('<br/>')}</td><td style="text-align:left">${f.vigas.map(esc).join('<br/>')}${f.falta.length ? `<br/><small>${esc(f.falta.join('; '))}</small>` : ''}</td><td>${fx(f.Mpc, 1)}</td><td>${fx(f.Mpb, 1)}</td><td><b>${isFinite(f.ratio) ? fx(f.ratio, 2) : '—'}</b></td><td>${pillE(f)}</td></tr>`).join('')}</tbody></table></div>`;
+    <tbody>${fs.map(f => `<tr><td>${esc(f.j)}${f.eje ? `<br/><small>${esc(f.eje)}</small>` : ''}</td><td>${f.dir}</td><td style="text-align:left">${f.cols.map(esc).join('<br/>')}</td><td style="text-align:left">${f.vigas.map(esc).join('<br/>')}${f.falta.length ? `<br/><small>${esc(f.falta.join('; '))}</small>` : ''}</td><td>${fx(f.Mpc, 1)}</td><td>${fx(f.Mpb, 1)}</td><td><b>${isFinite(f.ratio) ? fx(f.ratio, 2) : '—'}</b></td><td>${pillE(f)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function scwbCardHTML(){
   if(!esDES() || !S.m.anexos?.C?.modelo) return '';

@@ -295,7 +295,7 @@ function derivasCardHTML(C, M){
   const r = d.res, hA = alturaDer(C);
   const tabDir = dir => { const x = r?.[dir]; if(!x) return '';
     return `<div class="tor-dir"><b>Sismo sentido ${dir}</b> <span class="hint">(caso ${esc(x.caso)})</span>
-      ${tabla(['Nudo', 'U1 [mm]', 'U2 [mm]', 'Δ = √(U1²+U2²) [mm]', 'Deriva Δ/h', '≤ 1 %'], x.n.map(n => [esc(n.j), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? pill('ok', 'Cumple') : pill('no', 'No cumple')]))}</div>`; };
+      ${tabla(['Nudo', 'U1 [mm]', 'U2 [mm]', 'Δ = √(U1²+U2²) [mm]', 'Deriva Δ/h', '≤ 1 %'], x.n.map(n => [esc(n.j) + (n.eje ? `<br/><small>${esc(n.eje)}</small>` : ''), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? pill('ok', 'Cumple') : pill('no', 'No cumple')]))}</div>`; };
   const sug = r?.ok && !r.cumple && typeof bulbHTML === 'function' ? bulbHTML({ tit:'deriva', por:`La deriva máxima es ${fx(r.max * 100, 2)} % de h y el límite es 1 %: la estructura es muy flexible lateralmente.`,
     ops:[{ t:'Subir la sección de las columnas (más inercia en el sentido que no cumple) y volver a correr el modelo.' }, { t:'Agregar arriostramientos (diagonales) en los pórticos del sentido que no cumple.' }, { t:'Revisar la conexión columna–placa base: si en el modelo está articulada y en realidad es empotrada, el desplazamiento baja.' }, { t:'Confirmar que el caso usado sea la envolvente de las fuerzas sísmicas sin dividir por R y que h sea la altura correcta.' }] }) : '';
   return `<div class="card"><div class="ct"><span>C-8 Derivas (A.6)</span>${r?.ok ? (r.cumple ? pill('ok', `Cumple · máx ${fx(r.max * 100, 2)} %`) : pill('no', `No cumple · máx ${fx(r.max * 100, 2)} %`)) : pill('pend', 'Sin revisar')}</div>
@@ -326,13 +326,16 @@ function activarDerivas(C, M){
     if(!cX || !cY) return toast('Escoge el caso de cada sentido.', 3500);
     try{
       toast('Leyendo desplazamientos…', 15000);
-      const pega = $('#derPega')?.value.trim(), D = AnexoC.desplazamientos(pega || await textoModelo(C));
+      const pega = $('#derPega')?.value.trim(), txt = pega || await textoModelo(C), D = AnexoC.desplazamientos(txt);
+      let ejeJ = () => ''; if(!pega) try{ const TT = AnexoC.leer(txt), G = AnexoC.ejesDe(TT), JJ = {};
+        for(const r of TT['JOINT COORDINATES'] || []) JJ[r.Joint] = [+r.GlobalX || 0, +r.GlobalY || 0, +r.GlobalZ || 0];
+        if(G) ejeJ = j => JJ[j] ? AnexoC.ubicar(G, JJ[j]) : ''; }catch(e){ console.warn(e); }
       if(!D.n) throw new Error('No se encontraron desplazamientos en el archivo ni en la tabla pegada.');
       const nor = t => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
       const dir = c0 => { const caso = D.casos.find(c => nor(c) === nor(c0)); if(!caso) throw new Error(`No encuentro el caso «${c0}». Casos en los datos: ${D.casos.join(' · ')}.`);
         const n = nudos.map(j => ({ j, ...(D.mapa[`${j}|${caso}`] || {}) })), falt = n.filter(x => x.U1 === undefined).map(x => x.j);
         if(falt.length) throw new Error(`No hay desplazamientos del nudo ${falt.join(', ')} en el caso ${caso}.`);
-        n.forEach(x => { x.D = Math.hypot(x.U1, x.U2); x.der = x.D / h; }); return { caso, n, max:Math.max(...n.map(x => x.der)) }; };
+        n.forEach(x => { x.D = Math.hypot(x.U1, x.U2); x.der = x.D / h; x.eje = ejeJ(x.j); }); return { caso, n, max:Math.max(...n.map(x => x.der)) }; };
       const X = dir(cX), Y = dir(cY), max = Math.max(X.max, Y.max);
       d.casoX = X.caso; d.casoY = Y.caso;
       d.res = { ok:true, X, Y, h, max, cumple:max <= 0.01, fecha:new Date().toISOString(), archivo:C.archivo?.fecha };
@@ -343,7 +346,7 @@ function activarDerivas(C, M){
 // Para el PDF del Anexo C
 function derivasPrintHTML(C, L, tb){
   const r = C.der?.res; if(!r?.ok) return '';
-  const filas = ['X', 'Y'].flatMap(dir => r[dir].n.map(n => [dir, esc(r[dir].caso), esc(n.j), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
+  const filas = ['X', 'Y'].flatMap(dir => r[dir].n.map(n => [dir, esc(r[dir].caso), esc(n.j) + (n.eje ? ` (${esc(n.eje)})` : ''), fx(n.U1 * 1000, 2), fx(n.U2 * 1000, 2), fx(n.D * 1000, 2), fx(n.der * 100, 3) + ' %', n.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
   return `<section class="ax-cont"><h3>${L}-8 Derivas (NSR-10 A.6)</h3><p>Desplazamientos de la envolvente de las fuerzas sísmicas sin dividir por R. Para una estructura de un nivel la deriva es Δ/h, con Δ = √(U1² + U2²) (A.6.3.1) y h = ${fx(r.h, 2)} m; el límite es 1.0 % de h (Tabla A.6.4-1).</p>
     ${tb(['Sentido','Caso','Nudo','U1 [mm]','U2 [mm]','Δ [mm]','Deriva','≤ 1 %'], filas)}
     <div class="ax-box">Deriva máxima = ${fx(r.max * 100, 3)} % — ${r.cumple ? 'CUMPLE' : 'NO CUMPLE'}</div></section>`;

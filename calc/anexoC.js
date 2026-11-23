@@ -366,6 +366,7 @@ function topologia(texto){
   Object.defineProperty(out, '_hayResortes', { value:!!tSp, enumerable:false });
   // Coordenadas de los nudos y ángulo de los ejes locales de cada elemento (columna fuerte – viga débil, 21-nov)
   Object.defineProperty(out, '_J', { value:J, enumerable:false });
+  Object.defineProperty(out, '_G', { value:ejesDe(T), enumerable:false });
   const tAx = Object.keys(T).find(n => /^FRAME LOCAL AXES ASSIGNMENTS 1/i.test(n));
   Object.defineProperty(out, '_ang', { value:Object.fromEntries((tAx ? T[tAx] : []).map(r => [r.Frame, num(r.Angle)])), enumerable:false });
   return out;
@@ -421,6 +422,45 @@ function disenoDe(T){
 }
 
 
-const api = { reacciones, filasGrupos, topologia, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
+// ─── Ejes del modelo (tabla «GRID LINES», pedido de Amo 22-nov): ubicar nudos y vigas por ejes ───
+function ejesDe(T){
+  const G = { X:[], Y:[] };
+  for(const r of T['GRID LINES'] || []){ if(r.CoordSys && r.CoordSys !== 'GLOBAL') continue; const d = String(r.AxisDir || '').toUpperCase();
+    if(G[d] && r.GridID) G[d].push({ id:r.GridID, c:num(r.XRYZCoord) }); }
+  for(const d of ['X','Y']) G[d].sort((a, b) => a.c - b.c);
+  return G.X.length || G.Y.length ? G : null;
+}
+const fm = v => (Math.round(v * 100) / 100).toFixed(2);
+// posición de un valor respecto a los ejes de una dirección: { on:id } | { a:id, b:id, d, de:id } (d = distancia al más cercano)
+function posEje(L, v, tol = 0.02){
+  if(!L?.length) return null;
+  const on = L.find(g => Math.abs(g.c - v) <= tol); if(on) return { on:on.id };
+  const lo = [...L].reverse().find(g => g.c < v), hi = L.find(g => g.c > v);
+  if(!lo) return { fuera:true, de:hi.id, d:hi.c - v }; if(!hi) return { fuera:true, de:lo.id, d:v - lo.c };
+  const n = v - lo.c <= hi.c - v ? lo : hi; return { a:lo.id, b:hi.id, de:n.id, d:Math.abs(v - n.c) };
+}
+const txtPos = q => q.on ? q.on : q.fuera ? `a ${fm(q.d)} m del eje ${q.de}` : `entre ${q.a} y ${q.b} (a ${fm(q.d)} m de ${q.de})`;
+// un punto [x, y, z]: «Ejes 1 y B», «Eje 1, entre B y C (a 0.30 m de B)», …
+function ubicar(G, p){
+  if(!G || !p) return '';
+  const x = posEje(G.X, p[0]), y = posEje(G.Y, p[1]);
+  if(x?.on && y?.on) return `Ejes ${y.on} y ${x.on}`;
+  if(y?.on) return `Eje ${y.on}${x ? ', ' + txtPos(x) : ''}`;
+  if(x?.on) return `Eje ${x.on}${y ? ', ' + txtPos(y) : ''}`;
+  const rg = q => q.fuera ? `cerca de ${q.de}` : `${q.a}–${q.b}`;
+  return x && y ? `Entre ejes ${rg(y)} y ${rg(x)}` : x ? `Entre ejes ${rg(x)}` : y ? `Entre ejes ${rg(y)}` : '';
+}
+// un tramo recto de a a b: «Eje 1, de C a A» (si va a lo largo de un eje)
+function ubicarTramo(G, a, b){
+  if(!G || !a || !b) return '';
+  const dx = Math.abs(b[0] - a[0]), dy = Math.abs(b[1] - a[1]);
+  const [Lt, Ll, i, k] = dx >= dy ? [G.Y, G.X, 1, 0] : [G.X, G.Y, 0, 1];   // Lt = ejes transversales (la línea), Ll = a lo largo
+  if(Math.min(dx, dy) > 0.02 * Math.max(dx, dy, 1e-9)) return `de ${ubicar(G, a)} a ${ubicar(G, b)}`;
+  const ln = posEje(Lt, (a[i] + b[i]) / 2), p0 = posEje(Ll, a[k]), p1 = posEje(Ll, b[k]);
+  const extr = q => !q ? '' : q.on ? q.on : q.fuera ? `${fm(q.d)} m después de ${q.de}` : `${fm(q.d)} m de ${q.de}`;
+  return `${ln ? (ln.on ? `Eje ${ln.on}` : `Entre ejes ${ln.a ?? ln.de} y ${ln.b ?? ln.de}`) : ''}${p0 && p1 ? `, de ${extr(p0)} a ${extr(p1)}` : ''}`;
+}
+
+const api = { ejesDe, ubicar, ubicarTramo, reacciones, filasGrupos, topologia, fuerzas, desplazamientos, leer, analizar, completas, pesoPropio, revisar, rangos, categoria, NOM_CAT };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

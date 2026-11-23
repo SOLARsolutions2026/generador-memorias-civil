@@ -32,6 +32,8 @@ async function flModelo(){
   if(_flm?.clave === C.archivo.fecha) return _flm.Mo;
   const Mo = Flechas.leerModelo(await textoModelo(C)); _flm = { clave:C.archivo.fecha, Mo }; return Mo;
 }
+// Ubicación de un elemento del modelo por ejes («Eje 1, de C a B»), si ya se leyó el modelo
+const ubicFrame = F => { const Mo = _flm?.Mo, f = Mo?.fr?.[F]; return f && Mo.G ? AnexoC.ubicarTramo(Mo.G, Mo.J[f.i], Mo.J[f.j]) : ''; };
 // Configuración del elemento (se crea la primera vez: las vigas se revisan por defecto)
 function flCfg(e){
   if(!e.flecha) e.flecha = { on:/\|Viga$/.test(e.grupo || '') || /viga/i.test(e.desc || ''), tipoEl:'cub', noEst:'si', cons:'', origen:'modelo', man:{ d:'', L:'', vol:false } };
@@ -53,9 +55,9 @@ function calcFl(e, Mo){
     const r = Flechas.revisarGrupo(Mo, e.grupo, { ...cfg, cons });
     if(!r.ok) fl = { ok:false, error:r.error };
     else { const p = r.peor;
-      fl = { ok:true, cumple:r.cumple, ratio:r.ratio, d:p.d * 1000, dl:p.dl * 1000, Ll:p.Ll, L:p.L, tipo:p.tipo, caso:p.caso, F:p.F, xF:p.xF, nVanos:r.nVanos, nVol:r.nVol, avisos:r.avisos };
+      fl = { ok:true, cumple:r.cumple, ratio:r.ratio, d:p.d * 1000, dl:p.dl * 1000, Ll:p.Ll, L:p.L, tipo:p.tipo, caso:p.caso, F:p.F, xF:p.xF, ubic:p.ubic || '', ubicP:p.ubicP || '', porViga:!!p.porViga, dAbs:p.dAbs != null ? p.dAbs * 1000 : null, nVanos:r.nVanos, nVol:r.nVol, avisos:r.avisos };
       if(cfg.noEst !== 'no' && Mo.viva.length){ const v = Flechas.revisarGrupo(Mo, e.grupo, { tipoEl:cfg.tipoEl, noEst:'no' });
-        if(v.ok) fl.ref = { d:v.peor.d * 1000, dl:v.peor.dl * 1000, den:v.lim.den, ratio:v.ratio, caso:v.peor.caso, F:v.peor.F, xF:v.peor.xF, L:v.peor.L, Ll:v.peor.Ll, tipo:v.peor.tipo }; } }
+        if(v.ok) fl.ref = { d:v.peor.d * 1000, dl:v.peor.dl * 1000, den:v.lim.den, ratio:v.ratio, caso:v.peor.caso, F:v.peor.F, xF:v.peor.xF, L:v.peor.L, Ll:v.peor.Ll, tipo:v.peor.tipo, ubicP:v.peor.ubicP || '' }; } }
   }
   Object.assign(fl, { den:lim.den, fila:lim.fila, txt:lim.txt, cons, tipoEl:cfg.tipoEl, noEst:cfg.noEst });
   e.res.fl = fl;
@@ -65,9 +67,9 @@ function calcFl(e, Mo){
 const flDesc = fl => `${fl.tipoEl === 'ent' ? 'Entrepiso' : 'Cubierta'}, ${fl.noEst === 'dano' ? 'con elementos no estructurales que se pueden dañar' : fl.noEst === 'si' ? 'con elementos no estructurales que no se dañan' : 'sin elementos no estructurales susceptibles de daño'}`;
 function flFilas(fl){
   const f = [[fl.cons === 'viva' ? 'Solo viva' : 'Total de servicio', esc(fl.caso || '—'),
-    fl.manual ? 'escrita a mano' : `E${esc(fl.F)} · ${fl.tipo === 'voladizo' ? 'punta del voladizo' : `a ${fx(fl.xF, 2)} m`}`, fl.tipo === 'voladizo' ? `2 × ${fx(fl.L, 2)}` : fx(fl.L, 2),
+    fl.manual ? 'escrita a mano' : `${fl.ubicP ? esc(fl.ubicP) + ' · ' : ''}E${esc(fl.F)}${fl.tipo === 'voladizo' ? ' · punta del voladizo' : fl.ubicP ? '' : ` · a ${fx(fl.xF, 2)} m`}`, fl.tipo === 'voladizo' ? `2 × ${fx(fl.L, 2)}` : fx(fl.L, 2),
     fx(fl.d, 1), `${fx(fl.dl, 1)} (ℓ/${fl.den})`, fl.ratio, fl.cumple]];
-  if(fl.ref) f.push(['Solo viva (referencia)', esc(fl.ref.caso), `E${esc(fl.ref.F)} · ${fl.ref.tipo === 'voladizo' ? 'punta del voladizo' : `a ${fx(fl.ref.xF, 2)} m`}`, fl.ref.tipo === 'voladizo' ? `2 × ${fx(fl.ref.L, 2)}` : fx(fl.ref.L, 2), fx(fl.ref.d, 1), `${fx(fl.ref.dl, 1)} (ℓ/${fl.ref.den})`, fl.ref.ratio, fl.ref.ratio <= 1]);
+  if(fl.ref) f.push(['Solo viva (referencia)', esc(fl.ref.caso), `${fl.ref.ubicP ? esc(fl.ref.ubicP) + ' · ' : ''}E${esc(fl.ref.F)}${fl.ref.tipo === 'voladizo' ? ' · punta del voladizo' : fl.ref.ubicP ? '' : ` · a ${fx(fl.ref.xF, 2)} m`}`, fl.ref.tipo === 'voladizo' ? `2 × ${fx(fl.ref.L, 2)}` : fx(fl.ref.L, 2), fx(fl.ref.d, 1), `${fx(fl.ref.dl, 1)} (ℓ/${fl.ref.den})`, fl.ref.ratio, fl.ref.ratio <= 1]);
   return f;
 }
 function flHTML(e){
@@ -76,7 +78,8 @@ function flHTML(e){
   const filas = flFilas(fl).map(([a, b, c, d, dd, l, r, ok]) => { const col = r > 1 ? '#dc2626' : r > 0.9 ? '#d97706' : '#10b981';
     return [a, b, c, d, dd, l, `<span class="bar-d"><i style="width:${Math.min(100, r * 100)}%;background:${col}"></i></span> <b>${fx(r, 3)}</b>`, pill(ok ? 'ok' : 'no', ok ? 'Cumple' : 'No cumple')]; });
   return `${tabla(['Revisión', 'Combinación', 'Dónde', 'ℓ [m]', 'Flecha [mm]', 'Límite [mm]', 'Relación', ''], filas)}
-    ${fl.manual ? '' : `<div class="hint" style="margin-top:6px">Calculada con los momentos del modelo a lo largo de cada vano (κ = M/EI integrada dos veces) y medida respecto a la línea entre sus apoyos${fl.nVol ? '; en los voladizos, la punta respecto al apoyo' : ''}. Se revisaron ${fl.nVanos} vano${fl.nVanos === 1 ? '' : 's'} y se muestra el que controla. Para corroborarla, en el software vea la deformada con «${esc(fl.caso)}» en el elemento ${esc(fl.F)}.</div>`}
+    ${fl.porViga && fl.dAbs != null ? `<div class="note blue" style="margin-top:6px">${fl.tipo === 'voladizo' ? 'Este voladizo' : 'Este vano'} (${esc(fl.ubic)}) se apoya en otra viga: la flecha se mide desde ese apoyo y lo que baja la otra viga se revisa en ella. En total ${fl.tipo === 'voladizo' ? 'la punta' : 'el punto'} baja <b>${fx(fl.dAbs, 1)} mm</b> (referencia: es lo que «sienten» la lámina o los paneles).</div>` : ''}
+    ${fl.manual ? '' : `<div class="hint" style="margin-top:6px">Calculada con los momentos del modelo a lo largo de cada vano (κ = M/EI integrada dos veces) y medida respecto a la línea entre sus apoyos${fl.nVol ? '; en los voladizos, la punta respecto al apoyo' : ''}. Donde otra viga llega, las fuerzas del modelo dicen si la sostiene (apoyo) o si le pone carga. Se revisaron ${fl.nVanos} vano${fl.nVanos === 1 ? '' : 's'} y se muestra el que controla. Para corroborarla, en el software vea la deformada con «${esc(fl.caso)}» en el elemento ${esc(fl.F)}${fl.ubic ? ` (${esc(fl.ubic)})` : ''}.</div>`}
     ${(fl.avisos || []).map(a => `<div class="note amber" style="margin-top:6px">${esc(a)}</div>`).join('')}`;
 }
 function flFormHTML(e){
@@ -395,7 +398,9 @@ async function pintarResMet(e){
   if($('#dSec')) $('#dSec').innerHTML = seccionHTML(e);
   let G = null; try{ G = await filasModelo(); }catch(err){ console.warn(err); }
   const R = calcMet(e, G);
-  if(flCfg(e).on){ let Mo = null; if(e.fuerzas !== 'manual' && e.flecha.origen !== 'manual') try{ Mo = await flModelo(); }catch(err){ console.warn(err); } calcFl(e, Mo); } else calcFl(e, null);
+  let Mo = null; if(e.fuerzas !== 'manual') try{ Mo = await flModelo(); }catch(err){ console.warn(err); }
+  calcFl(e, flCfg(e).on && e.flecha.origen !== 'manual' ? Mo : null);
+  if(e.res?.ok) e.res.FcEje = R?.Fc ? ubicFrame(R.Fc) : '';
   if($('#dFl')) $('#dFl').innerHTML = flHTML(e);
   const b = $('#dRes'); if(!b || selMet !== e.id) return;
   if($('#dProg')){ $('#dProg').innerHTML = progHTML(e); activarProg(e); }
@@ -405,7 +410,7 @@ async function pintarResMet(e){
     return [`<b>${n}</b> <span class="hint">${k === 'int' ? (f.ec || ref) : ref}</span>`, k === 'int' ? `P/φPn = ${fx(f.pr,3)} · ΣM/φMn = ${fx(f.mm,3)}` : `${fx(dem(f),2)} ${u}`, k === 'int' ? '1.00' : `${fx(cap(R),2)} ${u}`,
       `<span class="bar-d"><i style="width:${Math.min(100, c.r*100)}%;background:${col}"></i></span> <b>${fx(c.r,3)}</b>`, pill(c.r <= 1 ? 'ok' : 'no', c.r <= 1 ? 'Cumple' : 'No cumple') + (c.r > 1 && esIng() && R._uso && typeof Sugerir !== 'undefined' ? bulbHTML(Sugerir.metal(R._uso.el, R._uso.filas, k)) : ''), `<span class="ids">${filaTxt(f)}</span>`]; });
   b.innerHTML = `${tabla(['Chequeo','Demanda','Capacidad (φRn)','Relación','','Fila que controla'], filas)}
-    <div class="wtot" style="background:${R.cumple ? '' : '#b91c1c'}"><span>Relación demanda / capacidad máxima (${R.filas} filas revisadas${R.Fc ? ` · controla el elemento E${esc(R.Fc)}` : ''})</span><span>${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
+    <div class="wtot" style="background:${R.cumple ? '' : '#b91c1c'}"><span>Relación demanda / capacidad máxima (${R.filas} filas revisadas${R.Fc ? ` · controla el elemento E${esc(R.Fc)}${e.res?.FcEje ? ` (${esc(e.res.FcEje)})` : ''}` : ''})</span><span>${fx(R.ratio,3)} — ${R.cumple ? 'CUMPLE' : 'NO CUMPLE'}</span></div>
     ${R.avisos.map(a => `<div class="note amber" style="margin-top:8px">${esc(a)}</div>`).join('')}
     <details class="d-opc" style="margin-top:10px"><summary>Ver cálculo detallado</summary>${detalleMetHTML(R)}</details>`;
   const lista = document.querySelector(`[data-sel="${e.id}"] .pill`); if(lista) lista.outerHTML = pillRes(e.res);
@@ -457,11 +462,11 @@ function activarMet(e){
 
 // Flechas de todos los elementos (impresión y memoria general)
 async function calcFlTodos(met){
-  let Mo = null; if(met.some(e => flCfg(e).on && e.fuerzas !== 'manual' && e.flecha.origen !== 'manual')) try{ Mo = await flModelo(); }catch(err){ console.warn(err); }
-  for(const e of met) calcFl(e, Mo);
+  let Mo = null; if(met.some(e => e.fuerzas !== 'manual')) try{ Mo = await flModelo(); }catch(err){ console.warn(err); }
+  for(const e of met){ calcFl(e, flCfg(e).on && e.flecha.origen !== 'manual' ? Mo : null); if(e.res?.ok && e.res.Fc) e.res.FcEje = ubicFrame(e.res.Fc); }
 }
 const flPrintHTML = (e, tb) => { const fl = e.res?.fl; if(!fl?.ok) return '';
-  return `<h4>Deflexión (servicio)</h4><p>${esc(flDesc(fl))}: límite ℓ/${fl.den} (NSR-10 Tabla C.9.5(b), fila ${fl.fila}, criterio adoptado). ${fl.manual ? 'Flecha tomada del modelo estructural.' : `Flecha calculada con los momentos del modelo a lo largo de cada vano, medida respecto a la línea entre sus apoyos${fl.nVol ? ' (en voladizos, la punta respecto al apoyo, con ℓ = 2 veces el largo)' : ''}; se presenta el vano que controla.`}</p>
+  return `<h4>Deflexión (servicio)</h4><p>${esc(flDesc(fl))}: límite ℓ/${fl.den} (NSR-10 Tabla C.9.5(b), fila ${fl.fila}, criterio adoptado). ${fl.manual ? 'Flecha tomada del modelo estructural.' : `Flecha calculada con los momentos del modelo a lo largo de cada vano, medida respecto a la línea entre sus apoyos${fl.nVol ? ' (en voladizos, la punta respecto al apoyo, con ℓ = 2 veces el largo)' : ''}; se presenta el vano que controla${fl.ubic ? ` (${esc(fl.ubic)})` : ''}.${fl.porViga && fl.dAbs != null ? ` Ese tramo se apoya en otra viga, cuya flecha se revisa en ella; el desplazamiento vertical total del punto es ${fx(fl.dAbs, 1)} mm.` : ''}`}</p>
     ${tb(['Revisión', 'Combinación', 'Dónde', 'ℓ [m]', 'Flecha [mm]', 'Límite [mm]', 'Relación', 'Resultado'], flFilas(fl).map(([a, b, c, d, dd, l, r, ok]) => [a, b, c, d, dd, l, fx(r, 3), ok ? 'Cumple' : '<b>No cumple</b>']))}`; };
 
 // ═══ Páginas imprimibles del Anexo D (elementos metálicos) ═══
@@ -492,7 +497,7 @@ function anexoDPrintHTML(Rs, conc=''){
   ${ok.map(({ e, R }, i) => `<section class="ax-cont"><h3>${L}-1.${i+1} ${esc(e.nom)} — ${esc(nomSec(e))}${e.desc ? ' (' + esc(e.desc) + ')' : ''}</h3>
     <div class="ax-mapas" style="grid-template-columns:1fr 1.5fr;align-items:center"><figure>${svgSeccion(R.s)}</figure>
       <table class="ax-kv">${(ps => ps.filter((_, i) => i % 2 === 0).map((q, i) => `<tr><td>${q[0]}</td><td>${q[1]}</td>${ps[2*i+1] ? `<td>${ps[2*i+1][0]}</td><td>${ps[2*i+1][1]}</td>` : '<td></td><td></td>'}</tr>`).join(''))(propsSeccion(R.s))}</table></div>
-    <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]${R.Fc ? ` (elemento ${esc(R.Fc)}, el que controla)` : ''}</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
+    <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]${R.Fc ? ` (elemento ${esc(R.Fc)}${e.res?.FcEje ? `, ${esc(e.res.FcEje)}` : ''}, el que controla)` : ''}</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
       ${R.s.tipo !== 'BAR' ? `<tr><td>Kx · Ky · Kz · Cb</td><td>${R.Kx} · ${R.Ky} · ${R.Kz} · ${R.Cb}</td></tr>` : ''}
       <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados${e.res?.porEl?.length > 1 ? `, ${e.res.porEl.length} elementos revisados uno por uno` : ''}`}</td></tr>
       ${e.res?.porEl ? `<tr><td>Longitudes arriostradas y Cb</td><td>datos de cálculo${e.res.porEl.length > 1 ? ' de cada elemento' : ''}</td></tr>` : ''}</table>

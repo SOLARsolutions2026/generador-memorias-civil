@@ -258,7 +258,7 @@ function memDoc(ctx, ed){
     H(2, 'Chequeo de derivas');
     T('der', 'Las derivas se revisan con los desplazamientos de la envolvente de las fuerzas sísmicas sin reducir (A.6). Para una estructura de un nivel la deriva es el desplazamiento horizontal total Δ = √(U1² + U2²) dividido por la altura, y debe ser menor o igual al 1 % de la altura (Tabla A.6.4-1).');
     if(der){
-      const filas = ['X', 'Y'].flatMap(d => der[d].n.map(x => [d, esc(der[d].caso), esc(x.j), fx(x.U1 * 1000, 2), fx(x.U2 * 1000, 2), fx(x.D * 1000, 2), fx(der.h, 2), fx(x.der * 100, 3) + ' %', x.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
+      const filas = ['X', 'Y'].flatMap(d => der[d].n.map(x => [d, esc(der[d].caso), esc(x.j) + (x.eje ? ` (${esc(x.eje)})` : ''), fx(x.U1 * 1000, 2), fx(x.U2 * 1000, 2), fx(x.D * 1000, 2), fx(der.h, 2), fx(x.der * 100, 3) + ' %', x.der <= 0.01 ? 'Cumple' : '<b>No cumple</b>']));
       tabla(['Sentido', 'Caso', 'Nudo', 'U1 [mm]', 'U2 [mm]', 'Δ [mm]', 'h [m]', 'Deriva', '≤ 1 %'], filas, 'Chequeo de derivas con las fuerzas sísmicas sin reducir');
       out(`<p>La deriva máxima es ${fx(der.max * 100, 3)} % de la altura: ${der.cumple ? 'cumple' : 'NO cumple'} con el límite de 1.0 %. El detalle está en el ANEXO C.</p>`);
     }
@@ -286,7 +286,7 @@ function memDoc(ctx, ed){
   if(ctx.scw && ctx.scw.length){ H(3, 'Columna fuerte – viga débil');
     const nc = ctx.scw.filter(f => scwbEstado(f) === 'No cumple').length;
     T('scwb', `Por tratarse de un pórtico con disipación especial de energía (DES), en cada nudo se verifica que las columnas sean más fuertes a flexión que las vigas que llegan (NSR-10 F.3, AISC 341-10 E3.4a): ΣM*pc / ΣM*pb > 1.0. ${nc ? `${nc} nudo${nc > 1 ? 's' : ''} no cumple${nc > 1 ? 'n' : ''} esta condición.` : 'Todos los nudos revisados cumplen la condición o están exceptuados.'}`);
-    tabla(['Nudo', 'Sentido', 'ΣM*pc [kN·m]', 'ΣM*pb [kN·m]', 'ΣM*pc / ΣM*pb', 'Resultado'], ctx.scw.map(f => [esc(f.j), f.dir, fx(f.Mpc, 1), fx(f.Mpb, 1), isFinite(f.ratio) ? fx(f.ratio, 2) : '—', scwbEstado(f)]), 'Verificación columna fuerte – viga débil');
+    tabla(['Nudo', 'Sentido', 'ΣM*pc [kN·m]', 'ΣM*pb [kN·m]', 'ΣM*pc / ΣM*pb', 'Resultado'], ctx.scw.map(f => [esc(f.j) + (f.eje ? ` (${esc(f.eje)})` : ''), f.dir, fx(f.Mpc, 1), fx(f.Mpb, 1), isFinite(f.ratio) ? fx(f.ratio, 2) : '—', scwbEstado(f)]), 'Verificación columna fuerte – viga débil');
     T('scwb.n', SCWB_NOTA); }
   if(ctx.ped.length || ctx.zap.length){ H(3, 'Diseño de elementos de concreto');
     for(const { p, X } of ctx.ped){ if(!X?.ok) continue;
