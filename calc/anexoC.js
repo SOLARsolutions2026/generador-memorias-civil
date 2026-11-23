@@ -457,6 +457,8 @@ function ubicarTramo(G, a, b){
   const [Lt, Ll, i, k] = dx >= dy ? [G.Y, G.X, 1, 0] : [G.X, G.Y, 0, 1];   // Lt = ejes transversales (la línea), Ll = a lo largo
   if(Math.min(dx, dy) > 0.02 * Math.max(dx, dy, 1e-9)) return `de ${ubicar(G, a)} a ${ubicar(G, b)}`;
   const ln = posEje(Lt, (a[i] + b[i]) / 2), p0 = posEje(Ll, a[k]), p1 = posEje(Ll, b[k]);
+  // viga que no va sobre un eje (p. ej. el lindero de un lote en cuchilla): se dice de qué cruce a qué cruce va
+  if(!ln?.on && Math.abs(a[i] - b[i]) > 0.02) return `De ${ubicar(G, a).replace(/^E/, 'e')} a ${ubicar(G, b).replace(/^E/, 'e')}`;
   const extr = q => !q ? '' : q.on ? q.on : q.fuera ? `${fm(q.d)} m después de ${q.de}` : `${fm(q.d)} m de ${q.de}`;
   return `${ln ? (ln.on ? `Eje ${ln.on}` : `Entre ejes ${ln.a ?? ln.de} y ${ln.b ?? ln.de}`) : ''}${p0 && p1 ? `, de ${extr(p0)} a ${extr(p1)}` : ''}`;
 }
