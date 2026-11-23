@@ -443,6 +443,22 @@ function scwb(D, ctx){
   const prop = el => { const P = PL.find(x => x[0] === el.perfil); if(!P) return null; const ac = AnexoD.ACEROS[el.acero] || AnexoD.ACEROS['A572 Gr 50'];
     return { nom:P[0], d:P[2], A:P[7], Zx:P[10], Zy:P[13], Fy:ac[0], Ry:/A36/.test(el.acero || '') ? 1.5 : 1.1 }; };
   const porNudo = {}; for(const F in T){ const f = T[F]; for(const [e, j] of [['i', f.i], ['j', f.j]]) (porNudo[j] = porNudo[j] || []).push({ F, e, f }); }
+  // Composición de cada combinación del modelo (pedido de Amo 22-nov: cortante de gravedad y Ω0): factor de D, de la viva de entrepiso y si lleva sismo
+  const Cm = S.m.anexos?.C?.modelo, cats = Object.fromEntries((Cm?.patrones || []).map(p => [p.n, p.cat])), cbs = Object.fromEntries((Cm?.combos || []).map(c => [c.n, c]));
+  const Lf = S.m.anexos?.K?.pat?.L || '';      // viva de entrepiso (la de cubierta Lr no entra en las combinaciones con sismo)
+  const info = (n, f = 1, prof = 0, o = { D:0, Lf:0, E:false, otro:false }) => { const c = cbs[n];
+    if(!c || prof > 6){ const k = cats[n] || AnexoC.categoria(n, ''); if(k === 'D') o.D += f; else if(k === 'E') o.E = true; else if(Lf && n === Lf) o.Lf += f; else o.otro = true; return o; }
+    const env = /envelope/i.test(c.tipo || '');
+    for(const [cs, fc] of Object.entries(c.casos || {})){ if(env){ const q = info(cs, 1, prof + 1); if(q.E) o.E = true; if(q.otro || q.D || q.Lf) o.otro = true; } else info(cs, f * fc, prof + 1, o); }
+    return o; };
+  const INF = {}, inf = n => INF[n] ??= info(n);
+  const O0 = 3.0;                               // Ω0 de los pórticos de acero resistentes a momento (NSR-10 Tabla A.3-3)
+  // fuerzas de gravedad sin mayorar (D y viva de entrepiso) en un extremo, a partir de las combinaciones de solo D y de D + L
+  const grav = (fs, k) => { const pD = fs.find(r => { const i = inf(r.c); return i.D > 0 && !i.Lf && !i.E && !i.otro; });
+    if(!pD) return null; const D = pD[k] / inf(pD.c).D;
+    const pL = Lf ? fs.find(r => { const i = inf(r.c); return i.Lf > 0 && !i.E && !i.otro; }) : null;
+    const L = pL ? (pL[k] - inf(pL.c).D * D) / inf(pL.c).Lf : 0;
+    return { D, L, comb:pD.c }; };
   const out = [];
   for(const j of Object.keys(porNudo).sort((a, b) => (+a || 0) - (+b || 0))){
     const lst = porNudo[j], pj = J[j]; if(!pj) continue;
@@ -451,27 +467,36 @@ function scwb(D, ctx){
     for(const dir of ['X', 'Y']){
       const vs = vigas.filter(v => { const q = J[v.e === 'i' ? v.f.j : v.f.i]; if(!q) return false; const dx = Math.abs(q[0] - pj[0]), dy = Math.abs(q[1] - pj[1]); return dir === 'X' ? dx >= dy : dy > dx; });
       if(!vs.length) continue;
-      let Mpc = 0, Mpb = 0, arriba = false, PucMax = 0, Pc = Infinity, dc = 0; const tC = [], tB = [], falta = [];
+      let Mpc = 0, Mpb = 0, arriba = false, PucMax = 0, Pc = Infinity, dc = 0, sinO = false, sinVg = false; const tC = [], tB = [], falta = [];
       for(const c of cols){ const el = elDe(c.f.g), s = el && prop(el); if(!s){ falta.push(`columna ${c.f.g.split('|')[0]} sin perfil I en el Anexo D`); continue; }
         const q = J[c.e === 'i' ? c.f.j : c.f.i]; if(q && q[2] > pj[2] + 1e-6) arriba = true;
         const a = (ang[c.F] || 0) * Math.PI / 180, pX = Math.abs(Math.cos(a)) >= Math.abs(Math.sin(a)), fuerte = (dir === 'X') === pX, Z = fuerte ? s.Zx : s.Zy;
         const fs = (G?.[c.f.g]?.filas || []).filter(r => String(r.F) === String(c.F));
         const st = fs.length ? (c.e === 'i' ? Math.min(...fs.map(r => r.st)) : Math.max(...fs.map(r => r.st))) : null;
-        const Puc = Math.max(0, ...fs.filter(r => Math.abs(r.st - st) < 1e-6).map(r => -r.P));
+        const fe = fs.filter(r => Math.abs(r.st - st) < 1e-6), g = grav(fe, 'P'), sis = fe.filter(r => inf(r.c).E);
+        // Puc con la carga sísmica amplificada: 1.2D + 0.5L + Ω0·E, con E = (fila con sismo) − (su parte de gravedad)
+        let Puc, conO = false;
+        if(g && sis.length){ conO = true; Puc = Math.max(0, ...sis.map(r => { const i = inf(r.c), PE = r.P - i.D * g.D - i.Lf * g.L; return -(1.2 * g.D + 0.5 * g.L + O0 * PE); })); }
+        else { Puc = Math.max(0, ...fe.map(r => -r.P)); sinO = true; }
         PucMax = Math.max(PucMax, Puc); Pc = Math.min(Pc, s.Fy * s.A / 1000); dc = Math.max(dc, s.d);
         Mpc += Math.max(0, Z * (s.Fy - Puc * 1000 / s.A) / 1e6);
-        tC.push(`${s.nom} ${q && q[2] > pj[2] ? 'arriba' : 'abajo'} (eje ${fuerte ? 'fuerte' : 'débil'}, Puc ${fx(Puc, 0)} kN)`); }
+        tC.push(`${s.nom} ${q && q[2] > pj[2] ? 'arriba' : 'abajo'} (eje ${fuerte ? 'fuerte' : 'débil'}, Puc ${fx(Puc, 0)} kN${conO ? ' con Ω0' : ''})`); }
       for(const v of vs){ const el = elDe(v.f.g), s = el && prop(el); if(!s){ falta.push(`viga ${v.f.g.split('|')[0]} sin perfil I en el Anexo D`); continue; }
         const Mpr = 1.1 * s.Ry * s.Fy * s.Zx / 1e6, sh = s.d / 2000, Lh = Math.max(0.5, (v.f.L || 0) - dc / 1000 - 2 * sh), Vpr = 2 * Mpr / Lh;
-        Mpb += Mpr + Vpr * (sh + dc / 2000); tB.push(`${s.nom} (L ${fx(v.f.L, 2)} m)`); }
+        // cortante de gravedad en el extremo de la viga (1.2D + 0.5L, la viva de cubierta no entra con sismo)
+        const fv = (G?.[v.f.g]?.filas || []).filter(r => String(r.F) === String(v.F)), stv = fv.length ? (v.e === 'i' ? Math.min(...fv.map(r => r.st)) : Math.max(...fv.map(r => r.st))) : null;
+        const gv = grav(fv.filter(r => Math.abs(r.st - stv) < 1e-6), 'V2'), Vg = gv ? Math.abs(1.2 * gv.D + 0.5 * gv.L) : 0; if(!gv) sinVg = true;
+        Mpb += Mpr + (Vpr + Vg) * (sh + dc / 2000); tB.push(`${s.nom} (L ${fx(v.f.L, 2)} m${gv ? `, Vg ${fx(Vg, 1)} kN` : ''})`); }
       const ratio = Mpb > 0 ? Mpc / Mpb : Infinity, exc = !arriba && PucMax < 0.3 * Pc;
+      if(sinO) falta.length || tC.push('sin Ω0: el archivo no trae una combinación de solo carga muerta o las de sismo');
+      if(sinVg) tB.push('sin cortante de gravedad: el archivo no trae una combinación de solo carga muerta');
       out.push({ j, eje:ejeNudo(T, j), dir, cols:tC, vigas:tB, Mpc, Mpb, ratio, ok:ratio > 1, exc, falta });
     }
   }
   return out;
 }
 const scwbEstado = f => f.falta.length ? 'Sin datos' : f.ok ? 'Cumple' : f.exc ? 'Exceptuado' : 'No cumple';
-const SCWB_NOTA = 'ΣM*pc = Σ Zc·(Fyc − Puc/Ag) de las columnas que llegan al nudo (Puc = mayor compresión del modelo en ese extremo); ΣM*pb = Σ (1.1·Ry·Fyb·Zb + Muv), con la rótula a db/2 de la cara de la columna y Muv = Vpr·(sh + dc/2), Vpr = 2·Mpr/Lh. No incluye el cortante de gravedad de la viga ni la sobrerresistencia Ω0 en Puc: si la relación queda entre 1.0 y 1.1, revíselo con más detalle. Exceptuado = último piso con Puc < 0.3·Fy·Ag (AISC 341 E3.4a, excepción (a)).';
+const SCWB_NOTA = 'ΣM*pc = Σ Zc·(Fyc − Puc/Ag) de las columnas que llegan al nudo, con Puc = compresión con la carga sísmica amplificada: 1.2D + 0.5L + Ω0·E (Ω0 = 3.0, Tabla A.3-3; E se obtiene de cada combinación con sismo del modelo restándole su parte de gravedad). ΣM*pb = Σ (1.1·Ry·Fyb·Zb + Muv), con la rótula a db/2 de la cara de la columna y Muv = (Vpr + Vg)·(sh + dc/2), Vpr = 2·Mpr/Lh y Vg = cortante de gravedad de la viga en ese extremo (1.2D + 0.5L; la viva de cubierta no entra con sismo). Exceptuado = último piso con Puc < 0.3·Fy·Ag (AISC 341 E3.4a, excepción (a)).';
 function scwbTablaHTML(fs, imp){
   const pillE = f => { const e = scwbEstado(f); return imp ? e : `<span class="pill ${e === 'Cumple' ? 'ok' : e === 'No cumple' ? 'no' : 'gray'}">${e}</span>`; };
   return `<div style="overflow-x:auto"><table class="ax-tb"><thead><tr><th>Nudo</th><th>Sentido</th><th>Columnas</th><th>Vigas</th><th>ΣM*pc [kN·m]</th><th>ΣM*pb [kN·m]</th><th>ΣM*pc / ΣM*pb</th><th>Resultado</th></tr></thead>
