@@ -568,11 +568,16 @@ function calcTesta(c){
     if(dos) pasos.push(`Viga al otro lado: M₂ = ${r2(Mu2)} kN·m → F₂ = ${r2(F2)} kN; momentos ${opuesto ? 'opuestos (gravedad): las alas inferiores aprietan el alma desde los dos lados (J10-8) y el panel recibe la diferencia' : 'del mismo sentido (sismo/viento): el panel recibe la suma'}`);
     // a) sin rigidizadores
     let Yc;
-    if(ras) Yc = nfR === 1 ? cl.bf / 2 * (h1 / sC) + 2 / g * (h1 * sC) + g / 2 : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + pb / 4) + h2 * (sC + 3 * pb / 4) + pb * pb / 2) + g / 2;   // por confirmar (Guía 16)
+    // Chapa a ras: Yc de Eatherton y Murray (Virginia Tech, = Guías AISC 4 + 16 unificadas 2021), Tablas 3-1 y 3-4, confirmadas con
+    // capturas de Amo (24-nov). c = pb (separación entre filas). En el tope de la columna de = tf + pfi (ala superior de la viga al ras del tope).
+    const deC = tbf + pfi;
+    if(ras) Yc = nfR === 1
+      ? (c.colTope ? cl.bf / 2 * (h1 / sC - 0.5) + 2 / g * (h1 * (sC + deC)) + g / 4 : cl.bf * h1 / sC + 4 * h1 * sC / g)
+      : (c.colTope ? cl.bf / 2 * (h2 / sC - 0.5) + 2 / g * (h1 * (deC + 3 * pb / 4) + h2 * (sC + pb / 4)) + 3 * g / 4
+                   : cl.bf / 2 * (h1 / sC + h2 / sC) + 2 / g * (h1 * (sC + 3 * pb / 4) + h2 * (sC + pb / 4)) + g / 2);
     else if(e8) Yc = cl.bf / 2 * (H.h1 / sC + H.h4 / sC) + 2 / g * (H.h1 * (pb + cc / 2 + sC) + H.h2 * (pb / 2 + cc / 4) + H.h3 * (pb / 2 + cc / 2) + H.h4 * sC) + g / 2;   // AISC 358-22 Tabla 6.6 sin rigidizar (8ES), confirmada 20-nov
     else Yc = cl.bf / 2 * (h1 / sC + h0 / sC) + 2 / g * (h1 * (sC + 3 * cc / 4) + h0 * (sC + cc / 4) + cc * cc / 2) + g / 2;
-    // Chapa a ras (opción A de Amo, 20-nov): el Yc de la Guía 16 sigue POR CONFIRMAR → se revisa también el ala como T equivalente
-    // con palanca (Manual AISC parte 9) y se usa el menor de los dos.
+    // Chapa a ras: la T equivalente con palanca (Manual AISC parte 9) queda solo como referencia (antes se usaba el menor; 24-nov).
     if(ras){
       const B = 0.75 * Pt, bb = g / 2 - cl.tw / 2, aa = Math.min((cl.bf - g) / 2, 1.25 * bb), bpr = bb - d / 2, apr = aa + d / 2, rho = bpr / apr;
       const pp = (2 * sC + (nfR - 1) * pb) / nfR, delta = 1 - agujero(d) / pp;
@@ -580,9 +585,7 @@ function calcTesta(c){
       let alT = (1 / (delta * (1 + rho))) * ((tcT / cl.tf) ** 2 - 1); alT = Math.max(0, Math.min(1, alT));
       const QT = cl.tf >= tcT ? 1 : Math.min(1, (cl.tf / tcT) ** 2 * (1 + delta * alT));
       const phiMT = 2 * B * QT * sumH / 1000, YcT = phiMT * 1e6 / (phD * ac.Fy * cl.tf * cl.tf);
-      pasos.push(`Ala de la columna a ras, segundo método (T equivalente con palanca, Manual AISC parte 9): b = g/2 − tw/2 = ${r1(bb)}, a = ${r1(aa)}, p = ${r1(pp)} mm por fila, B = φ·Pt = ${r2(B)} kN, tc = ${r1(tcT)} mm, Q = ${r3(QT)} → φM = 2·B·Q·Σh = ${r2(phiMT)} kN·m (equivale a Yc = ${Math.round(YcT)} mm); Yc de la Guía 16 = ${Math.round(Yc)} mm (por confirmar) → se usa el menor`);
-      av.push('Chapa a ras: la fórmula del ala de la columna de la Guía AISC 16 está por confirmar; la app también la revisa como T equivalente con palanca (Manual AISC parte 9) y usa el menor de los dos resultados.');
-      if(YcT < Yc) Yc = YcT;
+      pasos.push(`Ala de la columna a ras: Yc = ${Math.round(Yc)} mm (líneas de fluencia, ${nfR === 1 ? 'Tabla 3-1' : 'Tabla 3-4'} de Eatherton y Murray = Guías AISC 4/16, ${c.colTope ? `tope de la columna sin rigidizar, de = tf + pfi = ${r1(deC)} mm` : 'columna continua sin rigidizar'}${nfR === 2 ? `, c = pb = ${pb} mm` : ''}). Referencia: como T equivalente con palanca (Manual AISC parte 9: b = ${r1(bb)}, a = ${r1(aa)}, p = ${r1(pp)} mm, B = ${r2(B)} kN, Q = ${r3(QT)}) daría φM = ${r2(phiMT)} kN·m (Yc ≈ ${Math.round(YcT)} mm)`);
     }
     // Demanda en el ala: sin sismo, Mu (la palanca se avisa con tcf,req de placa gruesa); con sismo, 1.11·Mf (AISC 358)
     const demCf = sis ? 1.11 * Mu : Mu, demThick = sis ? 1.11 * Mu : 1.11 * gr * phiMnp;
@@ -636,8 +639,10 @@ function calcTesta(c){
       const ps = Math.max(ras ? pfi + tbf / 2 - ts / 2 : (cc - ts) / 2, 1);
       let YcS;
       if(e8) YcS = cl.bf / 2 * (H.h1 / sC + H.h2 / ps + H.h3 / ps + H.h4 / sC) + 2 / g * (H.h1 * (sC + pb / 4) + H.h2 * (ps + 3 * pb / 4) + H.h3 * (ps + pb / 4) + H.h4 * (sC + 3 * pb / 4) + pb * pb) + g;   // AISC 358-22 Tabla 6.6 rigidizada (8ES), confirmada 20-nov (el término final es pb², por unidades)
-      else if(ras) YcS = nfR === 1 ? cl.bf / 2 * (h1 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps))
-        : cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h2 / sC) + 2 / g * (h1 * (ps + 3 * pb / 4) + h2 * (sC + pb / 4) + pb * pb / 2) + g / 2;   // Guía AISC 16, por confirmar
+      // a ras (Tablas 3-1 y 3-4, confirmadas 24-nov): 2 pernos «Continuous Stiffened»; 4 pernos «Stiffened Above the Bolts»
+      // (placa de continuidad a la altura del ala de la viga). En el tope con placa de tapa la fórmula es la misma con pcp = psi. psi ≤ s.
+      else if(ras){ const pr = Math.min(ps, sC); YcS = nfR === 1 ? cl.bf / 2 * (h1 * (1 / pr + 1 / sC)) + 2 / g * (h1 * (pr + sC))
+        : cl.bf / 2 * (h1 / pr + h2 / sC) + 2 / g * (h1 * (pr + 3 * pb / 4) + h2 * (sC + pb / 4)) + g / 2; }
       else YcS = cl.bf / 2 * (h1 * (1 / sC + 1 / ps) + h0 * (1 / sC + 1 / ps)) + 2 / g * (h1 * (sC + ps) + h0 * (sC + ps));
       YcS = Math.max(YcS, Yc);                                       // rigidizar nunca baja la capacidad del ala
       const phiMcfS = phD * ac.Fy * cl.tf * cl.tf * YcS / 1e6;
