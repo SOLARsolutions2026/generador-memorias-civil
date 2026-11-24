@@ -78,7 +78,7 @@ function interpTabla(tabla, theta, sacar, minAng){
 // Valores iniciales de una memoria nueva
 function defaults(){
   return {
-    tipo:{ paneles:true, lamina:false },
+    tipo:{ paneles:true, lamina:false, correas:true },   // correas: sin cubierta, los rieles se apoyan en correas metálicas (23-nov)
     panel:{ nombre:'TRINASOLAR 700-720W', L:2.384, W:1.303, H:0.033, peso:38.3, cargaF:5400, cargaP:2400, ficha:'fichas/panel-trinasolar-700-720w.pdf' },
     riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906, material:'Aluminio 6005-T6', luzMax:2.0, ficha:'fichas/riel-alurack-master-rail.pdf' },
     dBorde:0.40, tribRiel:'', qMant:15,
@@ -101,7 +101,8 @@ function extras(A){
 
 // Separación de los apoyos del riel: con cubierta, el riel se apoya en las correas (su separación manda);
 // sin cubierta, la escribe el diseñador (viento.luz)
-const luzRiel = A => A.tipo.lamina ? num(A.lamina.sep, 0) : num(A.viento?.luz, 0);
+const conCorreas = A => !!(A.tipo.lamina || (A.tipo.paneles && A.tipo.correas));   // hay correas: con cubierta, o sin cubierta con correas bajo los rieles
+const luzRiel = A => conCorreas(A) ? num(A.lamina.sep, 0) : num(A.viento?.luz, 0);
 
 // ─── Carga muerta y viva: paneles solares sobre rieles ───
 function paneles(A){
@@ -113,7 +114,7 @@ function paneles(A){
   const kgmPanel = wPanel * trib;                            // kg/m sobre el riel
   const Dpanel = kgmPanel * G / 1000, Driel = num(A.riel.peso) * G / 1000;
   // si no hay cubierta de lámina/teja, las cargas adicionales cuelgan de la estructura de paneles
-  const ext = A.tipo.lamina ? [] : extras(A), wExt = ext.reduce((a, x) => a + x.w, 0), Dext = wExt * trib * G / 1000;
+  const ext = conCorreas(A) ? [] : extras(A), wExt = ext.reduce((a, x) => a + x.w, 0), Dext = wExt * trib * G / 1000;
   const D = Dpanel + Driel + Dext;
   const qM = num(A.qMant, 15), Lm = qM * trib * G / 1000;
   const luz = luzRiel(A), luzMax = num(A.riel.luzMax, 0);
@@ -121,8 +122,16 @@ function paneles(A){
 }
 
 // ─── Carga muerta y viva: cubierta en lámina sobre correas ───
+// Sin cubierta pero con correas (pedido de Amo 23-nov): la correa lleva solo las cargas adicionales (ductos, luminarias…)
+// y la viva de montaje (Lr × separación); la muerta y el viento de los paneles le llegan por los rieles del modelo
 function lamina(A){
-  const l = A.lamina, mat = LAMINAS[l.perfil] || LAMINAS.master1000, s = num(l.sep);
+  const l = A.lamina, s = num(l.sep);
+  if(!A.tipo.lamina){
+    const items = extras(A), wTot = items.reduce((a, x) => a + x.w, 0), kgm = wTot * s, D = kgm * G / 1000;
+    const Lr = num(A.Lr, 50), Lm = Lr * s * G / 1000;
+    return { sinCub:true, perfil:'Sin cubierta', nomMat:'Sin cubierta', metal:false, calOk:true, wAuto:0, manual:false, fuente:'—', wLam:0, items, wTot, s, kgm, D, Dr:r3(D) || 0, Lr, L:Lm, Lr3:r3(Lm) };
+  }
+  const mat = LAMINAS[l.perfil] || LAMINAS.master1000;
   let wAuto = 0, cal = null;
   if(mat.calibres){ cal = mat.calibres[l.calibre]; wAuto = cal ? cal.peso / cal.ancho : 0; } // kg/m de lámina ÷ ancho útil = kg/m²
   else wAuto = mat.w;
@@ -218,10 +227,11 @@ function calcular(A){
   const elems = [];
   if(A.tipo.paneles){ out.paneles = paneles(A); elems.push({ id:'riel', nombre:'Riel de paneles', trib:out.paneles.trib, luz:luzRiel(A) }); }
   if(A.tipo.lamina){ out.lamina = lamina(A); elems.push({ id:'correa', nombre:'Correa de cubierta', trib:out.lamina.s, luz:A.viento.luzCorrea || 4 }); }
+  else if(conCorreas(A)) out.lamina = lamina(A);        // correa sin cubierta: sin viento propio (le llega por los rieles)
   out.viento = viento(A, elems);
   return out;
 }
 
-const api = { luzRiel, G, LAMINAS, CIELOS, EXTRAS_DEF, extras, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
+const api = { luzRiel, conCorreas, G, LAMINAS, CIELOS, EXTRAS_DEF, extras, GRUPOS, VELOCIDADES, EXPO, SISTEMAS, CN_SPRFV, CN_CYR, defaults, calcular, paneles, lamina, viento, exposicion, Kz, interpTabla, r3, num };
 if(typeof module !== 'undefined') module.exports = api; else root.AnexoA = api;
 })(typeof window !== 'undefined' ? window : globalThis);

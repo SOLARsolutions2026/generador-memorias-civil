@@ -28,7 +28,7 @@ const fSel = (A, p, l, opts, o={}) => `<div class="f ${o.cls||''}"><label>${l}</
 const fChk = (A, p, l) => `<label class="chk"><input type="checkbox" data-a="${p}" data-re="1" ${getP(A,p)?'checked':''} ${ro()}/> ${l}</label>`;
 // Columnas numéricas: encabezado y valores alineados a la derecha (pedido de Amo 23-nov: los valores no quedaban debajo de su título)
 const esNumA = c => typeof c === 'number' || /^\s*(<b>)?[-+−]?\d[\d.,]*(<\/b>)?(\s*\(mín\.\))?\s*$/.test(String(c ?? ''));
-const tabla = (cab, filas, cls='') => { const num = cab.map((_, i) => i > 0 && filas.length > 0 && filas.every(f => f[i] === '' || f[i] == null || esNumA(f[i])) && filas.some(f => esNumA(f[i])));
+const tabla = (cab, filas, cls='') => { const num = cab.map((_, i) => i > 0 && filas.length > 0 && filas.every(f => f[i] === '' || f[i] === '—' || f[i] == null || esNumA(f[i])) && filas.some(f => esNumA(f[i])));
   return `<div class="tw"><table class="t ${cls}"><thead><tr>${cab.map((c, i) => `<th class="${num[i]?'n':''}">${c}</th>`).join('')}</tr></thead><tbody>${filas.map(f => `<tr>${f.map((c,i) => `<td class="${num[i]?'n':''}">${typeof c==='number'?fx(c):c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; };
 const res = (filas) => `<div class="sap">${filas.map(([t,v,hi]) => `<div class="row ${hi?'hi':''}"><span>${t}</span><b>${v}</b></div>`).join('')}</div>`;
 
@@ -73,7 +73,8 @@ cubierta(A, R){
     <div class="fg g4">${fSel(A,'lamina.perfil','Material de la cubierta',[['ninguna','Ninguna (no lleva cubierta)'],...Object.entries(AnexoA.LAMINAS).map(([k,v]) => [k,v.nombre])],{cls:'span2',re:1})}
       ${A.tipo.lamina ? `${mat.calibres ? fSel(A,'lamina.calibre','Calibre',Object.keys(mat.calibres).map(c => [c,`Calibre ${c}`]),{re:1}) : '<div></div>'}
       ${fIn(A,'lamina.sep','Separación de correas [m]')}
-      ${fIn(A,'lamina.wManual','Peso de la cubierta [kg/m²]',{cls:'span2',ph:L&&L.wAuto?fx(L.wAuto,2)+' (de la tabla)':'Escribe el peso',h:'Vacío = valor de la tabla. Escribe otro si tu material pesa distinto.'})}` : ''}</div>
+      ${fIn(A,'lamina.wManual','Peso de la cubierta [kg/m²]',{cls:'span2',ph:L&&L.wAuto?fx(L.wAuto,2)+' (de la tabla)':'Escribe el peso',h:'Vacío = valor de la tabla. Escribe otro si tu material pesa distinto.'})}` : ''}
+      ${!A.tipo.lamina && A.tipo.paneles ? `<div class="f span2" style="align-self:end">${fChk(A,'tipo.correas','Los rieles se apoyan en correas metálicas')}<div class="hint">Sin lámina: la correa lleva la viva de montaje y las cargas adicionales</div></div>${A.tipo.correas ? fIn(A,'lamina.sep','Separación de correas [m]') : ''}` : ''}</div>
     ${A.tipo.lamina ? `<div class="hint" id="fuenteCub" style="margin-top:6px">${L ? 'Fuente: ' + esc(L.fuente) + (L.metal && !L.manual ? ` — ${fx(L.pesoLin,3)} kg/m ÷ ${fx(L.ancho,2)} m de ancho útil` : '') : ''}</div>` : ''}
     ${!A.tipo.lamina && !A.tipo.paneles ? '<div class="note amber" style="margin-top:10px">Sin paneles y sin cubierta no hay cargas que calcular. Escoge al menos una.</div>' : ''}</div>
   <div class="card"><div class="ct">Cargas adicionales (solo si existen en el proyecto)</div>
@@ -82,7 +83,7 @@ cubierta(A, R){
     <h4 class="sub">Otras cargas por metro cuadrado</h4>
     ${(e.otras||[]).map((o,i) => `<div class="xrow">${fIn(A,`extras.otras.${i}.n`,'Descripción',{num:false,ph:'Ej: aviso, equipo, aislamiento'})}${fIn(A,`extras.otras.${i}.w`,'Peso [kg/m²]')}${esIng()?`<div class="f"><label>&nbsp;</label><button class="btn sm danger" type="button" data-delx="${i}" aria-label="Quitar">✕</button></div>`:''}</div>`).join('')}
     ${esIng()?'<button class="btn sm" type="button" id="addX">＋ Agregar otra carga</button>':''}
-    <div class="hint" style="margin-top:8px">${A.tipo.lamina ? 'Se suman a la cubierta y van sobre las correas.' : 'Como no hay cubierta, se suman sobre los rieles de los paneles.'} Ductería mecánica 20 kg/m² según NSR-10 Tabla B.3.4.1-1; los demás son valores típicos que puedes cambiar.</div></div>
+    <div class="hint" style="margin-top:8px">${A.tipo.lamina ? 'Se suman a la cubierta y van sobre las correas.' : AnexoA.conCorreas(A) ? 'Como no hay cubierta, van directamente sobre las correas.' : 'Como no hay cubierta, se suman sobre los rieles de los paneles.'} Ductería mecánica 20 kg/m² según NSR-10 Tabla B.3.4.1-1; los demás son valores típicos que puedes cambiar.</div></div>
   <div class="card"><div class="ct">Resumen de cargas por área</div><div id="resA">${RES_A.cubierta(A,R)}</div></div>`;
 },
 muerta(A, R){
@@ -91,7 +92,7 @@ muerta(A, R){
     const bib = S.cfg.biblioteca || {}, pans = bib.paneles || [], rie = bib.rieles || [];
     const enBib = (lista, nom) => lista.some(x => x.nombre === nom);
     const iconos = (obj, q, idBib) => `<span class="icos">${obj.ficha ? `<button class="ib" type="button" data-verficha="${q}" title="Ver ficha técnica" aria-label="Ver ficha técnica">📄</button>` : ''}${esIng() && !String(obj.ficha||'').startsWith('fichas/') ? `<button class="ib" type="button" data-subficha="${q}" title="${obj.ficha?'Cambiar':'Adjuntar'} PDF de ficha técnica" aria-label="Adjuntar ficha técnica">📎</button>` : ''}${esIng() ? `<button class="ib" type="button" id="${idBib}" title="Guardar en biblioteca" aria-label="Guardar en biblioteca">💾</button>` : ''}</span>`;
-    const apoyo = A.tipo.lamina ? `<div class="f"><label>Apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly title="Separación de correas (pestaña Cubierta)"/></div>` : fIn(A,'viento.luz','Apoyos [m]');
+    const apoyo = AnexoA.conCorreas(A) ? `<div class="f"><label>Apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly title="Separación de correas (pestaña Cubierta)"/></div>` : fIn(A,'viento.luz','Apoyos [m]');
     h += `<div class="card"><div class="ct">A.1 Paneles solares y rieles</div>
       <div class="two">
         <div class="col"><h5>☀️ Panel ${iconos(A.panel,'panel','bibPanel')}${esIng() ? ' <button class="btn xs" type="button" data-anuevo="paneles" title="Agregar un panel nuevo a la biblioteca">＋ Nuevo</button>' : ''}</h5>
@@ -114,6 +115,7 @@ viva(A, R){
   let h = '<div class="card"><div class="ct">Datos — carga viva</div><div class="fg g4">';
   if(A.tipo.paneles) h += fIn(A,'qMant','Mantenimiento sobre paneles [kg/m²]',{cls:'span2',h:'Equipo de mantenimiento; no se camina sobre los paneles'});
   if(A.tipo.lamina) h += fIn(A,'Lr','Carga viva de cubierta Lr [kg/m²]',{cls:'span2',h:'NSR-10 Tabla B.4.2.1-2'});
+  else if(AnexoA.conCorreas(A)) h += fIn(A,'Lr','Carga viva de montaje sobre correas Lr [kg/m²]',{cls:'span2',h:'Personal durante la instalación; ancho aferente = separación de correas'});
   return h + `</div></div><div class="card"><div class="ct">Resultado — carga viva</div><div id="resA">${RES_A.viva(A,R)}</div></div>`;
 },
 viento(A, R){
@@ -146,7 +148,7 @@ viento(A, R){
       ${fSel(A,'viento.flujo','Flujo bajo la cubierta',[['libre','Libre (bloqueo ≤ 50 %)'],['obst','Obstruido (bloqueo > 50 %)']],{h:'Objetos debajo que frenan el viento'})}
       ${fSel(A,'viento.sistema','Sistema estructural (para Ta)',AnexoA.SISTEMAS.map((s,i) => [i,s.nombre]),{cls:'span2'})}
       ${fIn(A,'viento.Gmanual','Factor ráfaga G (si no es rígida)',{ph:'0.85'})}
-      ${A.tipo.paneles ? (A.tipo.lamina ? `<div class="f"><label>Luz del riel entre apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Separación de correas (Cubierta)</div></div>` : fIn(A,'viento.luz','Luz del riel entre apoyos [m]',{h:'Para el área efectiva de viento'})) : ''}
+      ${A.tipo.paneles ? (AnexoA.conCorreas(A) ? `<div class="f"><label>Luz del riel entre apoyos [m]</label><input value="${esc(A.lamina.sep)}" readonly/><div class="hint">Separación de correas (Cubierta)</div></div>` : fIn(A,'viento.luz','Luz del riel entre apoyos [m]',{h:'Para el área efectiva de viento'})) : ''}
       ${A.tipo.lamina ? fIn(A,'viento.luzCorrea','Luz de la correa entre vigas [m]',{ph:'4.0',h:'Para el área efectiva de viento'}) : ''}
       ${fSel(A,'viento.fuente','Presión que va al modelo',[['sprfv','Sistema principal (SPRFV)'],['cyr','Componentes y revestimiento']],{cls:'span2'})}</div></div>
     <div class="card"><div class="ct">Resultados</div><div id="resA">${RES_A.viento(A,R)}</div></div>`;
@@ -178,7 +180,10 @@ muerta(A, R){
     if(p.luzExcede) h += `<div class="note amber"><b>Separación de apoyos muy grande:</b> ${fx(p.luz,2)} m supera los ${fx(p.luzMax,2)} m que permite el fabricante para el riel ${esc(A.riel.nombre)}.</div>`;
     h += `<h4 class="sub">Paneles solares → riel</h4>` + res([['Peso del panel por área', fx(p.wPanel)+' kg/m²'],['Ancho aferente por riel', fx(p.trib)+' m'],['Separación entre rieles', fx(p.sepRieles,2)+' m'],
       ['Panel sobre el riel', `${fx(p.kgmPanel,2)} kg/m → ${fx(p.Dpanel,4)} kN/m`],['Riel '+esc(A.riel.nombre), fx(p.Driel,4)+' kN/m'],...(p.ext.length?[['Cargas adicionales', `${fx(p.wExt,2)} kg/m² × ${fx(p.trib,3)} m → ${fx(p.Dext,4)} kN/m`]]:[]),['D total sobre riel', fx(p.Dr)+' kN/ml', 1]]); }
-  if(R.lamina){ const l = R.lamina;
+  if(R.lamina?.sinCub){ const l = R.lamina;
+    h += `<h4 class="sub">Correa (sin cubierta)</h4>` + (l.items.length ? res([...l.items.map(x => [esc(x.n), fx(x.w,2)+' kg/m²']),['Total por área', fx(l.wTot,2)+' kg/m²'],['× separación de correas', fx(l.s,2)+' m'],['D total sobre correa', fx(l.Dr)+' kN/ml', 1]])
+      : res([['D sobre correa', '0 kN/ml', 1]])) + '<div class="hint">La muerta de los paneles y del riel le llega a la correa por los rieles del modelo.</div>'; }
+  else if(R.lamina){ const l = R.lamina;
     h += `<h4 class="sub">Cubierta → correa</h4>` + (l.calOk ? '' : '<div class="note amber">Ese calibre no existe para este tipo de lámina.</div>') +
       res([...l.items.map(x => [esc(x.n), fx(x.w,2)+' kg/m²']),['Total por área', fx(l.wTot,2)+' kg/m²'],['× separación de correas', fx(l.s,2)+' m'],['D total sobre correa', fx(l.Dr)+' kN/ml', 1]]) +
       `<div class="hint">Fuente del peso de la cubierta: ${esc(l.fuente)}.</div>`; }
@@ -187,7 +192,7 @@ muerta(A, R){
 viva(A, R){
   let h = '';
   if(R.paneles) h += `<h4 class="sub">Paneles solares → riel</h4>` + res([['Mantenimiento', fx(R.paneles.qM,1)+' kg/m²'],['× ancho aferente', fx(R.paneles.trib)+' m'],['L sobre riel', fx(R.paneles.Lr3)+' kN/ml', 1]]);
-  if(R.lamina) h += `<h4 class="sub">Cubierta → correa</h4>` + res([['Lr cubierta', fx(R.lamina.Lr,1)+' kg/m²'],['× separación de correas', fx(R.lamina.s,2)+' m'],['Lr sobre correa', fx(R.lamina.Lr3)+' kN/ml', 1]]);
+  if(R.lamina) h += `<h4 class="sub">${R.lamina.sinCub ? 'Montaje → correa (sin cubierta)' : 'Cubierta → correa'}</h4>` + res([[R.lamina.sinCub ? 'Viva de montaje' : 'Lr cubierta', fx(R.lamina.Lr,1)+' kg/m²'],['× separación de correas', fx(R.lamina.s,2)+' m'],['Lr sobre correa', fx(R.lamina.Lr3)+' kN/ml', 1]]);
   return h || '—';
 },
 viento(A, R){
@@ -219,9 +224,11 @@ viento(A, R){
 resumen(A, R){
   const filas = [];
   if(R.paneles){ const w = R.viento.ok ? R.viento.porElem.find(e => e.id==='riel') : null; filas.push(['Riel de paneles ('+esc(A.riel.nombre)+')', R.paneles.Dr, R.paneles.Lr3, w?w.Wp:null, w?w.Ws:null]); }
-  if(R.lamina){ const w = R.viento.ok ? R.viento.porElem.find(e => e.id==='correa') : null; filas.push(['Correa de cubierta', R.lamina.Dr, R.lamina.Lr3, w?w.Wp:null, w?w.Ws:null]); }
+  if(R.lamina?.sinCub) filas.push(['Correa (sin cubierta)', R.lamina.Dr, R.lamina.Lr3, '—', '—']);
+  else if(R.lamina){ const w = R.viento.ok ? R.viento.porElem.find(e => e.id==='correa') : null; filas.push(['Correa de cubierta', R.lamina.Dr, R.lamina.Lr3, w?w.Wp:null, w?w.Ws:null]); }
   if(!filas.length) return '<div class="note amber">Escoge el tipo de cubierta.</div>';
-  return (R.viento.ok ? '' : '<div class="note amber">Faltan datos de viento.</div>') + tabla(['Elemento','D muerta','L / Lr viva','W↓ viento','W↑ viento'], filas, 'sapres');
+  return (R.viento.ok ? '' : '<div class="note amber">Faltan datos de viento.</div>') + tabla(['Elemento','D muerta','L / Lr viva','W↓ viento','W↑ viento'], filas, 'sapres') +
+    (R.lamina?.sinCub ? '<div class="hint" style="margin-top:6px">Sin cubierta: la correa lleva solo la viva de montaje (y las cargas adicionales); la muerta, la viva de mantenimiento y el viento de los paneles le llegan por los rieles del modelo.</div>' : '');
 },
 };
 function expoHTML(W){
@@ -347,7 +354,24 @@ function anexoAPrintHTML(A, R){
       ${tb(['Ítem','Unidad','Cantidad','Peso/unidad [kN/m]','Peso total [kN/m]'],[['Mantenimiento','ml','1',fx(p.L,4),fx(p.L,4)]],fx(p.L,4))}
       ${box(fx(p.Lr3),'kN/ml')}</section>`;
   }
-  if(R.lamina){ const l = R.lamina, s = sec();
+  if(R.lamina?.sinCub){ const l = R.lamina;
+    if(l.items.length){ const s = sec();
+      h += `<section>${cab('ANÁLISIS DE CARGA MUERTA','NSR-10. B.3.3. Cargas muertas requeridas','Cargas adicionales sobre las correas')}
+      <h3>${s} Cargas MUERTAS adicionales sobre las correas (sin cubierta)</h3>
+      ${kv([['Cubierta','No lleva (los paneles van directamente sobre la estructura)'],['Separación de correas [m]',fx(l.s,2)]])}
+      ${svgCorreas(l.s)}
+      ${tb(['Ítem','Unidad','Peso [kg/m²]'], l.items.map(x => [esc(x.n),'m²',fx(x.w,2)]), fx(l.wTot,2))}
+      <p>Carga sobre la correa: ${fx(l.wTot,2)} kg/m² × ${fx(l.s,2)} m = ${fx(l.kgm,2)} kg/m → ${fx(l.D,4)} kN/m.</p>
+      ${box(fx(l.Dr),'kN/ml')}</section>`; }
+    const s2 = sec();
+    h += `<section>${cab('ANÁLISIS DE CARGA VIVA','NSR-10. B.4.2.1 Cargas vivas requeridas','Carga viva de montaje sobre las correas')}
+      <h3>${s2} Carga VIVA de montaje sobre las correas (sin cubierta)</h3>
+      <p>La estructura no lleva cubierta. Durante la instalación de los paneles el personal se apoya directamente sobre las correas metálicas; se considera una carga viva de montaje aplicada con el ancho aferente igual a la separación de las correas. La muerta, la viva de mantenimiento y el viento de los paneles llegan a las correas a través de los rieles.</p>
+      ${kv([['Carga viva de montaje [kg/m²]',fx(l.Lr,1)],['Separación de correas (ancho aferente) [m]',fx(l.s,2)]])}
+      ${tb(['Ítem','Unidad','Cantidad','Peso/unidad [kN/m]','Peso total [kN/m]'],[['Viva de montaje','ml','1',fx(l.L,4),fx(l.L,4)]],fx(l.L,4))}
+      ${box(fx(l.Lr3),'kN/ml')}</section>`;
+  }
+  else if(R.lamina){ const l = R.lamina, s = sec();
     h += `<section>${cab('ANÁLISIS DE CARGA MUERTA','NSR-10. B.3.3. Cargas muertas requeridas','Cargas muertas mínimas en cubierta')}
       <h3>${s} Cálculo de cargas MUERTAS de cubierta</h3>
       <h4>${s}-1 Datos iniciales</h4>${kv([['Tipo de cubierta',esc(l.nomMat)],...(l.metal&&!l.manual?[['Ancho útil [m]',fx(l.ancho,2)],['Peso [kg/m]',fx(l.pesoLin,3)]]:[]),['Peso [kg/m²]',fx(l.wLam,3)],['Fuente',esc(l.fuente)],['Separación de apoyos (correas) [m]',fx(l.s,2)]])}
