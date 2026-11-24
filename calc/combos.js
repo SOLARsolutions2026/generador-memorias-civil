@@ -81,16 +81,19 @@ function generar(K, conSismo){
   const R = coefR(K), out = [];
   const add = (id, grupo, ref, ts, nota, tipo) => out.push({ id, grupo, ref, ts:ts.filter(t => t.f), nota, tipo:tipo || 'Linear Add' });
   const env = K.metodoE !== 'lineal';
-  // Casos de sismo: E = ±Ex ± Tx ± 0.3Ey (y viceversa), todo dividido por R.
+  // Casos de sismo: E = ±Ex ± Tx ± 0.3Ey ± 0.3Ty (y viceversa), todo dividido por R (corrección de Amo 24-nov:
+  // el 30 % ortogonal es del efecto completo de la otra dirección, con su torsión accidental; 16 por dirección = 32,
+  // con los mismos nombres de su modelo, p. ej. «FX+TX+0.3FY+0.3TY» y «0.3FX+0.3TX+FY+TY»).
   // La torsión accidental se toma con los dos signos (excentricidad ±5 %, A.3.6.7); el 30 % ortogonal según A.3.6.3.
-  const casosE = [];
+  const casosE = [], sg = (v, first) => v < 0 ? '-' : first ? '' : '+';
   if(conSismo && R.R > 0){
     const e = 1 / R.R;
     for(const [P, S] of [['x','y'], ['y','x']])
-      for(const sp of [1, -1]) for(const st of [1, -1]) for(const ss of (K.orto ? [1, -1] : [0])){
+      for(const sp of [1, -1]) for(const st of [1, -1]) for(const ss of (K.orto ? [1, -1] : [0])) for(const sq of (K.orto ? [1, -1] : [0])){
         const ts = [T('E' + P, sp * e), T('T' + P, st * e)];
-        if(ss) ts.push(T('E' + S, ss * 0.3 * e));
-        casosE.push({ P:P.toUpperCase(), sp, st, ss, ts });
+        if(ss) ts.push(T('E' + S, ss * 0.3 * e), T('T' + S, sq * 0.3 * e));
+        const p1 = `${sg(sp, P === 'x')}F${P.toUpperCase()}${sg(st)}T${P.toUpperCase()}`, p2 = ss ? `${sg(ss, P === 'y')}0.3F${S.toUpperCase()}${sg(sq)}0.3T${S.toUpperCase()}` : '';
+        casosE.push({ P:P.toUpperCase(), sp, st, ss, sq, ts, nom:P === 'x' ? p1 + p2 : p2 + (p2 ? p1.replace(/^(?=F)/, '+') : p1) });
       }
   }
   // Resistencia B.2.4.2 (L = 0: cubiertas, la viva es Lr)
@@ -104,8 +107,8 @@ function generar(K, conSismo){
   const nomE = { X:(K.nomEX || '100% X 30% Y').trim(), Y:(K.nomEY || '30% X 100% Y').trim() };
   if(env && casosE.length){
     const cont = { X:0, Y:0 };
-    casosE.forEach(c => { const n = `S${c.P}${++cont[c.P]}`; c.id = n;
-      add(n, 'Sismo: componentes', 'A.3.6.3', c.ts.map(t => T(t.k, t.f * R.R)), 'sin reducir'); });
+    casosE.forEach(c => { const n = K.orto ? c.nom : `S${c.P}${++cont[c.P]}`; c.id = n;
+      add(n, 'Sismo: componentes', 'A.3.6.3', c.ts.map(t => T(t.k, t.f * R.R)), 'sin reducir'); out[out.length - 1].dir = c.P; });
     for(const P of ['X','Y']) add(nomE[P], 'Sismo: envolventes', 'A.3.6.3', casosE.filter(c => c.P === P).map(c => T('@' + c.id, 1, c.id)), 'derivas y torsión', 'Envelope');
     const e = 1 / R.R;
     for(const P of ['X','Y']) add(`U7${P}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), T('@' + nomE[P], e, 'E' + P)], 'E = envolvente / R');
@@ -129,7 +132,8 @@ function generar(K, conSismo){
   }
   // Derivas (A.6): fuerzas sísmicas sin dividir por R
   if(K.derivas && casosE.length && !env){
-    casosE.filter(c => c.sp === 1).forEach((c, i) => add(`DER${c.P}-${i % (K.orto ? 4 : 2) + 1}`, 'Derivas', 'A.6', c.ts.map(t => T(t.k, t.f * R.R)), 'Fs sin dividir por R'));
+    const cd = { X:0, Y:0 };
+    casosE.filter(c => c.sp === 1).forEach(c => add(`DER${c.P}-${++cd[c.P]}`, 'Derivas', 'A.6', c.ts.map(t => T(t.k, t.f * R.R)), 'Fs sin dividir por R'));
   }
   // Impacto de vehículos (combinación aparte, criterio de Amo)
   if(K.impacto){

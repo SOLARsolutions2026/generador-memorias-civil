@@ -241,7 +241,7 @@ function memDoc(ctx, ed){
     if(ctx.sismo && comp.length){
       H(2, 'Fuerzas sísmicas: componentes y envolventes');
       T('comb.sis', 'Las fuerzas sísmicas se combinan según A.3.6.3: en cada dirección se toma el 100 % de las fuerzas en esa dirección más el 30 % de las de la dirección perpendicular, con la torsión accidental (T) en los dos sentidos. Así se obtienen 8 componentes en cada dirección, sin dividir por R:');
-      const sx = comp.filter(c => /^SX/.test(c.id)), sy = comp.filter(c => /^SY/.test(c.id)), n = Math.max(sx.length, sy.length);
+      const sx = comp.filter(c => c.dir === 'X' || /^SX/.test(c.id)), sy = comp.filter(c => c.dir === 'Y' || /^SY/.test(c.id)), n = Math.max(sx.length, sy.length);
       tabla(['Sismo en X', '', 'Sismo en Y', ''], Array.from({ length:n }, (_, i) => [esc(sx[i]?.id || ''), esc(sx[i]?.txt || ''), esc(sy[i]?.id || ''), esc(sy[i]?.txt || '')]), 'Componentes de las fuerzas sísmicas (A.3.6.3)');
       if(env.length){
         T('comb.env', `Con ellas se forman ${env.length === 1 ? 'una envolvente, que toma' : 'dos envolventes, que toman'} en cada elemento el valor más desfavorable de sus 8 componentes:`);
