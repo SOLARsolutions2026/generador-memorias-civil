@@ -276,6 +276,8 @@ cálculo detallado en letra de máquina; pestañas subrayadas; avisos con barra 
 - Conexiones: mismo esquema; en el computador la `.d-lista` (conexiones + galería) se mueve a la barra lateral (`.d-grid.sin-lista`), con resumen «n de m cumplen»; en el celular sigue la lista desplegable.
 - Estilos al final de app.css (bloque «ESTILO B»): tarjetas 18 px con sombra suave, botones 11 px, campos 11 px con foco azul, pastillas redondas, ventanas 22 px, observaciones en panel blanco (la primera pendiente resaltada en amarillo).
 
+- Columnas numéricas (23-nov, pedido de Amo: «los valores no aparecen debajo de su referencia»): `tabla()` del Anexo A marca con `.n` el título y las celdas de las columnas numéricas (`esNumA`), y `alinearTablas()` (app.js, MutationObserver) pone `th.n` (a la derecha) en cualquier tabla del generador cuyas celdas de esa columna sean todas `td.n`.
+
 ## Almacenamiento
 Supabase gratis = 1 GB de archivos (aviso al 80 %; Amo NO quiere aviso al 70 % ni medir la base de datos, 20/21-nov).
 Guardar en el NAS (21-nov, versión sencilla de Amo: sin pestaña nueva, sin opciones extra; `respaldo-ui.js` `guardarNAS` / `cargarZipNAS`):

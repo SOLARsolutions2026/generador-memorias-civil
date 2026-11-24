@@ -197,6 +197,7 @@ table.t td input{width:100%;border:1px solid var(--border);border-radius:6px;pad
 @media (max-width:560px){.xrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.xrow>.f:first-child{grid-column:1/-1}}
 h4.sub{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px}
 table.t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.t th.n{text-align:right}
 table.sapres td:not(:first-child){text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
 
 /* Páginas impresas de anexos (se paginan solas en hoja carta) */
@@ -865,3 +866,5 @@ body.con-sb .fila-mem:not(:has(>.btn:not(#back):not(#btnHist),>.pill)){display:n
 .sbar.sb-fija .sb-slot>.steps{flex:1 1 auto;min-height:80px;overflow-y:auto;margin:8px -14px 0;padding:6px 14px 8px;border-top:1px solid #eef2f7;scrollbar-width:thin}
 .sbar.sb-fija .sb-slot>.steps .step.on::before{left:-14px}
 .sbar.sb-fija .sb-av{flex:0 0 auto;margin-top:10px}
+/* Títulos de columnas numéricas alineados con sus valores (alinearTablas, 23-nov) */
+th.n{text-align:right}

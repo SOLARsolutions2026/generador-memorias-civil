@@ -1027,3 +1027,18 @@ $('#sbMenu').onclick = () => { $('#sbar').classList.add('open'); $('#sbScrim').h
 $('#sbScrim').onclick = cerrarLateral;
 // el botón «Pasos» de la barra móvil abre el cajón (los pasos ya viven en la barra lateral)
 document.addEventListener('click', e => { if(e.target.closest('#openSteps')){ $('#sbar').classList.add('open'); $('#sbScrim').hidden = false; } if(e.target.closest('#closeSteps')) cerrarLateral(); }, true);
+
+// ═══ Encabezados de columnas numéricas alineados con sus valores (pedido de Amo 23-nov) ═══
+// Si todas las celdas de una columna son numéricas (td.n), el título de esa columna también se alinea a la derecha.
+function alinearTablas(raiz){
+  for(const t of (raiz || document).querySelectorAll('table')){
+    const ths = t.tHead?.rows?.[0]?.cells; if(!ths || !t.tBodies[0]) continue;
+    const filas = [...t.tBodies[0].rows].filter(r => ![...r.cells].some(c => c.colSpan > 1) && r.cells.length === ths.length);
+    if(!filas.length) continue;
+    for(let i = 1; i < ths.length; i++){ if(ths[i].colSpan > 1) break;
+      const cs = filas.map(r => r.cells[i]).filter(c => c.textContent.trim() !== '' && c.textContent.trim() !== '—');
+      ths[i].classList.toggle('n', cs.length > 0 && cs.every(c => c.classList.contains('n'))); }
+  }
+}
+{ let pend = false; new MutationObserver(() => { if(pend) return; pend = true; requestAnimationFrame(() => { pend = false; alinearTablas(); }); })
+    .observe(document.body, { childList:true, subtree:true }); }
