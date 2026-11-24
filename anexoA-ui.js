@@ -117,7 +117,7 @@ viva(A, R){
   let h = '<div class="card"><div class="ct">Datos — carga viva</div><div class="fg g4">';
   if(A.tipo.paneles) h += fIn(A,'qMant','Mantenimiento sobre paneles [kg/m²]',{cls:'span2',h:'Equipo de mantenimiento; no se camina sobre los paneles'});
   if(A.tipo.lamina) h += fIn(A,'Lr','Carga viva de cubierta Lr [kg/m²]',{cls:'span2',h:'NSR-10 Tabla B.4.2.1-2'});
-  else if(AnexoA.conCorreas(A)) h += fIn(A,'Lr','Carga viva de montaje sobre correas Lr [kg/m²]',{cls:'span2',h:'Personal durante la instalación; ancho aferente = separación de correas'});
+  else if(AnexoA.conCorreas(A)) h += fIn(A,'Lr','Carga viva de cubierta Lr [kg/m²]',{cls:'span2',h:'NSR-10 Tabla B.4.2.1-2 · sin cubierta actúa sobre las correas durante la instalación'});
   return h + `</div></div><div class="card"><div class="ct">Resultado — carga viva</div><div id="resA">${RES_A.viva(A,R)}</div></div>`;
 },
 viento(A, R){
