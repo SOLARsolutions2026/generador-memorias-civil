@@ -40,7 +40,9 @@ function paneCombos(){
   const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = (torAuto && (i.k === '1aP' || i.k === '1bP')) || autoK.has(i.k);
     const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí aplica' : 'No aplica'} · según cálculo</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
     const g = Combos.GRUPO_IRR[i.k], fig = `<figure class="irr-fig"><a href="img/irr-${g}.jpg" target="_blank" rel="noopener" title="Ver en grande"><img src="img/irr-${g}.jpg" alt="Figura ${lado === 'irrP' ? 'A.3-1' : 'A.3-2'} · ${esc(i.k)}" loading="lazy"/></a><figcaption>Toque para ver en grande · NSR-10 Figura ${lado === 'irrP' ? 'A.3-1 — Irregularidades en planta' : 'A.3-2 — Irregularidades en altura'}</figcaption></figure>`;
-    const det = `<div class="irr-grid">${fig}<div>${(i.k === '1aP' || i.k === '1bP') ? torsionHTML(K, M, ro_) : irrDatosHTML(K, g, IR[g], ro_)}<div style="margin-top:10px">${nota(i.k, v)}</div></div></div>`;
+    const det = (i.k === '1aP' || i.k === '1bP')
+      ? `<div class="irr-grid tor">${fig}<div>${torsionHTML(K, M, ro_, 'datos')}</div></div>${torsionHTML(K, M, ro_, 'res')}<div style="margin-top:10px">${nota(i.k, v)}</div>`
+      : `<div class="irr-grid">${fig}<div>${irrDatosHTML(K, g, IR[g], ro_)}<div style="margin-top:10px">${nota(i.k, v)}</div></div></div>`;
     return fila(i.k, i.n, 'φ ' + fx(i.phi,1), ctrl, det, K.notasIrr[i.k] ? ' <span class="hint">· con nota</span>' : ''); };
   let h = '';
   // 1. Irregularidades
@@ -166,28 +168,34 @@ function irrDatosHTML(K, g, r, ro_){
 }
 
 // ═══ Irregularidad torsional con los desplazamientos de SAP2000 ═══
-function torsionHTML(K, M, ro_){
+function torsionHTML(K, M, ro_, parte){
   const T = K.tor, casos = M?.desp?.casos || [], hay = casos.length > 0;
   const selC = (k, def) => hay ? `<select data-tor="${k}" ${ro_}>${['', ...casos].map(c => `<option value="${esc(c)}" ${T[k] === c ? 'selected' : ''}>${c ? esc(c) : '— escoge —'}</option>`).join('')}</select>`
     : `<input data-tor="${k}" value="${esc(T[k] || '')}" placeholder="${def}" ${ro_}/>`;
-  const res = T.res, filaDir = (dir) => { const r = res?.[dir]; if(!r) return '';
-    return `<div class="tor-dir"><b>Sismo sentido ${dir}</b> <span class="hint">(caso ${esc(r.caso)})</span>
-      ${tabla(['Nudo','U1 [m]','U2 [m]','Δ = √(U1²+U2²)'], r.n.map(x => [esc(x.j), fx(x.U1,6), fx(x.U2,6), fx(x.D,4)]))}
-      ${tabla(['Δmáx','1.2·(Δ1+Δ2)/2','1.4·(Δ1+Δ2)/2','Resultado'], [[fx(r.t.max,4), fx(r.t.l12,4), fx(r.t.l14,4),
-        r.t.tipo ? pill('no', r.t.tipo === '1bP' ? '1bP torsional extrema' : '1aP torsional') : pill('ok', 'Sin irregularidad torsional')]])}</div>`; };
-  return `<div class="tor-box"><h4 class="sub" style="margin-top:0">Irregularidad torsional 1aP / 1bP — cálculo con los desplazamientos del modelo</h4>
-    <div class="fg g4">
-      <div class="f"><label>Nudos extremos (sentido X)</label><input data-tor="nudos" value="${esc(T.nudos || '')}" placeholder="Ej.: 23, 18" ${ro_}/></div>
-      <div class="f"><label>Caso para X</label>${selC('casoX', 'DERX')}</div>
-      <div class="f"><label>Nudos extremos (sentido Y)</label><input data-tor="nudosY" value="${esc(T.nudosY || '')}" placeholder="vacío = los mismos" ${ro_}/></div>
-      <div class="f"><label>Caso para Y</label>${selC('casoY', 'DERY')}</div></div>
+  // Opción A de Amo (24-nov): datos arriba en una tarjeta por sentido; abajo un resultado por sentido con barra de límites
+  const res = T.res;
+  const datos = (dir, kN, kC, ph, def) => `<div class="tor-card"><b>Sentido ${dir}</b><div class="tor-in">
+      <div class="f"><label>Nudos extremos</label><input data-tor="${kN}" value="${esc(T[kN] || '')}" placeholder="${ph}" ${ro_}/></div>
+      <div class="f"><label>Caso</label>${selC(kC, def)}</div></div></div>`;
+  const resDir = dir => { const r = res?.[dir]; if(!r) return '';
+    const t = r.t, top = Math.max(t.l14 * 1.25, t.max * 1.1), pc = v => Math.min(98, Math.max(2, 100 * v / top));
+    const mal = !!t.tipo, txt = t.tipo === '1bP' ? '1bP torsional extrema · φp 0.8' : t.tipo === '1aP' ? '1aP torsional · φp 0.9' : 'Sin irregularidad';
+    return `<div class="tor-card"><div class="tor-cab"><b>Sentido ${dir}</b>${pill(mal ? 'no' : 'ok', txt)}</div>
+      <div class="hint">Caso ${esc(r.caso)} · Δ1 nudo ${esc(r.n[0].j)} = ${fx(r.n[0].D, 4)} m · Δ2 nudo ${esc(r.n[1].j)} = ${fx(r.n[1].D, 4)} m</div>
+      <div class="tor-bar"><i class="tlim" style="left:${pc(t.l12)}%"><span>1.2·prom ${fx(t.l12, 4)}</span></i><i class="tlim up" style="left:${pc(t.l14)}%"><span>1.4·prom ${fx(t.l14, 4)}</span></i><i class="dot ${mal ? 'no' : 'ok'}" style="left:${pc(t.max)}%"></i></div>
+      <div><span class="tor-big">${fx(t.max, 4)}</span> <span class="hint">Δmáx [m] — ${t.tipo === '1bP' ? 'pasa 1.4·prom' : t.tipo === '1aP' ? 'pasa 1.2·prom' : 'cumple (≤ 1.2·prom)'}</span></div></div>`; };
+  const detalle = dir => { const r = res?.[dir]; return r ? `<div><b>Sentido ${dir}</b> <span class="hint">(${esc(r.caso)})</span>${tabla(['Nudo','U1 [m]','U2 [m]','Δ = √(U1²+U2²)'], r.n.map(x => [esc(x.j), fx(x.U1,6), fx(x.U2,6), fx(x.D,4)]))}</div>` : ''; };
+  if(parte === 'res') return `${res?.ok ? `<div class="tor-dos" style="margin-top:12px">${resDir('X')}${resDir('Y')}</div>
+      <details class="tor-det"><summary class="hint">Ver desplazamientos U1, U2 de cada nudo · calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))} (si cambia el modelo, vuelva a revisar)</summary><div class="tor-dos">${detalle('X')}${detalle('Y')}</div></details>` : ''}
+    ${res?.error ? `<div class="note amber" style="margin-top:8px">${esc(res.error)}</div>` : ''}`;
+  return `<div class="tor-box"><h4 class="sub" style="margin-top:0">Irregularidad torsional 1aP / 1bP — con los desplazamientos del modelo</h4>
+    <div class="tor-dos">${datos('X', 'nudos', 'casoX', 'Ej.: 23, 18', 'DERX')}${datos('Y', 'nudosY', 'casoY', 'vacío = los mismos', 'DERY')}</div>
     ${!M?.ok ? '<div class="note amber">Primero sube el modelo en el Anexo C.</div>'
-      : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En el software, después de correr el análisis: <b>File → Export → .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge DERX y DERY). Luego usa «Reemplazar» en el Anexo C.
+      : !hay ? `<div class="note amber"><b>El archivo del modelo no trae desplazamientos.</b> En el software, después de correr el análisis: <b>File → Export → .s2k Text File</b> y en la ventana de tablas marca también <b>Analysis Results → Joint Output → Displacements</b> (con el botón de casos escoge los de derivas). Luego usa «Reemplazar» en el Anexo C.
           <details open style="margin-top:6px"><summary><b>O pega aquí la tabla «Joint Displacements» copiada desde el software</b> (en la ventana de la tabla: Edit → Copy Entire Table)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	U1	U2	U3 …" ${ro_}></textarea></details></div>` : ''}
-    ${hay ? `<details style="margin-top:8px"><summary class="hint">Usar otra tabla de desplazamientos (pegarla desde el software)</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	StepType	U1	U2 …" ${ro_}></textarea></details>` : ''}
-    ${esIng() && M?.ok ? '<button class="btn sm pri" type="button" id="torCalc" style="margin-top:8px">⚙ Revisar irregularidad torsional</button>' : ''}
-    ${res?.ok ? `<div class="tor-res">${filaDir('X')}${filaDir('Y')}</div><div class="hint">Calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))}. Si cambias el modelo, vuelve a revisar.</div>` : ''}
-    ${res?.error ? `<div class="note amber" style="margin-top:8px">${esc(res.error)}</div>` : ''}</div>`;
+    <div class="tor-acc">${esIng() && M?.ok ? '<button class="btn sm pri" type="button" id="torCalc">⚙ Revisar irregularidad torsional</button>' : ''}
+      ${hay ? `<details><summary class="hint">Usar otra tabla de desplazamientos</summary><textarea id="torPega" rows="4" style="width:100%;margin-top:6px" placeholder="Joint	OutputCase	CaseType	StepType	U1	U2 …" ${ro_}></textarea></details>` : ''}</div>
+    ${parte ? '' : torsionHTML(K, M, ro_, 'res')}</div>`;
 }
 function activarTorsion(K, M){
   $$('[data-tor]').forEach(i => i.addEventListener(i.tagName === 'SELECT' ? 'change' : 'input', () => { K.tor[i.dataset.tor] = i.value; guardarMemoria(); }));

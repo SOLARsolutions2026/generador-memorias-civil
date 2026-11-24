@@ -873,3 +873,19 @@ th.n{text-align:right}
 .irr-fig{margin:0;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:6px}
 .irr-fig img{width:100%;display:block}.irr-fig figcaption{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
 @media (max-width:900px){.irr-grid{grid-template-columns:1fr}}
+/* Torsión 1aP/1bP — opción A de Amo (24-nov) */
+.tor-dos{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tor-card{border:1px solid #e2e8f0;border-radius:12px;padding:12px;background:#fff;min-width:0}
+.tor-in{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.tor-acc{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:10px}
+.tor-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tor-bar{position:relative;height:9px;background:#e2e8f0;border-radius:6px;margin:30px 0 26px}
+.tor-bar .tlim{position:absolute;top:-6px;height:21px;border-left:2px dashed #94a3b8}
+.tor-bar .tlim span{position:absolute;top:22px;left:-24px;font-size:10px;color:#64748b;white-space:nowrap;font-style:normal}
+.tor-bar .tlim.up span{top:-17px}
+.tor-bar .dot{position:absolute;top:-5px;width:17px;height:17px;border-radius:50%;border:3px solid #fff;margin-left:-8px;box-shadow:0 0 0 1px #0002}
+.tor-bar .dot.ok{background:#16a34a}.tor-bar .dot.no{background:#dc2626}
+.tor-big{font-size:20px;font-weight:800;color:var(--navy)}
+.tor-det{margin-top:8px}
+@media (max-width:900px){.tor-dos{grid-template-columns:1fr}}
+.irr-grid.tor{grid-template-columns:minmax(200px,260px) 1fr}
