@@ -78,7 +78,7 @@ function interpTabla(tabla, theta, sacar, minAng){
 // Valores iniciales de una memoria nueva
 function defaults(){
   return {
-    tipo:{ paneles:true, lamina:false, correas:true },   // correas: sin cubierta, los rieles se apoyan en correas metálicas (23-nov)
+    tipo:{ paneles:true, lamina:false },
     panel:{ nombre:'TRINASOLAR 700-720W', L:2.384, W:1.303, H:0.033, peso:38.3, cargaF:5400, cargaP:2400, ficha:'fichas/panel-trinasolar-700-720w.pdf' },
     riel:{ nombre:'Alurack Master Rail', alto:0.06, ancho:0.04, peso:0.906, material:'Aluminio 6005-T6', luzMax:2.0, ficha:'fichas/riel-alurack-master-rail.pdf' },
     dBorde:0.40, tribRiel:'', qMant:15,
@@ -101,7 +101,8 @@ function extras(A){
 
 // Separación de los apoyos del riel: con cubierta, el riel se apoya en las correas (su separación manda);
 // sin cubierta, la escribe el diseñador (viento.luz)
-const conCorreas = A => !!(A.tipo.lamina || (A.tipo.paneles && A.tipo.correas));   // hay correas: con cubierta, o sin cubierta con correas bajo los rieles
+// Siempre hay correas (Amo 24-nov): los rieles de los paneles se apoyan en ellas, lleve o no cubierta
+const conCorreas = A => !!(A.tipo.lamina || A.tipo.paneles);
 const luzRiel = A => conCorreas(A) ? num(A.lamina.sep, 0) : num(A.viento?.luz, 0);
 
 // ─── Carga muerta y viva: paneles solares sobre rieles ───

@@ -13,6 +13,8 @@ function datosA(){
   // completa claves nuevas si la memoria se creó con una versión anterior
   const d = AnexoA.defaults(), A = m.anexos.A;
   if(!A._v2){ if(!A.tipo.lamina) A.lamina.perfil = 'ninguna'; A._v2 = true; }
+  // 24-nov: sin cubierta los rieles también se apoyan en las correas; la separación de apoyos del riel que ya tenía (viento.luz) pasa a ser la de las correas
+  if(!A._v3){ if(A.lamina.perfil === 'ninguna' && +A.viento?.luz > 0) A.lamina.sep = A.viento.luz; A._v3 = true; }
   A.tipo.lamina = A.lamina.perfil !== 'ninguna';
   if(A.lamina && A.lamina.cielo && !A.extras){ const l = A.lamina; A.extras = { cielo:l.cielo, ductoE:l.ductoE, ductoM:l.ductoM, lum:l.lum, otras:[] }; delete l.cielo; delete l.ductoE; delete l.ductoM; delete l.lum; }
   (function fill(t, s){ for(const k in s){ if(t[k] === undefined) t[k] = JSON.parse(JSON.stringify(s[k])); else if(s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) fill(t[k], s[k]); } })(A, d);
@@ -74,7 +76,7 @@ cubierta(A, R){
       ${A.tipo.lamina ? `${mat.calibres ? fSel(A,'lamina.calibre','Calibre',Object.keys(mat.calibres).map(c => [c,`Calibre ${c}`]),{re:1}) : '<div></div>'}
       ${fIn(A,'lamina.sep','Separación de correas [m]')}
       ${fIn(A,'lamina.wManual','Peso de la cubierta [kg/m²]',{cls:'span2',ph:L&&L.wAuto?fx(L.wAuto,2)+' (de la tabla)':'Escribe el peso',h:'Vacío = valor de la tabla. Escribe otro si tu material pesa distinto.'})}` : ''}
-      ${!A.tipo.lamina && A.tipo.paneles ? `<div class="f span2" style="align-self:end">${fChk(A,'tipo.correas','Los rieles se apoyan en correas metálicas')}<div class="hint">Sin lámina: la correa lleva la viva de montaje y las cargas adicionales</div></div>${A.tipo.correas ? fIn(A,'lamina.sep','Separación de correas [m]') : ''}` : ''}</div>
+      ${!A.tipo.lamina && A.tipo.paneles ? fIn(A,'lamina.sep','Separación de correas [m]',{h:'Los rieles de los paneles se apoyan en las correas'}) : ''}</div>
     ${A.tipo.lamina ? `<div class="hint" id="fuenteCub" style="margin-top:6px">${L ? 'Fuente: ' + esc(L.fuente) + (L.metal && !L.manual ? ` — ${fx(L.pesoLin,3)} kg/m ÷ ${fx(L.ancho,2)} m de ancho útil` : '') : ''}</div>` : ''}
     ${!A.tipo.lamina && !A.tipo.paneles ? '<div class="note amber" style="margin-top:10px">Sin paneles y sin cubierta no hay cargas que calcular. Escoge al menos una.</div>' : ''}</div>
   <div class="card"><div class="ct">Cargas adicionales (solo si existen en el proyecto)</div>
