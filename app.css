@@ -868,3 +868,8 @@ body.con-sb .fila-mem:not(:has(>.btn:not(#back):not(#btnHist),>.pill)){display:n
 .sbar.sb-fija .sb-av{flex:0 0 auto;margin-top:10px}
 /* Títulos de columnas numéricas alineados con sus valores (alinearTablas, 23-nov) */
 th.n{text-align:right}
+/* Irregularidades con figura y datos (24-nov) */
+.irr-grid{display:grid;grid-template-columns:minmax(240px,440px) 1fr;gap:14px;align-items:start}
+.irr-fig{margin:0;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:6px}
+.irr-fig img{width:100%;display:block}.irr-fig figcaption{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+@media (max-width:900px){.irr-grid{grid-template-columns:1fr}}

@@ -215,8 +215,15 @@ function memDoc(ctx, ed){
     if(K.redImg) fig('red', 'Revisión de la redundancia de la estructura', ctx.urlsRed ? `<img src="${esc(ctx.urlsRed)}" alt=""/>` : '');
     H(3, 'Irregularidades en planta');
     tabla(['', 'Irregularidad', 'Sí / No', 'φp'], Combos.IRR_P.map(i => [i.k, esc(i.n), K.irrP?.[i.k] ? 'SÍ' : 'NO', K.irrP?.[i.k] ? fx(i.phi, 2) : '—']).concat([['', '<b>φp</b>', '', `<b>${fx(Rk.phiP, 2)}</b>`]]), 'Irregularidades en planta (Tabla A.3-6)');
+    const IRm = Combos.irregularidades ? Combos.irregularidades(K) : {};
+    const irrTxt = lista => { const vistos = new Set(); lista.forEach(i => { const g = Combos.GRUPO_IRR?.[i.k];
+      if(g && IRm[g] && !vistos.has(g)){ vistos.add(g); out(`<p><b>${esc(g === '1A' ? '1aA / 1bA' : g === '5A' ? '5aA / 5bA' : g)}.</b> ${esc(IRm[g].txt)}</p>`);
+        if(IRm[g].filas) tabla(IRm[g].cols, IRm[g].filas.map(f => f.map(x => esc(x))), `Revisión de la irregularidad ${g === '1A' ? '1aA / 1bA' : g === '5A' ? '5aA / 5bA' : g}`); }
+      if(K.notasIrr?.[i.k]) out(`<p><b>${esc(i.k)}.</b> ${esc(K.notasIrr[i.k])}</p>`); }); };
+    irrTxt(Combos.IRR_P);
     H(3, 'Irregularidades en altura');
     tabla(['', 'Irregularidad', 'Sí / No', 'φa'], Combos.IRR_A.map(i => [i.k, esc(i.n), K.irrA?.[i.k] ? 'SÍ' : 'NO', K.irrA?.[i.k] ? fx(i.phi, 2) : '—']).concat([['', '<b>φa</b>', '', `<b>${fx(Rk.phiA, 2)}</b>`]]), 'Irregularidades en altura (Tabla A.3-7)');
+    irrTxt(Combos.IRR_A);
     H(3, 'Coeficiente de disipación de energía R');
     out(`<p class="m-eq">R = φa · φp · φr · R0 = ${fx(Rk.phiA, 2)} × ${fx(Rk.phiP, 2)} × ${fx(Rk.phiR, 2)} × ${fx(Rk.R0, 1)} = <b>${fx(Rk.R, 2)}</b> &nbsp;(Ec. A.3.3-1)</p>`);
   }

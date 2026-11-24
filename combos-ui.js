@@ -19,9 +19,14 @@ let irrAbierta = null;   // fila de irregularidad abierta (solo una)
 function paneCombos(){
   const K = datosK(), sis = sismoK(), ro_ = esIng() ? '' : 'disabled', M = S.m.anexos?.C?.modelo;
   if(K.patAuto && M?.ok){ const p = Combos.patronesDeModelo(M, AnexoC.categoria); if(p){ for(const k in p) if(p[k]) K.pat[k] = p[k]; K.patAuto = false; guardarMemoria(); } }
-  const R = Combos.coefR(K);
   const seg = (attr, val, si) => `<div class="seg sm" role="group"><button type="button" ${attr}="1" class="${val ? 'on' : ''}" ${ro_}>${si || 'Sí'}</button><button type="button" ${attr}="0" class="${!val ? 'on' : ''}" ${ro_}>No</button></div>`;
   const torAuto = !!K.tor?.res?.ok;
+  // Revisión numérica de las demás irregularidades (24-nov): con datos completos fija el Sí/No
+  K.irrD = K.irrD || {};
+  const IR = Combos.irregularidades(K), autoK = new Set(); let cambio = false;
+  for(const g in IR) for(const [k, v] of Object.entries(IR[g].claves)){ const lado = Combos.IRR_P.some(i => i.k === k) ? 'irrP' : 'irrA'; autoK.add(k); if(!!K[lado][k] !== v){ K[lado][k] = v; cambio = true; } }
+  if(cambio){ sincronizarIrregular(); guardarMemoria(); }
+  const R = Combos.coefR(K);
   const nota = (k, v) => `<label>Nota para la memoria</label><input class="nota-irr" data-nirr="${k}" value="${esc(K.notasIrr[k] || '')}" placeholder="${v ? 'Por qué aplica' : 'Justificación (opcional)'}" ${ro_}/>`;
   const redDet = `<div class="red-box"><div class="f"><label for="redCalc">Cálculo / justificación (sale en la memoria)</label><textarea id="redCalc" rows="4" placeholder="Escribe el cálculo de la redundancia…" ${ro_}>${esc(K.redCalc || '')}</textarea><div class="hint">Sí (no tiene redundancia) → φr = 0.75 · No (sí tiene) → φr = 1.00</div></div>
         <div>${K.redImg ? `<div class="drop-img has" id="redImgV" style="max-width:none"><span class="muted">Cargando…</span></div>
@@ -32,9 +37,10 @@ function paneCombos(){
   const fila = (k, nombre, phi, ctrl, det, marca) => { const ab = irrAbierta === k;
     return `<div class="irr-row ${ab ? 'ab' : ''}" data-abre="${k}"><span class="chev">${ab ? '▾' : '▸'}</span><b class="ik">${esc(k === 'red' ? 'φr' : k)}</b><span class="in">${esc(nombre)}${marca || ''}</span><span class="iphi">${phi}</span>${ctrl}</div>
       ${ab ? `<div class="irr-det">${det}</div>` : ''}`; };
-  const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = torAuto && (i.k === '1aP' || i.k === '1bP');
+  const filaIrr = (i, lado) => { const v = !!K[lado][i.k], auto = (torAuto && (i.k === '1aP' || i.k === '1bP')) || autoK.has(i.k);
     const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí aplica' : 'No aplica'} · según cálculo</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
-    const det = (i.k === '1aP' || i.k === '1bP') ? torsionHTML(K, M, ro_) + `<div style="margin-top:10px">${nota(i.k, v)}</div>` : nota(i.k, v);
+    const g = Combos.GRUPO_IRR[i.k], fig = `<figure class="irr-fig"><a href="img/irr-${g}.jpg" target="_blank" rel="noopener" title="Ver en grande"><img src="img/irr-${g}.jpg" alt="Figura ${lado === 'irrP' ? 'A.3-1' : 'A.3-2'} · ${esc(i.k)}" loading="lazy"/></a><figcaption>Toque para ver en grande · NSR-10 Figura ${lado === 'irrP' ? 'A.3-1 — Irregularidades en planta' : 'A.3-2 — Irregularidades en altura'}</figcaption></figure>`;
+    const det = `<div class="irr-grid">${fig}<div>${(i.k === '1aP' || i.k === '1bP') ? torsionHTML(K, M, ro_) : irrDatosHTML(K, g, IR[g], ro_)}<div style="margin-top:10px">${nota(i.k, v)}</div></div></div>`;
     return fila(i.k, i.n, 'φ ' + fx(i.phi,1), ctrl, det, K.notasIrr[i.k] ? ' <span class="hint">· con nota</span>' : ''); };
   let h = '';
   // 1. Irregularidades
@@ -43,7 +49,7 @@ function paneCombos(){
   else {
     h += `<div class="fg g4">${fSel(K,'sisR','Sistema estructural (Tabla A.3-3)',Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}` : '')]),{cls:'span4',re:1})}
         ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) : ''}</div>
-      <div class="hint" style="margin:8px 0 2px">Toca una fila (▸) para abrir sus datos: la torsión se calcula en 1aP/1bP; las demás llevan una nota.</div>
+      <div class="hint" style="margin:8px 0 2px">Toca una fila (▸) para abrir su figura y sus datos. Con los datos completos la revisión fija el Sí/No; 4P y 5P se deciden mirando la figura.</div>
       <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${Combos.IRR_P.map(i => filaIrr(i, 'irrP')).join('')}
       <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${Combos.IRR_A.map(i => filaIrr(i, 'irrA')).join('')}
       <h4 class="sub">Redundancia (A.3.3.8) → φr</h4>${fila('red', '¿Ausencia de redundancia?', 'φ ' + fx(R.phiR,2), seg('data-red', K.redundante === false), redDet,
@@ -112,6 +118,13 @@ function paneCombos(){
   activarTorsion(K, M);
   $$('[data-abre]').forEach(r => r.onclick = e => { if(e.target.closest('.seg, button, input')) return; irrAbierta = irrAbierta === r.dataset.abre ? null : r.dataset.abre; paneCombos(); });
   $$('[data-nirr]').forEach(i => i.oninput = () => { K.notasIrr[i.dataset.nirr] = i.value; guardarMemoria(); });
+  // Datos de las irregularidades (24-nov)
+  $$('[data-ird]').forEach(i => { const [g, c] = i.dataset.ird.split('.'); const set = () => { K.irrD[g] = K.irrD[g] || {}; K.irrD[g][c] = i.value; guardarMemoria(); };
+    i.oninput = set; i.onchange = () => { set(); paneCombos(); }; });
+  $$('[data-pis]').forEach(i => { const [n, c] = i.dataset.pis.split('.'); const set = () => { K.irrD.pisos[+n][c] = i.value; guardarMemoria(); };
+    i.oninput = set; i.onchange = () => { set(); paneCombos(); }; });
+  if($('#pisoAdd')) $('#pisoAdd').onclick = () => { const L = K.irrD.pisos = K.irrD.pisos || []; L.push({ n:`Piso ${L.length + 1}` }); guardarMemoria(); paneCombos(); };
+  $$('[data-pisodel]').forEach(b => b.onclick = () => { K.irrD.pisos.splice(+b.dataset.pisodel, 1); guardarMemoria(); paneCombos(); });
   $$('[data-con]').forEach(c => c.onchange = () => { const s = new Set(K.off); c.checked ? s.delete(c.dataset.con) : s.add(c.dataset.con); K.off = [...s]; guardarMemoria(); paneCombos(); });
   $$('#pane [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {
     setP(K, inp.dataset.a, inp.type === 'checkbox' ? inp.checked : inp.value); sincronizarIrregular(); guardarMemoria();
@@ -125,6 +138,31 @@ function paneCombos(){
   const txt = () => Combos.tablaSAP(calcK().activas);
   $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt()); toast('Tabla copiada. Pégala en Excel o en el software.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
   $('#bajaK').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt()], { type:'text/plain' })); a.download = `${S.m.consecutivo}_combinaciones.txt`; a.click(); };
+}
+
+// ═══ Datos y revisión de cada irregularidad (pedido de Amo 24-nov) ═══
+const COLS_PISO = { '1A':[['V', 'Cortante del piso V [kN]'], ['d', 'Deriva del piso Δ [mm]']], '2A':[['m', 'Masa del piso [kN o t]']], '3A':[['a', 'Dimensión horizontal a [m]']], '5A':[['R', 'Resistencia del piso [kN]']] };
+function irrDatosHTML(K, g, r, ro_){
+  const D = K.irrD, inp = (k, l, h) => `<div class="f"><label>${l}</label><input inputmode="decimal" data-ird="${g}.${k}" value="${esc(D[g]?.[k] ?? '')}" ${ro_}/>${h ? `<div class="hint">${h}</div>` : ''}</div>`;
+  const res = r ? `<div class="note ${Object.values(r.claves).some(x => x) ? 'amber' : 'green'}" style="margin-top:8px">${esc(r.txt)}</div>` : '';
+  const tablaR = r?.filas ? `<table class="t" style="margin-top:8px"><thead><tr>${r.cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${r.filas.map(f => `<tr>${f.map((x, j) => `<td class="${j ? 'n' : ''}">${j === f.length - 1 && x !== 'No' ? `<b style="color:#b91c1c">${esc(x)}</b>` : esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+  if(g === '2P') return `<div class="fg g4">${inp('A', 'A [m]', 'Retroceso en el sentido de B')}${inp('B', 'B [m]', 'Lado total')}${inp('C', 'C [m]', 'Retroceso en el sentido de D')}${inp('D', 'D [m]', 'Lado total')}</div>
+    <div class="hint">Hay irregularidad si A > 0.15·B y además C > 0.15·D.</div>${res}`;
+  if(g === '3P'){ const c2 = D['3P']?.caso === '2';
+    return `<div class="fg g4"><div class="f"><label>Caso de la figura</label><select data-ird="3P.caso" ${ro_}><option value="1" ${!c2 ? 'selected' : ''}>1) Abertura interior C × D</option><option value="2" ${c2 ? 'selected' : ''}>2) Aberturas C × D + C × E</option></select></div>
+      ${inp('A', 'A [m]', 'Largo del diafragma')}${inp('B', 'B [m]', 'Ancho del diafragma')}${inp('C', 'C [m]')}${inp('D', 'D [m]')}${c2 ? inp('E', 'E [m]') : ''}</div>
+      <div class="hint">Hay irregularidad si el área de las aberturas es mayor que la mitad del área del diafragma (0.5·A·B).</div>${res}`; }
+  if(g === '4A') return `<div class="fg g4">${inp('a', 'a [m]', 'Largo del elemento vertical')}${inp('b', 'b [m]', 'Desplazamiento de su plano de acción')}</div><div class="hint">Hay irregularidad si b > a.</div>${res}`;
+  if(g === '4P' || g === '5P') return `<div class="hint">${g === '4P' ? 'Se presenta cuando la trayectoria de las fuerzas sísmicas se interrumpe porque un elemento vertical (muro, pórtico o arriostramiento) cambia de plano entre pisos. Compare la estructura con la figura y marque Sí o No.' : 'Se presenta cuando los elementos verticales que resisten el sismo no son paralelos ni simétricos respecto a los ejes principales. Compare la planta con la figura y marque Sí o No.'}</div>`;
+  if(COLS_PISO[g]){
+    const L = D.pisos || [], cols = COLS_PISO[g];
+    const filas = L.map((p, i) => `<tr><td><input data-pis="${i}.n" value="${esc(p.n || '')}" ${ro_} style="width:90px"/></td>${cols.map(([k]) => `<td><input inputmode="decimal" data-pis="${i}.${k}" value="${esc(p[k] ?? '')}" ${ro_} style="width:100px"/></td>`).join('')}<td>${esIng() ? `<button class="btn sm" type="button" data-pisodel="${i}" title="Quitar">✕</button>` : ''}</td></tr>`).join('');
+    const ayuda = { '1A':'Rigidez del piso K = V/Δ: cortante del piso y deriva del piso (desplazamiento relativo) en la misma dirección, del modelo.', '2A':'Masa (o peso) de cada piso, del avalúo de cargas.', '3A':'Dimensión horizontal del sistema de resistencia sísmica en cada piso, en la dirección revisada.', '5A':'Resistencia del piso = suma de las resistencias a cortante de los elementos que toman el cortante del piso en esa dirección.' }[g];
+    return `<div class="hint" style="margin-bottom:6px">${ayuda} Los pisos van de abajo (Piso 1) hacia arriba; los mismos pisos sirven para 1A, 2A, 3A y 5A.</div>
+      <table class="t"><thead><tr><th>Piso</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th></th></tr></thead><tbody>${filas || `<tr><td colspan="${cols.length + 2}" class="muted">Sin pisos</td></tr>`}</tbody></table>
+      ${esIng() ? '<button class="btn sm" type="button" id="pisoAdd" style="margin-top:6px">＋ Agregar piso</button>' : ''}
+      ${L.length < 2 ? '<div class="note" style="margin-top:6px">Con un solo piso esta irregularidad no aplica: márquela «No» o agregue los pisos.</div>' : ''}${tablaR}${res}`; }
+  return '';
 }
 
 // ═══ Irregularidad torsional con los desplazamientos de SAP2000 ═══

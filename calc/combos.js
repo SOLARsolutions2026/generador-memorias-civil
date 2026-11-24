@@ -182,6 +182,55 @@ function compararSAP(lista, combosSAP){
   return lista.map(c => ({ id:c.id, txt:c.txt, en:sapF.get(firma(c.sap)) || null }));
 }
 
-const api = { torsion, IRR_P, IRR_A, R0S, SIMB, defaults, patronesDeModelo, coefR, generar, calcular, leerExpr, expr, tablaSAP, compararSAP };
+
+// ═══ Revisión numérica de las irregularidades (pedido de Amo 24-nov; Figuras A.3-1 y A.3-2) ═══
+// Datos en K.irrD = { '2P':{A,B,C,D}, '3P':{caso,A,B,C,D,E}, '4A':{a,b}, pisos:[{n,V,d,m,a,R}] } (pisos de abajo hacia arriba).
+// Devuelve, por cada revisión con datos completos, { claves:{k:true|false}, txt, filas? }.
+const nn = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : null; };
+const f2 = x => (Math.round(x * 100) / 100).toString();
+function irregularidades(K){
+  const D = K.irrD || {}, out = {};
+  { const d = D['2P'] || {}, A = nn(d.A), B = nn(d.B), C = nn(d.C), Dd = nn(d.D);
+    if(A && B && C && Dd){ const s = A > 0.15 * B && C > 0.15 * Dd;
+      out['2P'] = { claves:{ '2P':s }, txt:`Retrocesos: A = ${f2(A)} m ${A > 0.15 * B ? '>' : '≤'} 0.15·B = ${f2(0.15 * B)} m y C = ${f2(C)} m ${C > 0.15 * Dd ? '>' : '≤'} 0.15·D = ${f2(0.15 * Dd)} m → ${s ? 'hay' : 'no hay'} irregularidad 2P.` }; } }
+  { const d = D['3P'] || {}, A = nn(d.A), B = nn(d.B), C = nn(d.C), Dd = nn(d.D), E = nn(d.E) || 0, c2 = d.caso === '2';
+    if(A && B && C && Dd){ const ab = c2 ? C * Dd + C * E : C * Dd, lim = 0.5 * A * B, s = ab > lim;
+      out['3P'] = { claves:{ '3P':s }, txt:`Aberturas del diafragma: ${c2 ? 'C·D + C·E' : 'C·D'} = ${f2(ab)} m² ${s ? '>' : '≤'} 0.5·A·B = ${f2(lim)} m² → ${s ? 'hay' : 'no hay'} irregularidad 3P.` }; } }
+  { const d = D['4A'] || {}, a = nn(d.a), b = nn(d.b);
+    if(a && b != null){ const s = b > a; out['4A'] = { claves:{ '4A':s }, txt:`Desplazamiento en el plano: b = ${f2(b)} m ${s ? '>' : '≤'} a = ${f2(a)} m → ${s ? 'hay' : 'no hay'} irregularidad 4A.` }; } }
+  const P = (D.pisos || []).map((p, i) => ({ n:p.n || `Piso ${i + 1}`, V:nn(p.V), d:nn(p.d), m:nn(p.m), a:nn(p.a), R:nn(p.R) }));
+  if(P.length >= 2){
+    // 1aA / 1bA: rigidez de cada piso K = V/Δ frente al de arriba y al promedio de los tres de arriba
+    const Ks = P.map(p => p.V && p.d ? p.V / p.d : null);
+    if(Ks.every(x => x)){ const filas = []; let a = false, b = false;
+      for(let i = 0; i < P.length - 1; i++){ const k = Ks[i], k1 = Ks[i + 1], tres = Ks.slice(i + 1, i + 4), pr = tres.length === 3 ? tres.reduce((x, y) => x + y, 0) / 3 : null;
+        const r1 = k / k1, r3 = pr ? k / pr : null, eb = r1 < 0.6 || (r3 != null && r3 < 0.7), ea = !eb && (r1 < 0.7 || (r3 != null && r3 < 0.8));
+        a = a || ea; b = b || eb; filas.push([P[i].n, f2(k), f2(r1), r3 == null ? '—' : f2(r3), eb ? '1bA' : ea ? '1aA' : 'No']); }
+      out['1A'] = { claves:{ '1aA':a && !b, '1bA':b }, filas, cols:['Piso', 'K = V/Δ [kN/mm]', 'K / K arriba', 'K / prom. 3 arriba', 'Resultado'],
+        txt:`Rigidez de cada piso K = V/Δ comparada con la del piso de arriba (1aA si < 0.70, 1bA si < 0.60) y con el promedio de los tres de arriba (1aA si < 0.80, 1bA si < 0.70) → ${b ? 'hay irregularidad 1bA' : a ? 'hay irregularidad 1aA' : 'no hay piso flexible'}.` }; }
+    // 2A: masa de un piso > 1.5 la de un piso adyacente (la cubierta más liviana no se compara)
+    if(P.every(p => p.m)){ const filas = []; let s = false, top = P.length - 1;
+      P.forEach((p, i) => { const vec = [i > 0 ? P[i - 1] : null, i + 1 < top ? P[i + 1] : null].filter(Boolean);
+        const mx = vec.length ? Math.max(...vec.map(q => p.m / q.m)) : null, e = mx != null && mx > 1.5 && i !== top; s = s || e;
+        filas.push([p.n, f2(p.m), mx == null ? '—' : f2(mx), e ? '2A' : 'No']); });
+      out['2A'] = { claves:{ '2A':s }, filas, cols:['Piso', 'Masa', 'Mayor relación con un piso vecino', 'Resultado'],
+        txt:`Masa de cada piso frente a la de sus pisos vecinos (límite 1.50; la cubierta no se compara) → ${s ? 'hay' : 'no hay'} irregularidad 2A.` }; }
+    // 3A: dimensión horizontal del sistema de resistencia sísmica > 1.30 la de un piso adyacente
+    if(P.every(p => p.a)){ const filas = []; let s = false;
+      P.forEach((p, i) => { const vec = [P[i - 1], P[i + 1]].filter(Boolean), mx = Math.max(...vec.map(q => p.a / q.a)), e = mx > 1.3; s = s || e; filas.push([p.n, f2(p.a), f2(mx), e ? '3A' : 'No']); });
+      out['3A'] = { claves:{ '3A':s }, filas, cols:['Piso', 'Dimensión a [m]', 'Mayor relación con un piso vecino', 'Resultado'],
+        txt:`Dimensión horizontal del sistema de resistencia sísmica de cada piso frente a la de sus pisos vecinos (límite 1.30) → ${s ? 'hay' : 'no hay'} irregularidad 3A.` }; }
+    // 5aA / 5bA: resistencia del piso < 0.80 (< 0.65 extrema) la del piso de arriba
+    if(P.every(p => p.R)){ const filas = []; let a = false, b = false;
+      for(let i = 0; i < P.length - 1; i++){ const r = P[i].R / P[i + 1].R, eb = r < 0.65, ea = !eb && r < 0.8; a = a || ea; b = b || eb; filas.push([P[i].n, f2(P[i].R), f2(r), eb ? '5bA' : ea ? '5aA' : 'No']); }
+      out['5A'] = { claves:{ '5aA':a && !b, '5bA':b }, filas, cols:['Piso', 'Resistencia [kN]', 'R / R arriba', 'Resultado'],
+        txt:`Resistencia de cada piso frente a la del piso de arriba (5aA si < 0.80, 5bA si < 0.65) → ${b ? 'hay piso débil extremo 5bA' : a ? 'hay piso débil 5aA' : 'no hay piso débil'}.` }; }
+  }
+  return out;
+}
+// Grupo de revisión de cada irregularidad (las que comparten figura y datos)
+const GRUPO_IRR = { '1aP':'1P', '1bP':'1P', '2P':'2P', '3P':'3P', '4P':'4P', '5P':'5P', '1aA':'1A', '1bA':'1A', '2A':'2A', '3A':'3A', '4A':'4A', '5aA':'5A', '5bA':'5A' };
+
+const api = { irregularidades, GRUPO_IRR, torsion, IRR_P, IRR_A, R0S, SIMB, defaults, patronesDeModelo, coefR, generar, calcular, leerExpr, expr, tablaSAP, compararSAP };
 if(typeof module !== 'undefined') module.exports = api; else root.Combos = api;
 })(typeof window !== 'undefined' ? window : globalThis);
