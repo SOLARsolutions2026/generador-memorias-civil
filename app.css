@@ -889,3 +889,5 @@ th.n{text-align:right}
 .tor-det{margin-top:8px}
 @media (max-width:900px){.tor-dos{grid-template-columns:1fr}}
 .irr-grid.tor{grid-template-columns:minmax(200px,260px) 1fr}
+.tor-bar .tlim.on{border-left:2px solid #334155}.tor-bar .tlim.on span{color:#0f172a;font-weight:700}
+.tor-bar .tlim.off{opacity:.45}

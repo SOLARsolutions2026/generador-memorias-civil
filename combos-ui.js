@@ -41,7 +41,7 @@ function paneCombos(){
     const ctrl = auto ? `<span class="pill ${v ? 'no' : 'ok'}">${v ? 'Sí aplica' : 'No aplica'} · según cálculo</span>` : seg(`data-irr="${lado}.${i.k}" data-v`, v);
     const g = Combos.GRUPO_IRR[i.k], fig = `<figure class="irr-fig"><a href="img/irr-${g}.jpg" target="_blank" rel="noopener" title="Ver en grande"><img src="img/irr-${g}.jpg" alt="Figura ${lado === 'irrP' ? 'A.3-1' : 'A.3-2'} · ${esc(i.k)}" loading="lazy"/></a><figcaption>Toque para ver en grande · NSR-10 Figura ${lado === 'irrP' ? 'A.3-1 — Irregularidades en planta' : 'A.3-2 — Irregularidades en altura'}</figcaption></figure>`;
     const det = (i.k === '1aP' || i.k === '1bP')
-      ? `<div class="irr-grid tor">${fig}<div>${torsionHTML(K, M, ro_, 'datos')}</div></div>${torsionHTML(K, M, ro_, 'res')}<div style="margin-top:10px">${nota(i.k, v)}</div>`
+      ? `<div class="irr-grid tor">${fig}<div>${torsionHTML(K, M, ro_, 'datos')}</div></div>${torsionHTML(K, M, ro_, 'res', i.k)}<div style="margin-top:10px">${nota(i.k, v)}</div>`
       : `<div class="irr-grid">${fig}<div>${irrDatosHTML(K, g, IR[g], ro_)}<div style="margin-top:10px">${nota(i.k, v)}</div></div></div>`;
     return fila(i.k, i.n, 'φ ' + fx(i.phi,1), ctrl, det, K.notasIrr[i.k] ? ' <span class="hint">· con nota</span>' : ''); };
   let h = '';
@@ -168,7 +168,7 @@ function irrDatosHTML(K, g, r, ro_){
 }
 
 // ═══ Irregularidad torsional con los desplazamientos de SAP2000 ═══
-function torsionHTML(K, M, ro_, parte){
+function torsionHTML(K, M, ro_, parte, nivel){
   const T = K.tor, casos = M?.desp?.casos || [], hay = casos.length > 0;
   const selC = (k, def) => hay ? `<select data-tor="${k}" ${ro_}>${['', ...casos].map(c => `<option value="${esc(c)}" ${T[k] === c ? 'selected' : ''}>${c ? esc(c) : '— escoge —'}</option>`).join('')}</select>`
     : `<input data-tor="${k}" value="${esc(T[k] || '')}" placeholder="${def}" ${ro_}/>`;
@@ -177,13 +177,18 @@ function torsionHTML(K, M, ro_, parte){
   const datos = (dir, kN, kC, ph, def) => `<div class="tor-card"><b>Sentido ${dir}</b><div class="tor-in">
       <div class="f"><label>Nudos extremos</label><input data-tor="${kN}" value="${esc(T[kN] || '')}" placeholder="${ph}" ${ro_}/></div>
       <div class="f"><label>Caso</label>${selC(kC, def)}</div></div></div>`;
+  // Opción B de Amo (24-nov): cada fila se pinta contra su propio límite (1aP → 1.2·prom, 1bP → 1.4·prom)
+  const ext = nivel === '1bP';
   const resDir = dir => { const r = res?.[dir]; if(!r) return '';
     const t = r.t, top = Math.max(t.l14 * 1.25, t.max * 1.1), pc = v => Math.min(98, Math.max(2, 100 * v / top));
-    const mal = !!t.tipo, txt = t.tipo === '1bP' ? '1bP torsional extrema · φp 0.8' : t.tipo === '1aP' ? '1aP torsional · φp 0.9' : 'Sin irregularidad';
+    const mal = ext ? t.tipo === '1bP' : !!t.tipo;
+    const txt = ext ? (t.tipo === '1bP' ? '1bP torsional extrema · φp 0.8' : t.tipo === '1aP' ? 'No llega a 1bP (sí tiene 1aP)' : 'Sin irregularidad')
+                    : (t.tipo === '1aP' ? '1aP torsional · φp 0.9' : t.tipo === '1bP' ? 'Pasa a 1bP (extrema)' : 'Sin irregularidad');
+    const lim = ext ? t.l14 : t.l12, nl = ext ? '1.4·prom' : '1.2·prom';
     return `<div class="tor-card"><div class="tor-cab"><b>Sentido ${dir}</b>${pill(mal ? 'no' : 'ok', txt)}</div>
       <div class="hint">Caso ${esc(r.caso)} · Δ1 nudo ${esc(r.n[0].j)} = ${fx(r.n[0].D, 4)} m · Δ2 nudo ${esc(r.n[1].j)} = ${fx(r.n[1].D, 4)} m</div>
-      <div class="tor-bar"><i class="tlim" style="left:${pc(t.l12)}%"><span>1.2·prom ${fx(t.l12, 4)}</span></i><i class="tlim up" style="left:${pc(t.l14)}%"><span>1.4·prom ${fx(t.l14, 4)}</span></i><i class="dot ${mal ? 'no' : 'ok'}" style="left:${pc(t.max)}%"></i></div>
-      <div><span class="tor-big">${fx(t.max, 4)}</span> <span class="hint">Δmáx [m] — ${t.tipo === '1bP' ? 'pasa 1.4·prom' : t.tipo === '1aP' ? 'pasa 1.2·prom' : 'cumple (≤ 1.2·prom)'}</span></div></div>`; };
+      <div class="tor-bar"><i class="tlim ${ext ? 'off' : 'on'}" style="left:${pc(t.l12)}%"><span>1.2·prom ${fx(t.l12, 4)}</span></i><i class="tlim up ${ext ? 'on' : 'off'}" style="left:${pc(t.l14)}%"><span>1.4·prom ${fx(t.l14, 4)}</span></i><i class="dot ${mal ? 'no' : 'ok'}" style="left:${pc(t.max)}%"></i></div>
+      <div><span class="tor-big">${fx(t.max, 4)}</span> <span class="hint">Δmáx [m] — ${t.max > lim ? 'pasa' : 'no pasa'} ${nl} = ${fx(lim, 4)} (límite de ${ext ? '1bP' : '1aP'})</span></div></div>`; };
   const detalle = dir => { const r = res?.[dir]; return r ? `<div><b>Sentido ${dir}</b> <span class="hint">(${esc(r.caso)})</span>${tabla(['Nudo','U1 [m]','U2 [m]','Δ = √(U1²+U2²)'], r.n.map(x => [esc(x.j), fx(x.U1,6), fx(x.U2,6), fx(x.D,4)]))}</div>` : ''; };
   if(parte === 'res') return `${res?.ok ? `<div class="tor-dos" style="margin-top:12px">${resDir('X')}${resDir('Y')}</div>
       <details class="tor-det"><summary class="hint">Ver desplazamientos U1, U2 de cada nudo · calculado el ${esc(new Date(res.fecha).toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' }))} (si cambia el modelo, vuelva a revisar)</summary><div class="tor-dos">${detalle('X')}${detalle('Y')}</div></details>` : ''}
