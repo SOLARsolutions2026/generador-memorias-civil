@@ -13,7 +13,7 @@ const ACEROS = {               // Fy, Fu [MPa]
   'A992':        { Fy:345, Fu:450 },
   'A500 Gr B':   { Fy:317, Fu:400 },   // tubos estructurales (perfiles cuadrados/rectangulares)
   'A500 Gr C':   { Fy:345, Fu:427 },
-  'A500 Gr C':   { Fy:345, Fu:427 },
+  'A53 Gr B':    { Fy:240, Fu:415 },   // tubo redondo (pipe) — diagonales (24-nov)
 };
 // NSR-10 Tabla F.2.10.3-2 (AISC Tabla J3.2): Fnt y Fnv [MPa]; N = rosca incluida en el plano de corte, X = excluida
 const PERNOS = {
@@ -404,8 +404,8 @@ function defaultsTesta(){
     rigCol:'auto', tsC:'', bsC:'', wsC:'', aceroRigC:'A36', // rigidizadores (placas de continuidad) de la columna
     sismo:'no', Lh:6, Vg:30 };                             // F.3 (AISC 358): DMO = pórtico intermedio, DES = especial
 }
-const RY = ac => /A36/.test(ac) ? 1.5 : /A500 Gr B/.test(ac) ? 1.4 : /A500/.test(ac) ? 1.3 : 1.1;   // NSR-10 F.3 / AISC 341 Tabla A3.1
-const RT = ac => /A36/.test(ac) ? 1.2 : /A500 Gr B/.test(ac) ? 1.3 : /A500/.test(ac) ? 1.2 : 1.1;   // Rt (Fu esperado)
+const RY = ac => /A53/.test(ac) ? 1.6 : /A36/.test(ac) ? 1.5 : /A500 Gr B/.test(ac) ? 1.4 : /A500/.test(ac) ? 1.3 : 1.1;   // NSR-10 F.3 / AISC 341 Tabla A3.1
+const RT = ac => /A53/.test(ac) ? 1.2 : /A36/.test(ac) ? 1.2 : /A500 Gr B/.test(ac) ? 1.3 : /A500/.test(ac) ? 1.2 : 1.1;   // Rt (Fu esperado)
 const ESP_PL = [6.4, 8, 9.5, 12.7, 15.9, 19.1, 22.2, 25.4, 28.6, 31.8, 38.1];
 function calcTesta(c){
   const ch = [], av = [], pasos = [], req = [];
@@ -1104,7 +1104,7 @@ function defaultsCartela(){
   return { tipo:'cartela', nom:'', desc:'', Pu:150, nL:2, bL:76, tL:6.4, aceroL:'A36', n:3, s:65, Le:38, ga:45,
     tg:9.5, aceroG:'A36', Lcr:150, K:0.65, theta:45, Lwg:250, w:6, electrodo:'E70XX', d:19.1, grado:'A325', rosca:'N',
     // Diagonal de tubo cuadrado ranurado y soldado a la cartela (opción A de Amo, 20-nov)
-    diag:'L', Bt:100, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4,
+    diag:'L', Bt:100, Dt:114.3, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4,
     // Revisión con Amo (20-nov, puntos 1–8)
     Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'' };
 }
@@ -1113,20 +1113,25 @@ function calcCartela0(c){
   const P = +c.Pu || 0, Pa = Math.abs(P), d = +c.d, n = Math.max(1, Math.round(+c.n)), s = +c.s, Le = +c.Le, b = +c.bL, t = +c.tL, nL = +c.nL === 1 ? 1 : 2, ga = +c.ga, tg = +c.tg;
   const aL = ACEROS[c.aceroL], ag = ACEROS[c.aceroG], FEXX = ELECTRODOS[c.electrodo];
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d);
-  const tub = c.diag === 'tubo';
+  const tub = esTubo(c), red = c.diag === 'redondo';
   let Lw, U = 0, xb = 0;
   if(tub){
-    // Tubo cuadrado B × t ranurado en dos caras opuestas; la cartela entra por la ranura y se suelda con 4 filetes longitudinales de largo Lws
-    const B = +c.Bt, td = 0.93 * +c.tt, at = ACEROS[c.aceroT] || ACEROS['A500 Gr C'], Lws = +c.Lws, wt = +c.wt, sl = tg + 3;
-    const AgT = B * B - (B - 2 * td) ** 2, AnT = AgT - 2 * td * sl;
-    xb = (B * B + 2 * B * B) / (4 * (B + B));                       // Tabla D3.1 caso 6 (una cartela concéntrica): x̄ = (B² + 2BH)/(4(B + H))
-    U = Lws > 0 ? Math.max(0, 1 - xb / Lws) : 0;
-    const AeT = U * AnT;
-    pasos.push(`Diagonal tubo ${B}×${B}×${c.tt} mm (${c.aceroT}; espesor de diseño 0.93t = ${r2(td)} mm): Ag = ${r1(AgT)} mm²; Pu = ${r2(P)} kN (${P >= 0 ? 'tensión' : 'compresión'})`);
-    pasos.push(`Ranura en dos caras opuestas de ancho tg + 3 = ${r1(sl)} mm → An = Ag − 2·t·ancho = ${r1(AnT)} mm²; x̄ = ${r1(xb)} mm, l = ${Lws} mm → U = 1 − x̄/l = ${r3(U)}, Ae = ${r1(AeT)} mm²`);
+    // Tubo cuadrado B × t o redondo D × t (24-nov) ranurado en dos caras opuestas; la cartela entra por la ranura y se suelda con 4 filetes longitudinales de largo Lws
+    const B = red ? +c.Dt : +c.Bt, td = 0.93 * +c.tt, at = ACEROS[c.aceroT] || ACEROS['A500 Gr C'], Lws = +c.Lws, wt = +c.wt, sl = tg + 3;
+    const AgT = diagDe(c).Ag, AnT = AgT - 2 * td * sl;
+    if(red){                                                         // Tabla D3.1 caso 5 (tubo redondo con una cartela concéntrica)
+      xb = B / Math.PI;
+      U = Lws >= 1.3 * B ? 1 : Lws >= B ? 1 - xb / Lws : Math.max(0, 1 - xb / Math.max(Lws, 1));
+    } else {
+      xb = (B * B + 2 * B * B) / (4 * (B + B));                     // Tabla D3.1 caso 6 (una cartela concéntrica): x̄ = (B² + 2BH)/(4(B + H))
+      U = Lws > 0 ? Math.max(0, 1 - xb / Lws) : 0;
+    }
+    const AeT = U * AnT, nomT = red ? `redondo ⌀${B}×${c.tt}` : `${B}×${B}×${c.tt}`, casoU = red ? 'Tabla D3.1 caso 5' : 'Tabla D3.1 caso 6';
+    pasos.push(`Diagonal tubo ${nomT} mm (${c.aceroT}; espesor de diseño 0.93t = ${r2(td)} mm): Ag = ${r1(AgT)} mm²; Pu = ${r2(P)} kN (${P >= 0 ? 'tensión' : 'compresión'})`);
+    pasos.push(`Ranura en dos caras opuestas de ancho tg + 3 = ${r1(sl)} mm → An = Ag − 2·t·ancho = ${r1(AnT)} mm²; x̄ = ${red ? 'D/π' : '(B² + 2BH)/(4(B + H))'} = ${r1(xb)} mm, l = ${Lws} mm → U = ${red && Lws >= 1.3 * B ? '1.0 (l ≥ 1.3D)' : `1 − x̄/l = ${r3(U)}`}, Ae = ${r1(AeT)} mm²`);
     if(P > 0){
       add('diagonal', 'Fluencia a tensión del tubo', 'F.2.4.2 (D2-1)', P, 0.9 * at.Fy * AgT / 1000, 'kN', '');
-      add('diagonal', 'Rotura a tensión del tubo en la ranura', 'F.2.4.2 (D2-2), Tabla D3.1 caso 6', P, 0.75 * at.Fu * AeT / 1000, 'kN', `U = ${r3(U)}, Ae = ${r1(AeT)} mm²`);
+      add('diagonal', 'Rotura a tensión del tubo en la ranura', `F.2.4.2 (D2-2), ${casoU}`, P, 0.75 * at.Fu * AeT / 1000, 'kN', `U = ${r3(U)}, Ae = ${r1(AeT)} mm²`);
       if(0.75 * at.Fu * AeT / 1000 < P) av.push('La sección neta del tubo en la ranura no alcanza: alargue la soldadura (sube U) o refuerce el tubo con platinas soldadas a las caras sin ranura.');
     } else pasos.push('Compresión: el pandeo del tubo se revisa como elemento (Anexo D); aquí solo la conexión.');
     const fwT = fw(FEXX, wt);
@@ -1136,7 +1141,8 @@ function calcCartela0(c){
     Lw = B + 2 * Lws * Math.tan(Math.PI / 6);
     pasos.push(`Cartela t = ${tg} mm: ancho de Whitmore Lw = B + 2·Lws·tan30° = ${r1(Lw)} mm (empieza con el ancho del tubo)`);
     const wMinT = Math.min(td, tg) <= 6 ? 3 : Math.min(td, tg) <= 13 ? 5 : Math.min(td, tg) <= 19 ? 6 : 8;
-    req.push(['Largo de la soldadura tubo–cartela ≥ ancho del tubo (Tabla D3.1 caso 6)', Lws >= B - 1e-6, `${Lws} ≥ ${B} mm`]);
+    req.push([`Largo de la soldadura tubo–cartela ≥ ${red ? 'diámetro' : 'ancho'} del tubo (${casoU})`, Lws >= B - 1e-6, `${Lws} ≥ ${B} mm`]);
+    if(red && Lws < 1.3 * B) av.push(`Tubo redondo: con l ≥ 1.3D = ${r1(1.3 * B)} mm la sección neta trabaja completa (U = 1.0).`);
     req.push(['Filete tubo–cartela ≥ mín. Tabla J2.4', wt >= wMinT, `${wt} ≥ ${wMinT} mm`]);
     req.push(['La cartela cabe en la ranura y queda dentro del tubo: tg + 3 < B − 2t', sl < B - 2 * +c.tt, `${r1(sl)} < ${r1(B - 2 * +c.tt)} mm`]);
     req.push(['Ranura 25 mm más larga que la punta de la cartela, o cerrada con soldadura; extremo del tubo sellado (galvanizado/agua)', true, 'indicar en planos']);
@@ -1183,6 +1189,8 @@ function calcCartela0(c){
     add('cartela', 'Rotura en la sección de Whitmore (por el agujero)', 'F.2.10.4.1 (J4-2), An ≤ 0.85·Ag', P, 0.75 * ag.Fu * AnW / 1000, 'kN', `An = mín((Lw − dh)·tg; 0.85·Aw) = ${r1(AnW)} mm²`); }
   if(P <= 0){ const KLr = +c.K * +c.Lcr / (tg / Math.sqrt(12));
     add('cartela', 'Pandeo de la cartela (sección de Whitmore)', 'F.2.10.4.4 (J4-6) / E3', Pa, 0.9 * fcrE3(ag.Fy, KLr) * Aw / 1000, 'kN', `KL/r = ${c.K}·${c.Lcr}/r = ${r1(KLr)}`); }
+  if(c.tipo === 'esquina'){ const g = ufmEsquina(c, { ch, av, pasos, req, add, Pa, P, tg, ag, FEXX }); return g.error ? g : fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb, ...g }); }
+  if(c.tipo === 'cruce'){ cruceX(c, { ch, av, pasos, req, add, Pa, P, tg, ag, dh }); return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb }); }
   // Soldadura cartela–soporte
   const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, w = +c.w, fd = c.duct === false ? 1 : 1.25, Pw = fd * Pa, eW = nz(c.eW);
   if(fd > 1) pasos.push(`Soldadura cartela–soporte con factor de ductilidad 1.25 (Manual AISC parte 13): fuerza de diseño ${r2(Pw)} kN`);
@@ -1196,9 +1204,85 @@ function calcCartela0(c){
   return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb });
 }
 
+const esTubo = c => c.diag === 'tubo' || c.diag === 'redondo';
+// ── Cartela de esquina viga–columna: método de la fuerza uniforme (Manual AISC parte 13; pedido de Amo 24-nov) ──
+// La fuerza de la diagonal se reparte en la interfaz cartela–viga (Hb, Vb) y cartela–columna (Hc, Vc) sin momentos
+// cuando α = eb·tanθ − ec + β·tanθ (θ desde la vertical). Si la cartela real no cumple esa relación, queda un momento
+// Mb = Vb·(α − ᾱ) en la interfaz con la viga (caso especial 3).
+function defaultsEsquina(){
+  return { ...defaultsCartela(), tipo:'esquina', viga:'IPE 300', columna:'HEA 300', aceroViga:'A36', aceroCol:'A36', cara:'ala',
+    ang:45, Lh:400, Lv:350, wB:6, wC:6, Rv:0, Ab:0, K:0.5, Lcr:150 };
+}
+function ufmEsquina(c, o){
+  const { ch, av, pasos, req, add, Pa, P, tg, ag, FEXX } = o;
+  const vg = perfil(c.viga), cl = perfil(c.columna); if(!vg) return { error:'Escoja el perfil de la viga.' }; if(!cl) return { error:'Escoja el perfil de la columna.' };
+  const av_ = ACEROS[c.aceroViga] || ACEROS.A36, ac = ACEROS[c.aceroCol] || ACEROS.A36, alma = c.cara === 'alma';
+  const ang = Math.min(Math.max(+c.ang || 45, 5), 85), th = (90 - ang) * Math.PI / 180, tn = Math.tan(th);   // θ desde la vertical
+  const Lh = +c.Lh, Lv = +c.Lv, eb = vg.d / 2, ec = alma ? cl.tw / 2 : cl.d / 2, ab = Lh / 2, bb = Lv / 2;
+  const beta = bb, alpha = eb * tn - ec + beta * tn, r = Math.hypot(alpha + ec, beta + eb);
+  const Hc = ec / r * Pa, Vc = beta / r * Pa, Hb = alpha / r * Pa, Vb = eb / r * Pa, Mb = Vb * (alpha - ab) / 1000;   // kN, kN·m
+  pasos.push(`Método de la fuerza uniforme (Manual AISC parte 13): diagonal a ${ang}° de la horizontal (θ = ${r1(90 - ang)}° desde la vertical); eb = d viga/2 = ${r1(eb)} mm, ec = ${alma ? 'tw columna/2' : 'd columna/2'} = ${r1(ec)} mm`);
+  pasos.push(`Cartela ${Lh} (sobre la viga) × ${Lv} (contra la columna) mm → β = ${r1(beta)} mm; α ideal = eb·tanθ − ec + β·tanθ = ${r1(alpha)} mm; ᾱ real = ${r1(ab)} mm; r = √((α + ec)² + (β + eb)²) = ${r1(r)} mm`);
+  pasos.push(`Fuerzas (con |Pu| = ${r2(Pa)} kN): interfaz con la columna Hc = ec·P/r = ${r2(Hc)} kN (normal), Vc = β·P/r = ${r2(Vc)} kN (a lo largo); interfaz con la viga Hb = α·P/r = ${r2(Hb)} kN (a lo largo), Vb = eb·P/r = ${r2(Vb)} kN (normal)${Math.abs(Mb) > 0.005 ? `; Mb = Vb·(α − ᾱ) = ${r2(Mb)} kN·m` : ''}`);
+  if(alpha < 0) av.push('El α ideal sale negativo: la cartela es muy alta contra la columna para el ángulo de la diagonal; acórtela (Lv) o alargue la parte sobre la viga.');
+  if(Math.abs(alpha - ab) > 0.25 * ab) av.push(`La cartela no está proporcionada para el método (α ideal ${r1(alpha)} mm vs ᾱ ${r1(ab)} mm): aparece un momento en la soldadura a la viga. Para eliminarlo use Lh ≈ ${Math.round(2 * alpha / 5) * 5} mm.`);
+  const fd = c.duct === false ? 1 : 1.25;
+  if(fd > 1) pasos.push('Soldaduras de la cartela con factor de ductilidad 1.25 (Manual AISC parte 13).');
+  const interfaz = (nom, L, w, fPar, fNor, M, tBase, Fyb, ref) => {
+    const fs = fd * fPar / (2 * L), fn = fd * (fNor / (2 * L) + 6 * Math.abs(M) * 1000 / (2 * L * L)), f = Math.hypot(fs, fn), tht = Math.atan2(fn, Math.max(fs, 1e-9));
+    add('soldadura', `Filetes cartela–${nom} (ambas caras${fd > 1 ? ', ×1.25' : ''})`, 'F.2.10.2.4 (J2-4, J2-5)', f, fw(FEXX, w) * (1 + 0.5 * Math.pow(Math.sin(tht), 1.5)), 'kN/mm', `L = ${L} mm, w = ${w} mm; por cordón fs = ${r3(fs)}, fn = ${r3(fn)} kN/mm`);
+    add('cartela', `Cartela en la interfaz con la ${nom}: cortante`, 'F.2.10.4.2 (J4-3)', fPar, 1.0 * 0.6 * ag.Fy * tg * L / 1000, 'kN', '');
+    add('cartela', `Cartela en la interfaz con la ${nom}: tensión normal + flexión`, 'F.2.10.4.1 (J4-1)', fNor / (tg * L) * 1000 + 6 * Math.abs(M) * 1e6 / (tg * L * L), 0.9 * ag.Fy, 'MPa', `esfuerzo normal en la cartela`);
+    add(ref, `Metal base de la ${nom} junto a la soldadura`, 'F.2.10.2.4 (J4-3)', fd * fPar, 1.0 * 0.6 * Fyb * tBase * L / 1000, 'kN', `t = ${r1(tBase)} mm`);
+    const wMin = Math.min(tg, tBase) <= 6 ? 3 : Math.min(tg, tBase) <= 13 ? 5 : Math.min(tg, tBase) <= 19 ? 6 : 8;
+    req.push([`Filete cartela–${nom} ≥ mín. Tabla J2.4`, w >= wMin, `${w} ≥ ${wMin} mm`]);
+  };
+  interfaz('viga', Lh, +c.wB, Hb, Vb, Mb, vg.tf, av_.Fy, 'viga');
+  interfaz('columna', Lv, +c.wC, Vc, Hc, 0, alma ? cl.tw : cl.tf, ac.Fy, 'columna');
+  // Viga: alma bajo la fuerza normal Vb (la cartela está junto al extremo de la viga → 2.5k + N)
+  const kv = vg.tf + vg.r, kc = cl.tf + cl.r;
+  add('viga', 'Alma de la viga: fluencia local bajo Vb', 'F.2.10.10.2 (J10-3)', Vb, 1.0 * av_.Fy * vg.tw * (2.5 * kv + Lh) / 1000, 'kN', `N = ${Lh} mm junto al extremo`);
+  { const N = Lh, dd = vg.d, k1 = N / dd <= 0.2 ? 1 + 3 * (N / dd) * Math.pow(vg.tw / vg.tf, 1.5) : 1 + (4 * N / dd - 0.2) * Math.pow(vg.tw / vg.tf, 1.5);
+    add('viga', 'Alma de la viga: aplastamiento bajo Vb (diagonal en compresión)', 'F.2.10.10.3 (J10-5)', Vb, 0.75 * 0.40 * vg.tw * vg.tw * k1 * Math.sqrt(200000 * av_.Fy * vg.tf / vg.tw) / 1000, 'kN', ''); }
+  if(!alma){
+    add('columna', 'Alma de la columna: fluencia local bajo Hc', 'F.2.10.10.2 (J10-2)', Hc, 1.0 * ac.Fy * cl.tw * (5 * kc + Lv) / 1000, 'kN', `N = ${Lv} mm`);
+    add('columna', 'Ala de la columna: flexión local bajo Hc (diagonal en tensión)', 'F.2.10.10.1 (J10-1)', Hc, 0.9 * 6.25 * ac.Fy * cl.tf * cl.tf / 1000, 'kN', '');
+  } else {
+    // Eje débil: la cartela tira del alma fuera de su plano. Líneas de fluencia aproximadas (placa empotrada en las dos alas, carga en línea de largo Lv)
+    const h = cl.d - 2 * cl.tf, mp = ac.Fy * cl.tw * cl.tw / 4, Rn = 8 * mp * Lv / h / 1000;   // mecanismo: línea central + dos líneas en las alas (sin las zonas de los extremos)
+    add('columna', 'Alma de la columna fuera de su plano bajo Hc (líneas de fluencia, aproximado)', 'Manual AISC parte 9 (placa empotrada en las alas)', Hc, 0.9 * Rn, 'kN', `Rn = 8·mp·Lv/h, mp = Fy·tw²/4; h = ${r1(h)} mm, tw = ${cl.tw} mm`);
+    av.push('Cartela soldada al alma de la columna (eje débil): la fuerza normal Hc dobla el alma fuera de su plano. Si no alcanza, ponga placas entre las alas de la columna en los extremos del borde de la cartela.');
+  }
+  // Fuerzas para la unión viga–columna (se diseña aparte con una conexión a cortante)
+  const Vvc = Vb + nz(c.Rv), Nvc = Hc + nz(c.Ab);
+  pasos.push(`Unión viga–columna (diseñarla aparte, conexión a cortante): cortante = Vb + R = ${r2(Vb)} + ${r2(nz(c.Rv))} = ${r2(Vvc)} kN; axial = Hc + Ab = ${r2(Hc)} + ${r2(nz(c.Ab))} = ${r2(Nvc)} kN (Ab = fuerza que el piso le pasa a la viga).`);
+  av.push(`Use en la conexión viga–columna (chapa de aleta o doble angular) V = ${r2(Vvc)} kN y P = ${r2(Nvc)} kN.`);
+  req.push(['Separación de la cartela al ala de la viga y a la columna para la soldadura y el pandeo (franja de 2tg con sismo DES)', true, 'indicar en planos']);
+  return { ufm:{ alpha, beta, ab, r, Hc, Vc, Hb, Vb, Mb, Vvc, Nvc }, vg, cl };
+}
+// ── Cruce de diagonales en X: una pasa continua y la otra se corta y se une a una platina en el cruce (pedido de Amo 24-nov) ──
+function defaultsCruce(){
+  return { ...defaultsCartela(), tipo:'cruce', bPl:250, LcX:120, KX:1.0, nH:0, Lcr:120, K:1.0 };
+}
+function cruceX(c, o){
+  const { av, pasos, req, add, Pa, P, tg, ag, dh } = o;
+  const b = +c.bPl, Ag = b * tg, nH = Math.max(0, Math.round(nz(c.nH))), An = Math.min((b - nH * dh) * tg, 0.85 * Ag);
+  pasos.push(`Platina del cruce ${b} × ${tg} mm (${c.aceroG}): la fuerza de la diagonal interrumpida (${r2(Pa)} kN) pasa de una mitad a la otra a través de la platina, por encima de la diagonal continua.`);
+  if(P > 0){
+    add('cartela', 'Platina en el cruce: fluencia a tensión', 'F.2.10.4.1 (J4-1)', P, 0.9 * ag.Fy * Ag / 1000, 'kN', `Ag = ${r1(Ag)} mm²`);
+    add('cartela', 'Platina en el cruce: rotura a tensión', 'F.2.10.4.1 (J4-2)', P, 0.75 * ag.Fu * An / 1000, 'kN', nH ? `${nH} agujeros de la unión a la diagonal continua; An = ${r1(An)} mm²` : `An = ${r1(An)} mm²`);
+  } else {
+    const KLr = nz(c.KX) * nz(c.LcX) / (tg / Math.sqrt(12));
+    add('cartela', 'Platina en el cruce: pandeo entre los extremos de la diagonal interrumpida', 'F.2.10.4.4 (J4-6) / E3', Pa, 0.9 * fcrE3(ag.Fy, KLr) * Ag / 1000, 'kN', `KL/r = ${c.KX}·${c.LcX}/r = ${r1(KLr)}`);
+  }
+  req.push(['La platina se une a la diagonal continua (pernos o soldadura) solo para mantenerla en su sitio; esa unión no lleva la fuerza de la diagonal interrumpida', true, 'indicar en planos']);
+  av.push('Anexo D: con el cruce unido, la longitud de pandeo fuera del plano de cada diagonal puede tomarse como la mitad (del extremo al cruce) si la otra diagonal trabaja en tensión; dentro del plano también es la mitad.');
+  if(['DMO', 'DES'].includes(c.sismo)) av.push('Sismo: la diagonal interrumpida debe poder doblarse fuera del plano en el cruce; deje la franja de 2tg sin restringir en la platina o diseñe la unión para la resistencia a flexión de la diagonal (AISC 341 F2.5b).');
+}
 // Área y acero de la diagonal (para el sismo)
 function diagDe(c){
   if(c.diag === 'tubo'){ const B = +c.Bt, td = 0.93 * +c.tt; return { Ag:B * B - (B - 2 * td) ** 2, ac:c.aceroT || 'A500 Gr C' }; }
+  if(c.diag === 'redondo'){ const D = +c.Dt, td = 0.93 * +c.tt; return { Ag:Math.PI / 4 * (D * D - (D - 2 * td) ** 2), ac:c.aceroT || 'A500 Gr C' }; }
   const b = +c.bL, t = +c.tL, nL = +c.nL === 1 ? 1 : 2; return { Ag:nL * (2 * b - t) * t, ac:c.aceroL };
 }
 // Envoltura (20-nov): sismo (pórtico arriostrado concéntrico) y 💡 sugerencia
@@ -1226,16 +1310,16 @@ function calcCartela(c){
   } else R = calcCartela0(c);
   if(R.error || c._sinSug || R.ok) return R;
   // 💡 espesor de cartela, número de pernos (o largo de la soldadura del tubo) y largo de la soldadura al soporte mínimos que cumplen
-  const tub = c.diag === 'tubo', tgs = ESP_PL.filter(x => x >= Math.min(+c.tg, 6.4)), base = { _sinSug:true };
-  const conex = tub ? [100, 125, 150, 175, 200, 250, 300, 350, 400].filter(x => x >= +c.Bt - 1e-6).map(Lws => ({ Lws })) : [2, 3, 4, 5, 6, 7, 8].map(n => ({ n }));
-  const largos = [+c.Lwg, ...[150, 200, 250, 300, 350, 400, 450, 500, 600].filter(x => x > +c.Lwg)];
+  const tub = esTubo(c), tgs = ESP_PL.filter(x => x >= Math.min(+c.tg, 6.4)), base = { _sinSug:true };
+  const conex = tub ? [100, 125, 150, 175, 200, 250, 300, 350, 400].filter(x => x >= +(c.diag === 'redondo' ? c.Dt : c.Bt) - 1e-6).map(Lws => ({ Lws })) : [2, 3, 4, 5, 6, 7, 8].map(n => ({ n }));
+  const sop = c.tipo === 'cartela' || !c.tipo, largos = sop ? [+c.Lwg, ...[150, 200, 250, 300, 350, 400, 450, 500, 600].filter(x => x > +c.Lwg)] : [+c.Lwg];
   let best = null;
   // con sismo la rotura de la propia diagonal no se arregla con la cartela: se busca lo demás y se avisa aparte
   const okS = t => !t.error && t.ch.every(x => x.ratio <= 1 || (sis && x.grupo === 'diagonal' && /Rotura/.test(x.nombre))) && !t.req.some(q => !q[1]);
   for(const tg of tgs){ for(const cx of conex){ for(const Lwg of largos){ const t = calcCartela({ ...c, ...base, tg, ...cx, Lwg }); if(okS(t)){ best = { tg, ...cx, Lwg }; break; } } if(best) break; } if(best) break; }
   if(best){ const cambia = Object.keys(best).filter(k => +best[k] !== +c[k]);
     const fin2 = calcCartela({ ...c, ...base, ...best });
-    if(cambia.length) R.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar cartela de ${best.tg} mm, ${tub ? `soldadura del tubo de ${best.Lws} mm` : `${best.n} pernos`} y soldadura al soporte de ${best.Lwg} mm${fin2.ok ? '' : ' (la diagonal sigue sin alcanzar en su sección neta: refuércela)'}` }; }
+    if(cambia.length) R.sug = { tipo:'sold', ok:true, ...best, txt:`💡 Usar ${c.tipo === 'cruce' ? 'platina' : 'cartela'} de ${best.tg} mm${sop ? ',' : ' y'} ${tub ? `soldadura del tubo de ${best.Lws} mm` : `${best.n} pernos`}${sop ? ` y soldadura al soporte de ${best.Lwg} mm` : ''}${fin2.ok ? '' : ' (la diagonal sigue sin alcanzar en su sección neta: refuércela)'}` }; }
   else R.av.push('No se encontró una combinación de cartela, pernos y soldadura que cumpla: revise la diagonal (perfil o acero), el diámetro de los pernos o el filete.');
   return R;
 }
@@ -1417,7 +1501,7 @@ const EXTRA = {
     const d = +c.d, n = Math.round(+c.n), s = +c.s, nL = +c.nL === 1 ? 1 : 2, dh = agujero(d), ag = ACEROS[c.aceroG], aL = ACEROS[c.aceroL];
     const P = nz(c.Pu), V2 = nz(c.V2), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2), M3 = nz(c.M3);
     const rC = Math.min(nL * fv(c, d), nL * aplast(+c.Le - dh / 2, +c.tL, d, aL.Fu).phiRn, 0.75 * 2.4 * d * +c.tg * ag.Fu / 1000);
-    const tub = c.diag === 'tubo';
+    const tub = esTubo(c);
     if(!tub){ const b = pernos3D(Array.from({ length:n }, (_, i) => ({ u:i * s, v:0 })), { Fu:P, Fv:V2, Mn:M3, N:Math.abs(V3), Mu:T, Mv:M2 }, { d, grado:c.grado, rosca:c.rosca, planos:nL, rCorte:rC });
       add('pernos', 'Pernos con las 6 fuerzas de la diagonal (J3-3a)', 'F.2.10.3.7', b.rat, 1, '', `cortante ${r2(b.r)} kN (φrn ${r2(rC)}), tensión ${r2(b.t)} kN${b.nota}`); }
     const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, hc = +c.Lcr + (tub ? +c.Lws / 2 : (n - 1) * s / 2);
@@ -2365,8 +2449,8 @@ function calcEmpCol(c){
   return R;
 }
 
-const CALC = { aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ, empCol:calcEmpCol };
-const DEF = { aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ, empCol:defaultsEmpCol };
+const CALC = { esquina:calcCartela, cruce:calcCartela, aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ, empCol:calcEmpCol };
+const DEF = { esquina:defaultsEsquina, cruce:defaultsCruce, aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ, empCol:defaultsEmpCol };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
   calc: c => { CIZ = !!c.cizalla; const r = (CALC[c.tipo] || calcAleta)(c, !!c._sinSug); if(!r.error && c.cizalla) r.pasos.unshift('Bordes cortados con cizalla: distancias mínimas al borde de la columna «cizalla» de la Tabla F.2.10.3-4 (J3.4).');
     if(r.error) return r;

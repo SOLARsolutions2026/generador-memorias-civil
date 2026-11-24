@@ -119,7 +119,7 @@ const resumenDatos = F => [F.proyecto, F.prop, [F.mun, F.depto].filter(Boolean).
 // Disipación de energía del proyecto (pedido de Amo 21-nov): se escoge una vez y la toman todas las conexiones y nudos;
 // con DMO o DES las conexiones a momento no precalificadas (AISC 358) quedan en gris en la galería.
 window.ConSisProy = true;
-const TIENE_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'base', 'empCol'];
+const TIENE_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'esquina', 'cruce', 'base', 'empCol'];
 const NO_PRECAL = { DMO:['ras'], DES:['ras'] };
 const SIS_OP = [['no', 'Sin sismo'], ['DMI', 'DMI · pórtico ordinario (OMF)'], ['DMO', 'DMO · pórtico intermedio (IMF)'], ['DES', 'DES · pórtico especial (SMF)']];
 function sisProyecto(p){
@@ -183,7 +183,7 @@ function renderEditor(){
     <div class="ed-grid"><div id="form">${formHTML(c)}</div><div><div class="dib" id="dib">${r.error ? '' : dibujo(c, r)}</div></div></div></div>
     <div class="card" id="res">${resHTML(c, r)}</div>`;
   const re = () => { pintaRes(); const r2 = recalcular(c); $('#dib').innerHTML = r2.error ? '' : dibujo(c, r2); $('#res').innerHTML = resHTML(c, r2);
-    const it = $(`[data-sel="${c.id}"] .pill`); if(it && c.res){ it.className = `pill ${c.res.ok ? 'ok' : 'no'}`; it.textContent = f2(c.res.max); } guardar(); };
+    const it = $(`[data-sel="${c.id}"] .pill`); if(it && c.res){ it.className = `pill ${c.res.ok ? 'ok' : 'no'}`; it.textContent = f2(c.res.max); } const sa = $('.sb-av'); if(sa) sa.innerHTML = resumenHTML(S.p.datos.con); guardar(); };
   const pintaRes = () => seccionesDe(c).forEach(([k, , res]) => { const e = $(`[data-res="${k}"]`); if(e) e.textContent = res(); });
   const guardaAb = () => { try{ localStorage.conSecc = JSON.stringify($$('#ed .sec.on').map(x => x.dataset.sec)); }catch(e){} };
   $$('#ed .sec-hd').forEach(b => b.onclick = () => { const s = b.parentElement; s.classList.toggle('on'); b.setAttribute('aria-expanded', s.classList.contains('on')); guardaAb(); });
@@ -211,6 +211,9 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-apsu
 const TIPOS_NUDO = ['testa', 'ras', 'soldada', 'aleta', 'angular', 'testaV', 'asiento'];
 const nudoSel = () => (S.p.datos.nudos || []).find(n => 'N:' + n.id === S.sel);
 const nudoCons = n => (n.cons || []).map(x => ({ c:S.p.datos.con.find(c => c.id === x.cid), cara:x.cara })).filter(x => x.c);
+// Resumen del proyecto en la barra lateral (se repinta al recalcular una conexión, 24-nov)
+function resumenHTML(L){ const ok = L.filter(c => c.res && c.res.ok).length, mal = L.filter(c => c.res && !c.res.ok);
+  return `<small>Resumen del proyecto</small><b>${ok} de ${L.length} cumplen</b><div class="bar"><i style="width:${Math.round(100 * ok / L.length)}%"></i></div><small>${mal.length ? esc(mal.slice(0, 3).map(c => `${c.nom} (${f2(c.res.max)})`).join(', ')) + ' no cumple' + (mal.length > 1 ? 'n' : '') : 'Todas las conexiones calculadas cumplen'}</small>`; }
 function recalcNudo(n){ const r = Conex.nudo(n, nudoCons(n)); n.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
 const ICO_NUDO = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="22" y="8" width="16" height="3" fill="#64748b"/><rect x="22" y="29" width="16" height="3" fill="#64748b"/><rect x="29" y="11" width="2" height="18" fill="#64748b"/><rect x="2" y="17" width="19" height="6" fill="#cbd5e1" stroke="#475569"/><rect x="39" y="17" width="19" height="6" fill="#cbd5e1" stroke="#475569"/><rect x="27" y="33" width="6" height="7" fill="#cbd5e1" stroke="#475569"/><rect x="27" y="0" width="6" height="7" fill="#cbd5e1" stroke="#475569"/></svg>';
 function nudoFormHTML(n){
@@ -391,7 +394,7 @@ function pintarLateral(){
   if(p && bar){ bar.classList.add('fila-mem'); const g = bar.querySelector('#gEst'); if(g) hd.querySelector('.crumb').appendChild(g); }
   const it = (href, ic, t, s, on) => `<a class="sb-it ${on ? 'on' : ''}" href="${href}"><span class="tile">${icoL(ic)}</span><span class="lbl">${t}<small>${s}</small></span></a>`;
   if(p && bar){
-    const L = p.datos.con, ok = L.filter(c => c.res && c.res.ok).length, mal = L.filter(c => c.res && !c.res.ok);
+    const L = p.datos.con;
     slot.innerHTML = `<button type="button" class="sb-mem" id="sbMem" title="Volver a la lista de proyectos"><span class="tile">${icoL('con')}</span><span><b>${esc(p.consecutivo)}</b><small>${esc((p.titulo || '').slice(0, 40))}</small></span></button>`;
     const lista = app.querySelector('.d-lista');
     if(lista && matchMedia('(min-width:901px)').matches){ const t = document.createElement('div'); t.className = 'ph'; t.textContent = 'Conexiones del proyecto'; slot.append(t, lista); app.querySelector('.d-grid')?.classList.add('sin-lista');
@@ -399,7 +402,7 @@ function pintarLateral(){
       const gz = lista.querySelector('.gal-zona'); if(gz){ slot.appendChild(gz); sbar.classList.add('sb-fija'); } }
     else sbar.classList.remove('sb-fija');
     if(L.length){ const av = document.createElement('div'); av.className = 'sb-av';
-      av.innerHTML = `<small>Resumen del proyecto</small><b>${ok} de ${L.length} cumplen</b><div class="bar"><i style="width:${Math.round(100 * ok / L.length)}%"></i></div><small>${mal.length ? esc(mal.slice(0, 3).map(c => `${c.nom} (${f2(c.res.max)})`).join(', ')) + ' no cumple' + (mal.length > 1 ? 'n' : '') : 'Todas las conexiones calculadas cumplen'}</small>`;
+      av.innerHTML = resumenHTML(L);
       slot.appendChild(av); }
     $('#sbMem').onclick = () => ir('#/');
   } else slot.innerHTML = `<div class="ph">Conexiones</div>${it('#/', 'con', 'Proyectos de conexiones', 'Lista y buscador', true)}<div class="ph">Otras apps</div>${it('../', 'doc', 'Memorias de cálculo', 'Generador de memorias', false)}`;

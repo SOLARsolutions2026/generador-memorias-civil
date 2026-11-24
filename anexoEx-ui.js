@@ -11,7 +11,7 @@ const esCx = c => !!(c && window.ConUI && ConUI.NOMBRES[c.tipo]);
 const CX_VC = ['aleta', 'angular', 'testaV', 'asiento', 'testa', 'ras', 'soldada'];   // viga que llega a una columna (o a otra viga)
 const CX_MOM = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'empCol'];                      // M3 se guarda como Mu
 const CX_EMP = ['empalme', 'empZ', 'empCol'];
-const CX_DESC = { aleta:'Viga a columna o a viga, a cortante', angular:'Viga a columna o a viga, a cortante', testaV:'Viga a columna o a viga, a cortante', asiento:'Viga apoyada sobre un angular',
+const CX_DESC = { esquina:'Diagonal a la esquina viga–columna (fuerza uniforme)', cruce:'Cruce de dos diagonales en X', aleta:'Viga a columna o a viga, a cortante', angular:'Viga a columna o a viga, a cortante', testaV:'Viga a columna o a viga, a cortante', asiento:'Viga apoyada sobre un angular',
   testa:'Viga a columna a momento', ras:'Viga a columna a momento', soldada:'Viga soldada a la columna a momento', empalme:'Unión de dos tramos de viga', empZ:'Unión soldada de dos tramos de viga',
   cartela:'Diagonal a una placa', grupo:'Grupo de pernos con carga excéntrica (cargas a mano)', base:'Columna sobre pedestal (reacciones del modelo)', empCol:'Unión de dos tramos de columna' };
 const CX_CORT = ['aleta', 'angular', 'testaV', 'asiento'];                        // conexiones a cortante (extremo articulado)
@@ -55,7 +55,7 @@ function extremosCx(c, D, T){
 function cargasDeFila(tipo, f0){
   const f = {}; for(const k of ['P', 'V2', 'V3', 'T', 'M2', 'M3', 'Vx', 'Vy', 'Mx', 'My']) f[k] = Math.round((+f0[k] || 0) * 1000) / 1000;
   if(tipo === 'base') return { P:f.P, Vx:f.Vx, Vy:f.Vy, T:f.T, Mx:f.Mx, My:f.My };
-  if(tipo === 'cartela') return { Pu:f.P, V2:f.V2, V3:f.V3, T:f.T, M2:f.M2, M3:f.M3 };
+  if(CX_ARR.includes(tipo)) return { Pu:f.P, V2:f.V2, V3:f.V3, T:f.T, M2:f.M2, M3:f.M3 };
   const k3 = CX_MOM.includes(tipo) ? 'Mu' : 'M3';
   return { P:f.P, Vu:Math.abs(f.V2), V3:f.V3, T:f.T, M2:f.M2, [k3]:CX_MOM.includes(tipo) ? Math.abs(f.M3) : f.M3 };
 }
@@ -86,7 +86,8 @@ function filasCx(c, D, ctx){
 const CX_LOCK = {};
 // Sismo de las conexiones del Anexo E = el del paso «Combinaciones» (sistema estructural; pedido de Amo 21-nov); los empalmes de vigas de gravedad van sin sismo
 window.ConSisProy = 'Sale del paso «Combinaciones» (sistema estructural de la memoria)';
-const CX_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'base', 'empCol'];
+const CX_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'esquina', 'cruce', 'base', 'empCol'];
+const CX_ARR = ['cartela', 'esquina', 'cruce'];   // la primera pieza es una diagonal
 function sisMemoria(){ const an = S.m?.anexos || {}, k = String(an.K?.sisR || '').toLowerCase(); return an.B && an.B.aplica !== false ? (k === 'des' ? 'DES' : k === 'dmo' ? 'DMO' : 'no') : 'no'; }
 function entradaCx(c, D, T){
   const z = { ...c }, lock = new Set(), avisos = [];
@@ -109,7 +110,8 @@ function entradaCx(c, D, T){
     if(a && sa?.tipo === 'I'){ z.colS = a.perfil; lock.add('colS'); } else if(!c.eA){ z.colS = ''; lock.add('colS'); }
   }
   else if(CX_EMP.includes(c.tipo) && de && !ponI('viga', 'aceroViga', de, sd)) avisos.push(`${de.nom} no es un perfil I.`);
-  if(c.tipo === 'cartela' && de && sd?.tipo === 'HSS'){ z.diag = 'tubo'; z.Bt = +de.B; z.tt = +de.t; z.aceroT = de.acero && /A500/.test(de.acero) ? de.acero : z.aceroT; ['diag', 'Bt', 'tt'].forEach(k => lock.add(k)); if(+de.B !== +de.H) avisos.push('La diagonal de tubo se revisa como tubo cuadrado de lado B.'); }
+  if(c.tipo === 'esquina' && a && sa?.tipo === 'I'){ const esCol = /Columna/i.test(a.grupo || '') || /col/i.test(a.desc || ''); if(esCol){ z.columna = a.perfil; z.aceroCol = a.acero || z.aceroCol; lock.add('columna'); lock.add('aceroCol'); } else { z.viga = a.perfil; z.aceroViga = a.acero || z.aceroViga; lock.add('viga'); lock.add('aceroViga'); } }
+  if(CX_ARR.includes(c.tipo) && de && sd?.tipo === 'HSS'){ z.diag = 'tubo'; z.Bt = +de.B; z.tt = +de.t; z.aceroT = de.acero && /A500/.test(de.acero) ? de.acero : z.aceroT; ['diag', 'Bt', 'tt'].forEach(k => lock.add(k)); if(+de.B !== +de.H) avisos.push('La diagonal de tubo se revisa como tubo cuadrado de lado B.'); }
   if(c.tipo === 'base'){
     if(de && sd?.tipo === 'I'){ z.colTipo = 'I'; z.columna = de.perfil; lock.add('colTipo'); lock.add('columna'); }
     else if(de && sd?.tipo === 'HSS'){ z.colTipo = 'tubo'; z.Ht = +de.H; z.Bt = +de.B; z.tt = +de.t; ['colTipo', 'Ht', 'Bt', 'tt'].forEach(k => lock.add(k)); }
@@ -219,7 +221,7 @@ function nuevaCx(t, E, D){
   const I = D.met.filter(e => e.tipo === 'I' || e.tipo === 'HSS'), esCol = e => /Columna/i.test(e.grupo || '') || /col/i.test(e.desc || ''), esViga = e => /Viga/i.test(e.grupo || '') || /viga/i.test(e.desc || '');
   const col = I.find(esCol), viga = I.find(e => esViga(e) && e !== col), diag = I.find(e => /Diagonal/i.test(e.grupo || ''));
   if(t === 'base'){ c.eDe = col?.id || ''; c.eA = D.ped[0]?.id || ''; }
-  else if(t === 'cartela'){ c.eDe = diag?.id || ''; c.eA = col?.id || viga?.id || ''; }
+  else if(CX_ARR.includes(t)){ c.eDe = diag?.id || ''; c.eA = t === 'cruce' ? (I.find(e => /Diagonal/i.test(e.grupo || '') && e !== diag)?.id || '') : col?.id || viga?.id || ''; }
   else if(t === 'empCol') c.eDe = col?.id || '';
   else if(CX_EMP.includes(t)) c.eDe = viga?.id || '';
   else if(t !== 'grupo'){ c.eDe = viga?.id || ''; c.eA = col?.id || ''; }
@@ -240,7 +242,7 @@ function uneHTML(c, D, T){
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), ext = T ? extremosCx(c, D, T) : null, off = new Set((c.nudosOff || []).map(String));
   const nudos = ext ? [...new Map(ext.map(x => [String(x.j), x])).values()] : [];
   const lado = CX_VC.includes(c.tipo) ? sel('cara', 'La viga llega a la columna por', [['ala', 'el ala (eje fuerte)'], ['alma', 'el alma (eje débil)']]) : '';
-  return `<div class="cx-une"><div class="fg g3">${sel('eDe', c.tipo === 'cartela' ? 'Diagonal (Anexo D)' : 'Viga (Anexo D)', [['', '— escoja —'], ...mets])}${sel('eA', 'Llega a (Anexo D)', [['', '— escoja —'], ...mets.filter(([id]) => id !== c.eDe)])}${lado}</div>
+  return `<div class="cx-une"><div class="fg g3">${sel('eDe', CX_ARR.includes(c.tipo) ? (c.tipo === 'cruce' ? 'Diagonal interrumpida (Anexo D)' : 'Diagonal (Anexo D)') : 'Viga (Anexo D)', [['', '— escoja —'], ...mets])}${sel('eA', 'Llega a (Anexo D)', [['', '— escoja —'], ...mets.filter(([id]) => id !== c.eDe)])}${lado}</div>
     ${c.cargas === 'manual' ? '<p class="hint" style="margin:2px 0 0">Cargas escritas a mano: los nudos no se usan.</p>'
       : !S.m.anexos?.C?.modelo ? '<p class="hint" style="margin:2px 0 0">Sin modelo en el Anexo C: escriba las cargas a mano.</p>'
       : ext === null ? '<p class="hint" style="margin:2px 0 0">Buscando los nudos en el modelo…</p>'

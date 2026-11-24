@@ -5,10 +5,10 @@
 const f2 = (x, d = 2) => x == null || !isFinite(x) ? '—' : (+x).toLocaleString('es-CO', { minimumFractionDigits:d, maximumFractionDigits:d });
 const NOMBRES = { aleta:'Chapa de aleta (shear tab)', angular:'Doble angular de alma', testaV:'Chapa de testa a cortante', asiento:'Asiento con angular',
   testa:'Chapa de testa extendida (4 pernos)', ras:'Chapa de testa a ras', empalme:'Empalme de viga con cubrejuntas', empZ:'Empalme en Z soldado', soldada:'Soldada en todo el perímetro',
-  cartela:'Diagonal a cartela', grupo:'Grupo de pernos excéntrico', base:'Placa base a momento', empCol:'Empalme de columna' };
+  cartela:'Diagonal a cartela', esquina:'Cartela de esquina (viga–columna)', cruce:'Cruce de diagonales en X', grupo:'Grupo de pernos excéntrico', base:'Placa base a momento', empCol:'Empalme de columna' };
 // Galería por tipo de trabajo (pedido de Amo 10-nov)
-const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme', 'empZ']], ['Axiales y otras', ['cartela', 'grupo', 'base', 'empCol']]];
-const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', grupo:'GE', base:'PB', empCol:'EC' };
+const CATS = [['A cortante (articuladas)', ['aleta', 'angular', 'testaV', 'asiento']], ['A momento (rígidas)', ['testa', 'ras', 'soldada', 'empalme', 'empZ']], ['Arriostramientos', ['cartela', 'esquina', 'cruce']], ['Axiales y otras', ['grupo', 'base', 'empCol']]];
+const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', ras:'CR', empalme:'EV', empZ:'EZ', soldada:'SP', cartela:'DC', esquina:'CE', cruce:'CX', grupo:'GE', base:'PB', empCol:'EC' };
 
 // Resumen de los datos de portada para la franja cerrada (pedido de Amo 19-nov: que se vea que se puede abrir)
 function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
@@ -20,6 +20,29 @@ function campo(c, k, l, opt = {}){
   if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">${c.vigaGrav ? 'Viga de gravedad (marcada abajo)' : typeof G.ConSisProy === 'string' ? G.ConSisProy : 'Se escoge arriba, en «Disipación de energía» del proyecto'}</div></div>`;
   if(opt.sel) return `<div class="f"><label>${l}</label><select data-k="${k}" ${ro}>${opt.sel.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(c[k]) === String(v) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
   return `<div class="f"><label>${l}</label><input data-k="${k}" ${opt.num === false ? '' : 'inputmode="decimal" data-num="1"'} value="${esc(c[k] ?? '')}" ${ro}/>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
+}
+// Cartela de esquina y cruce en X (24-nov): las mismas secciones de la diagonal a cartela; cambia la unión al soporte
+function seccionesArr(c){
+  const base = seccionesDe0({ ...c, tipo:'cartela' }).filter(([k]) => k !== 'sold');
+  const SELP2 = (k, l) => campo(c, k, l, { sel:(G.PERFILES_LAM || []).map(x => x[0]) }), g3 = (...x) => `<div class="fg g3">${x.join('')}</div>`;
+  if(c.tipo === 'esquina'){
+    const i = base.findIndex(([k]) => k === 'cart');
+    base.splice(i + 1, 0, ['ufm', 'Viga, columna y soldaduras de la cartela', () => `${c.viga} · ${c.columna} por el ${c.cara === 'alma' ? 'alma (eje débil)' : 'ala'} · diagonal a ${c.ang}° · cartela ${c.Lh} × ${c.Lv} mm · filetes ${c.wB}/${c.wC} mm${c.duct === false ? '' : ' · ×1.25'}`,
+      g3(SELP2('viga', 'Viga'), campo(c, 'aceroViga', 'Acero de la viga', { sel:SEL_ACERO }), campo(c, 'ang', 'Ángulo de la diagonal con la horizontal [°]'),
+        SELP2('columna', 'Columna'), campo(c, 'aceroCol', 'Acero de la columna', { sel:SEL_ACERO }), campo(c, 'cara', 'La cartela se suelda a la columna por', { sel:[['ala', 'el ala (eje fuerte)'], ['alma', 'el alma (eje débil)']] }),
+        campo(c, 'Lh', 'Largo de la cartela sobre la viga Lh [mm]', { h:'Soldadura a la viga, desde la cara de la columna' }), campo(c, 'Lv', 'Alto de la cartela contra la columna Lv [mm]', { h:'Soldadura a la columna, desde el ala de la viga' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }),
+        campo(c, 'wB', 'Filete cartela–viga [mm]', { h:'Por ambas caras' }), campo(c, 'wC', 'Filete cartela–columna [mm]', { h:'Por ambas caras' }), '<div></div>',
+        campo(c, 'Rv', 'Reacción de la viga R [kN]', { h:'Cortante de gravedad en el extremo; se suma para la unión viga–columna' }), campo(c, 'Ab', 'Fuerza de transferencia Ab [kN]', { h:'La que el piso le pasa a la viga; vacío = 0' }))
+      + `<div class="f"><label class="ck"><input type="checkbox" data-k="duct" ${c.duct !== false ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Diseñar las soldaduras para 1.25 veces la fuerza (ductilidad, Manual AISC parte 13)</label></div>`
+      + '<p class="hint">La fuerza de la diagonal se reparte con el método de la fuerza uniforme. La unión viga–columna se diseña aparte (chapa de aleta o doble angular) con las fuerzas que da esta conexión.</p>']);
+  } else {
+    const i = base.findIndex(([k]) => k === 'cart');
+    base.splice(i + 1, 0, ['pl', 'Platina en el cruce', () => `ancho ${c.bPl} mm · libre ${c.LcX} mm · K ${c.KX}${nz(c.nH) ? ` · ${c.nH} agujeros` : ''}`,
+      g3(campo(c, 'bPl', 'Ancho de la platina en el cruce [mm]', { h:'Perpendicular a la diagonal interrumpida, donde pasa sobre la continua' }), campo(c, 'LcX', 'Espacio libre entre los extremos de la diagonal interrumpida [mm]', { h:'Para el pandeo de la platina' }), campo(c, 'KX', 'Factor K', { h:'1.0 si la diagonal continua no la sujeta; 0.65 si la sujeta bien' }),
+        campo(c, 'nH', 'Agujeros en la sección del cruce', { h:'Pernos de la unión a la diagonal continua; 0 si va soldada' }))
+      + '<p class="hint">La platina pasa por encima de la diagonal continua y lleva la fuerza de la diagonal interrumpida de una mitad a la otra. Los pernos y la sección de Whitmore de cada mitad se revisan como en la diagonal a cartela.</p>']);
+  }
+  return base.map(x => x[0] === 'cart' ? [x[0], c.tipo === 'cruce' ? 'Platina (cada mitad de la diagonal)' : 'Cartela', x[2], x[3]] : x);
 }
 const SEL_DIAM = Conex.DIAM.map(([t, v]) => [v, `${t} (${v} mm)`]);
 const SEL_ACERO = Object.keys(Conex.ACEROS).map(k => [k, `${k} (Fy ${Conex.ACEROS[k].Fy} MPa)`]);
@@ -304,13 +327,13 @@ function seccionesDe0(c){
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
         ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'xEmp', 'Distancia del empalme a la cara de la columna [mm]', { h:'Debe quedar fuera de la zona de rótula (≥ d)' })] : []))
       + `<div class="f"><label class="ck"><input type="checkbox" data-k="vigaGrav" ${c.vigaGrav ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Esta viga NO hace parte del pórtico sísmico (viga de gravedad): el empalme va sin requisitos sísmicos</label></div>`] ];
-  if(c.tipo === 'cartela'){ const tbo = c.diag === 'tubo'; return [
-    ['diag', 'Diagonal', () => tbo ? `Tubo ${c.Bt}×${c.Bt}×${c.tt} mm · ${c.aceroT} · ranurado y soldado` : `${+c.nL === 1 ? 'L' : '2L'} ${c.bL}×${c.bL}×${c.tL} mm · ${c.aceroL}`,
-      g3(campo(c, 'diag', 'Tipo de diagonal', { sel:[['L', 'Angulares atornillados'], ['tubo', 'Tubo cuadrado ranurado y soldado']] }),
-        ...(tbo ? [campo(c, 'Bt', 'Lado del tubo B [mm]'), campo(c, 'tt', 'Espesor nominal t [mm]', { h:'Se diseña con 0.93t' }), campo(c, 'aceroT', 'Acero', { sel:SEL_ACERO })]
+  if(c.tipo === 'cartela'){ const red = c.diag === 'redondo', tbo = c.diag === 'tubo' || red; return [
+    ['diag', 'Diagonal', () => tbo ? `Tubo ${red ? `redondo ⌀${c.Dt}` : `${c.Bt}×${c.Bt}`}×${c.tt} mm · ${c.aceroT} · ranurado y soldado` : `${+c.nL === 1 ? 'L' : '2L'} ${c.bL}×${c.bL}×${c.tL} mm · ${c.aceroL}`,
+      g3(campo(c, 'diag', 'Tipo de diagonal', { sel:[['L', 'Angulares atornillados'], ['tubo', 'Tubo cuadrado ranurado y soldado'], ['redondo', 'Tubo redondo ranurado y soldado']] }),
+        ...(tbo ? [red ? campo(c, 'Dt', 'Diámetro exterior D [mm]') : campo(c, 'Bt', 'Lado del tubo B [mm]'), campo(c, 'tt', 'Espesor nominal t [mm]', { h:'Se diseña con 0.93t' }), campo(c, 'aceroT', 'Acero', { sel:SEL_ACERO })]
           : [campo(c, 'nL', 'Angulares', { sel:[['1', '1 angular'], ['2', '2 angulares (espalda con espalda)']] }), campo(c, 'bL', 'Ala b [mm]'), campo(c, 'tL', 'Espesor t [mm]'), campo(c, 'aceroL', 'Acero', { sel:SEL_ACERO })]))],
     ...(tbo ? [['stub', 'Soldadura tubo–cartela', () => `4 filetes de ${c.wt} mm × ${c.Lws} mm · ${c.electrodo}`,
-      g3(campo(c, 'Lws', 'Largo de cada cordón Lws [mm]', { h:'Traslapo del tubo sobre la cartela; ≥ B' }), campo(c, 'wt', 'Filete w [mm]', { h:'4 cordones: 2 por cada cara ranurada' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : [
+      g3(campo(c, 'Lws', 'Largo de cada cordón Lws [mm]', { h:red ? 'Traslapo sobre la cartela; ≥ D (con ≥ 1.3D, U = 1)' : 'Traslapo del tubo sobre la cartela; ≥ B' }), campo(c, 'wt', 'Filete w [mm]', { h:'4 cordones: 2 por cada cara ranurada' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : [
     ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · Le ${c.Le} · ga ${c.ga}`,
       g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Le', 'Borde al extremo Le [mm]'), campo(c, 'ga', 'Gramil en el angular ga [mm]', { h:'Del talón a la línea de pernos' }), campo(c, 'Leg', 'Borde de la cartela Leg [mm]', { h:'Del perno más lejano al borde de la cartela' }))]]),
     ['cart', 'Cartela', () => `t ${c.tg} mm · ${c.aceroG} · Lcr ${c.Lcr} mm · K ${c.K}${nz(c.bWg) ? ` · ancho ${c.bWg} mm` : ''}`,
@@ -428,11 +451,12 @@ function cargasHTML(c){
   if(c.tipo === 'base') return caja('Cargas en la base de la columna', [f('P', 'P [kN]', '+ compresión'), f('Vx', 'Vx [kN]', 'sentido N'), f('Vy', 'Vy [kN]', 'sentido B'), f('T', 'T [kN·m]', 'torsión'), f('Mx', 'Mx [kN·m]', 'flexión en el sentido N'), f('My', 'My [kN·m]', 'flexión en el sentido B')], 'Resultantes mayoradas · vacío = 0', false);
   if(c.tipo === 'grupo') return caja('Cargas sobre el grupo de pernos', [f('Pu', 'Pu en el plano [kN]'), f('e', 'Excentricidad e [mm]', 'al centro del grupo'), f('ang', 'Ángulo [°]', '0° = vertical'),
     f('Nt', 'N normal a la chapa [kN]', '+ tensión en los pernos'), f('Mx', 'Mx fuera del plano [kN·m]', 'eje horizontal'), f('My', 'My fuera del plano [kN·m]', 'eje vertical')], 'Resultantes mayoradas · vacío = 0', false);
+  if(c.tipo === 'esquina' || c.tipo === 'cruce') return caja(c.tipo === 'cruce' ? 'Carga en la diagonal interrumpida' : 'Carga en la diagonal', [f('Pu', 'Pu axial [kN]', '+ tensión · − compresión')], 'Fuerza mayorada de la diagonal', false);
   const k2 = c.tipo === 'cartela' ? 'V2' : 'Vu', kP = c.tipo === 'cartela' ? 'Pu' : 'P', k3 = ['testa', 'ras', 'empalme', 'soldada', 'empZ', 'empCol'].includes(c.tipo) ? 'Mu' : 'M3';
   return caja(c.tipo === 'cartela' ? 'Cargas en el extremo de la diagonal' : c.tipo === 'empCol' ? 'Cargas en la columna en el empalme' : 'Cargas en el extremo de la viga', [f(kP, 'P axial [kN]', 'a lo largo del eje 1'), f(k2, 'V2 [kN]', 'dirección 2 (alma)'), f('V3', 'V3 [kN]', 'dirección 3 (alas)'),
     f('T', 'T torsión [kN·m]', 'alrededor del eje 1'), f('M2', 'M2 [kN·m]', 'alrededor de 2 · eje débil'), f(k3, 'M3 [kN·m]', 'alrededor de 3 · eje fuerte')], nota);
 }
-const cargasTxt = c => c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
+const cargasTxt = c => ['esquina', 'cruce'].includes(c.tipo) ? `Pu ${nz(c.Pu)} kN (${nz(c.Pu) >= 0 ? 'tensión' : 'compresión'})` : c.tipo === 'base' ? `P ${nz(c.P)} · Vx ${nz(c.Vx)} · Vy ${nz(c.Vy)} kN · T ${nz(c.T)} · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
   : c.tipo === 'grupo' ? `Pu ${nz(c.Pu)} kN a ${nz(c.ang)}° con e = ${nz(c.e)} mm · N ${nz(c.Nt)} kN · Mx ${nz(c.Mx)} · My ${nz(c.My)} kN·m`
   : `P ${nz(c.tipo === 'cartela' ? c.Pu : c.P)} · V2 ${nz(c.tipo === 'cartela' ? c.V2 : c.Vu)} · V3 ${nz(c.V3)} kN · T ${nz(c.T)} · M2 ${nz(c.M2)} · M3 ${nz(['testa', 'ras', 'empalme', 'soldada', 'empZ', 'empCol'].includes(c.tipo) ? c.Mu : c.M3)} kN·m`;
 const nz = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
@@ -460,6 +484,7 @@ function reqHTML(r){
 
 // Sección «Rigidez y clasificación» (pedido de Amo 20-nov): luz de la viga (o altura de la columna) para K = Sj·L/(E·I)
 function seccionesDe(c){
+  if(c.tipo === 'esquina' || c.tipo === 'cruce') return seccionesArr(c);
   const L = seccionesDe0(c);
   if(['testa', 'ras', 'soldada'].includes(c.tipo))
     L.push(['rigid', 'Rigidez y clasificación', () => c.Lviga ? `luz de la viga ${c.Lviga} m` : 'escriba la luz de la viga',
@@ -512,7 +537,7 @@ const ICO_ALETA = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="2"
 const ICO_GRUPO = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="4" width="26" height="32" fill="#93c5fd" stroke="#1e3a8a"/>' + [10, 20, 30].map(y => `<circle cx="12" cy="${y}" r="2.2" fill="#1e3a8a"/><circle cx="22" cy="${y}" r="2.2" fill="#1e3a8a"/>`).join('') + '<line x1="50" y1="6" x2="50" y2="32" stroke="#ea580c" stroke-width="2.5"/><path d="M46 28 L50 35 L54 28" fill="#ea580c"/></svg>';
 function cotaV(x, y1, y2, t, lado = -1){ const xx = x + lado * 0; return `<g class="cota"><line x1="${xx}" y1="${y1}" x2="${xx}" y2="${y2}"/><line x1="${xx - 4}" y1="${y1}" x2="${xx + 4}" y2="${y1}"/><line x1="${xx - 4}" y1="${y2}" x2="${xx + 4}" y2="${y2}"/><text x="${xx + lado * 6}" y="${(y1 + y2) / 2}" text-anchor="${lado < 0 ? 'end' : 'start'}" dominant-baseline="middle">${t}</text></g>`; }
 function cotaH(y, x1, x2, t, lado = 1){ return `<g class="cota"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/><line x1="${x1}" y1="${y - 4}" x2="${x1}" y2="${y + 4}"/><line x1="${x2}" y1="${y - 4}" x2="${x2}" y2="${y + 4}"/><text x="${(x1 + x2) / 2}" y="${y + lado * 11}" text-anchor="middle">${t}</text></g>`; }
-function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, base:dibBase, soldada:dibSoldada, empZ:dibEmpZ, empCol:dibEmpCol }[c.tipo] || dibAleta)(c, r); }
+function dibujo(c, r){ return ({ grupo:dibGrupo, testa:dibTesta, ras:dibTesta, angular:dibAngular, testaV:dibTestaV, asiento:dibAsiento, empalme:dibEmpalme, cartela:dibCartela, esquina:dibEsquina, cruce:dibCruce, base:dibBase, soldada:dibSoldada, empZ:dibEmpZ, empCol:dibEmpCol }[c.tipo] || dibAleta)(c, r); }
 const ICO_ANG = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="8" height="38" fill="#cbd5e1"/><rect x="18" y="6" width="40" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="12" y="9" width="18" height="22" fill="#93c5fd" stroke="#1e3a8a"/><rect x="12" y="9" width="3" height="22" fill="#1e3a8a"/><circle cx="23" cy="14" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="20" r="2" fill="#fff" stroke="#1e3a8a"/><circle cx="23" cy="26" r="2" fill="#fff" stroke="#1e3a8a"/></svg>';
 function dibAngular(c, r){
   const g = r.geo, vg = g.vg, n = +c.n, s = +c.s, Lev = +c.Lev, b = +c.bAng, t = +c.tAng, g1 = +c.g1, g2 = +c.g2, hol = +c.holgura || 0, ts = +c.tSop || 10;
@@ -558,7 +583,9 @@ const ICO_BASE = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="8" y="28"
 const ICO_SP = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="4" y="1" width="9" height="38" fill="#cbd5e1"/><rect x="13" y="8" width="45" height="24" fill="#f1f5f9" stroke="#94a3b8"/><rect x="13" y="8" width="45" height="3" fill="#475569"/><rect x="13" y="29" width="45" height="3" fill="#475569"/><path d="M13 5 l4 3 h-4z M13 35 l4 -3 h-4z" fill="#b45309"/><line x1="13.5" y1="8" x2="13.5" y2="32" stroke="#b45309" stroke-width="2.5"/></svg>';
 const ICO_EZ = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="6" width="56" height="28" fill="#f1f5f9" stroke="#94a3b8"/><rect x="2" y="6" width="56" height="3" fill="#475569"/><rect x="2" y="31" width="56" height="3" fill="#475569"/><path d="M22 4 V20 H38 V36" fill="none" stroke="#b45309" stroke-width="2.6"/></svg>';
 const ICO_EC = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="22" y="1" width="16" height="18" fill="#f1f5f9" stroke="#94a3b8"/><rect x="22" y="21" width="16" height="18" fill="#f1f5f9" stroke="#94a3b8"/><rect x="18" y="10" width="4" height="20" fill="#93c5fd" stroke="#1e3a8a"/><rect x="38" y="10" width="4" height="20" fill="#93c5fd" stroke="#1e3a8a"/><rect x="26" y="13" width="8" height="14" fill="#93c5fd" stroke="#1e3a8a"/></svg>';
-const ICO = { empCol:ICO_EC, empZ:ICO_EZ, soldada:ICO_SP, aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, grupo:ICO_GRUPO, base:ICO_BASE };
+const ICO_ESQ = '<svg viewBox="0 0 60 40" aria-hidden="true"><rect x="2" y="2" width="8" height="37" fill="#cbd5e1" stroke="#475569"/><rect x="10" y="30" width="48" height="8" fill="#cbd5e1" stroke="#475569"/><path d="M10 30 L10 8 L22 8 L34 18 L34 30 Z" fill="#93c5fd" stroke="#1e3a8a"/><line x1="16" y1="25" x2="56" y2="2" stroke="#475569" stroke-width="5"/></svg>';
+const ICO_CRZ = '<svg viewBox="0 0 60 40" aria-hidden="true"><line x1="4" y1="38" x2="56" y2="2" stroke="#94a3b8" stroke-width="6"/><rect x="20" y="10" width="20" height="20" fill="#93c5fd" stroke="#1e3a8a" transform="rotate(35 30 20)"/><line x1="2" y1="4" x2="21" y2="16" stroke="#475569" stroke-width="5"/><line x1="39" y1="24" x2="58" y2="36" stroke="#475569" stroke-width="5"/></svg>';
+const ICO = { empCol:ICO_EC, empZ:ICO_EZ, soldada:ICO_SP, aleta:ICO_ALETA, angular:ICO_ANG, testaV:ICO_TV, asiento:ICO_AS, testa:ICO_TESTA, ras:ICO_TESTA, empalme:ICO_EMP, cartela:ICO_CAR, esquina:ICO_ESQ, cruce:ICO_CRZ, grupo:ICO_GRUPO, base:ICO_BASE };
 const svgW = (w, h, body, label, nota) => `<svg viewBox="0 0 ${w} ${h}" class="dsvg" role="img" aria-label="${label}">${body}</svg><div class="hint" style="text-align:center">${nota}</div>`;
 function dibTestaV(c, r){
   const vg = r.geo.vg, n = +c.n, s = +c.s, Lev = +c.Lev, tp = +c.tp, bp = +c.bp, gg = +c.g, Lp = r.geo.Lp, ts = +c.tSop || 10;
@@ -609,8 +636,8 @@ function dibEmpalme(c, r){
 function dibCartela(c, r){
   // Elevación (corregida 20-nov): el extremo de la diagonal queda hacia el soporte (a Le del primer perno); la fuerza entra por el
   // perno más lejano y se abre a 30° hasta el perno más cercano al soporte (sección de Whitmore). Con tubo: ranurado y soldado.
-  const tub = c.diag === 'tubo', th = (+c.theta || 45) * Math.PI / 180, Lwg = +c.Lwg, Lcr = Math.max(+c.Lcr || 0, 40);
-  const n = tub ? 0 : +c.n, s = +c.s, Le = tub ? 0 : +c.Le, l = tub ? +c.Lws || 0 : (n - 1) * s, Bt = +c.Bt || 0;
+  const red = c.diag === 'redondo', tub = c.diag === 'tubo' || red, th = (+c.theta || 45) * Math.PI / 180, Lwg = +c.Lwg, Lcr = Math.max(+c.Lcr || 0, 40);
+  const n = tub ? 0 : +c.n, s = +c.s, Le = tub ? 0 : +c.Le, l = tub ? +c.Lws || 0 : (n - 1) * s, Bt = +(red ? c.Dt : c.Bt) || 0;
   const ux = Math.cos(th), uy = Math.sin(th), nx = -uy, ny = ux;
   const L0 = Lcr / Math.max(uy, 0.3);                                   // del soporte a la sección de Whitmore, sobre el eje
   const P = t => [Lwg / 2 - (L0 + l / 2) * ux * 0.5 + t * ux, t * uy];  // punto sobre el eje de la diagonal (t desde el soporte)
@@ -625,7 +652,7 @@ function dibCartela(c, r){
     h += `<path d="M${X(a[0] + bw * nx)} ${Y(a[1] + bw * ny)} L${X(b[0] + bw * nx)} ${Y(b[1] + bw * ny)} L${X(b[0] - bw * nx)} ${Y(b[1] - bw * ny)} L${X(a[0] - bw * nx)} ${Y(a[1] - bw * ny)} Z" fill="#cbd5e1" stroke="#475569" opacity=".75"/>
       ${[1, -1].map(sg => `<line x1="${X(pf[0] + sg * bw * nx)}" y1="${Y(pf[1] + sg * bw * ny)}" x2="${X(sl[0] + sg * bw * nx)}" y2="${Y(sl[1] + sg * bw * ny)}" stroke="#1e293b" stroke-width="3" stroke-dasharray="3 2"/>`).join('')}
       ${[1, -1].map(sg => `<line x1="${X(a[0] + sg * bw * nx)}" y1="${Y(a[1] + sg * bw * ny)}" x2="${X(pf[0] + sg * bw * nx)}" y2="${Y(pf[1] + sg * bw * ny)}" stroke="#ea580c" stroke-width="3.5"/>`).join('')}
-      <text x="${X(b[0] + bw * nx) + 4}" y="${Y(b[1] + bw * ny)}" class="lbl">tubo ${c.Bt}×${c.Bt}×${c.tt}</text>`; }
+      <text x="${X(b[0] + bw * nx) + 4}" y="${Y(b[1] + bw * ny)}" class="lbl">tubo ${red ? `⌀${c.Dt}` : `${c.Bt}×${c.Bt}`}×${c.tt}</text>`; }
   else { const a = P(L0 - Le), b = P(L0 + l + 170);
     h += `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="#475569" stroke-width="${Math.max(6, +c.bL * k * 0.5)}" opacity=".55"/>`; }
   h += `<path d="M${X(pf[0] + w0 * nx)} ${Y(pf[1] + w0 * ny)} L${X(p0[0] + wx * nx)} ${Y(p0[1] + wx * ny)} M${X(pf[0] - w0 * nx)} ${Y(pf[1] - w0 * ny)} L${X(p0[0] - wx * nx)} ${Y(p0[1] - wx * ny)} M${X(p0[0] + wx * nx)} ${Y(p0[1] + wx * ny)} L${X(p0[0] - wx * nx)} ${Y(p0[1] - wx * ny)}" fill="none" stroke="#7c3aed" stroke-dasharray="4 3" stroke-width="1.5"/>`;
@@ -633,6 +660,42 @@ function dibCartela(c, r){
   h += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(Lwg)}" y2="${Y(0)}" class="wl"/>${cotaH(Y(0) + 26, X(0), X(Lwg), `soldadura L = ${Lwg}`)}
     <text x="${X(p0[0] - wx * nx) + 4}" y="${Y(p0[1] - wx * ny) + 12}" class="lbl" style="fill:#7c3aed">Whitmore ${f2(r.geo.Lw, 0)}</text>`;
   return svgW(X(xMax) + 10, Y(0) + 44, h, 'Diagonal a cartela', `θ = ${c.theta}° · Pu = ${f2(+c.Pu, 1)} kN · línea morada = sección de Whitmore (30° desde ${tub ? 'el final de la soldadura' : 'el perno más lejano'})${tub ? ' · en naranja los cordones tubo–cartela; punteado la ranura' : ''}`);
+}
+// Cartela de esquina (24-nov): elevación con la columna a la izquierda, la viga abajo y la cartela en la esquina
+function dibEsquina(c, r){
+  const g = r.geo || {}, vg = g.vg || { d:300, nom:c.viga }, cl = g.cl || { d:300, bf:300, nom:c.columna }, u = g.ufm || {};
+  const alma = c.cara === 'alma', wc = alma ? cl.bf : cl.d, Lh = +c.Lh, Lv = +c.Lv, ang = (+c.ang || 45) * Math.PI / 180;
+  const W = wc + Lh + 260, H = vg.d + Lv + 220, k = 380 / Math.max(W, H);
+  const X = v => 80 + (v + wc) * k, Y = v => 20 + (Lv + 200 - v) * k;      // x = 0 cara de la columna, y = 0 cara superior de la viga
+  const wp = [-(alma ? 0 : wc / 2), -vg.d / 2], far = [wp[0] + (W) * Math.cos(ang), wp[1] + W * Math.sin(ang)];
+  let h = `<rect x="${X(-wc)}" y="${Y(Lv + 200)}" width="${wc * k}" height="${(Lv + 200 + vg.d + 20) * k}" class="sop"/>
+    <rect x="${X(0)}" y="${Y(0)}" width="${(Lh + 260) * k}" height="${vg.d * k}" class="vg"/>
+    <path d="M${X(0)} ${Y(0)} L${X(Lh)} ${Y(0)} L${X(Lh)} ${Y(Lv * 0.25)} L${X(Lh * 0.35)} ${Y(Lv)} L${X(0)} ${Y(Lv)} Z" class="pl"/>
+    <line x1="${X(wp[0])}" y1="${Y(wp[1])}" x2="${X(far[0])}" y2="${Y(far[1])}" stroke="#475569" stroke-width="2" stroke-dasharray="6 4"/>
+    <line x1="${X(Lh * 0.45)}" y1="${Y(Lh * 0.45 * Math.tan(ang) + wp[1] - wp[0] * Math.tan(ang))}" x2="${X(far[0])}" y2="${Y(far[1])}" stroke="#475569" stroke-width="${Math.max(6, 14)}" opacity=".5"/>
+    <line x1="${X(0)}" y1="${Y(0)}" x2="${X(Lh)}" y2="${Y(0)}" class="wl"/><line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(Lv)}" class="wl"/>
+    <circle cx="${X(wp[0])}" cy="${Y(wp[1])}" r="3.5" fill="#dc2626"/><text x="${X(wp[0]) + 5}" y="${Y(wp[1]) + 12}" class="lbl" style="fill:#dc2626">punto de trabajo</text>
+    <text x="${X(-wc / 2)}" y="${Y(Lv + 160)}" class="lbl" text-anchor="middle">${esc(cl.nom || c.columna)}${alma ? ' (alma)' : ''}</text><text x="${X(Lh + 130)}" y="${Y(-vg.d / 2) + 4}" class="lbl" text-anchor="middle">${esc(vg.nom || c.viga)}</text>`;
+  h += cotaH(Y(-vg.d) + 16, X(0), X(Lh), `Lh = ${Lh}`) + cotaV(X(-wc) - 8, Y(0), Y(Lv), `Lv = ${Lv}`);
+  if(u.Hb != null) h += `<text x="${X(Lh * 0.5)}" y="${Y(0) - 6}" class="lbl" text-anchor="middle" style="fill:#ea580c">Hb ${f2(u.Hb, 0)} · Vb ${f2(u.Vb, 0)} kN</text>
+    <text x="${X(0) + 6}" y="${Y(Lv * 0.55)}" class="lbl" style="fill:#ea580c">Vc ${f2(u.Vc, 0)} · Hc ${f2(u.Hc, 0)} kN</text>`;
+  return svgW(X(Lh + 260) + 10, Y(-vg.d) + 40, h, 'Cartela de esquina', `Diagonal a ${c.ang}° · el eje pasa por el punto de trabajo (cruce de los ejes de viga y columna) · en naranja las soldaduras y las fuerzas de cada interfaz (fuerza uniforme)`);
+}
+// Cruce en X (24-nov): la diagonal continua en gris, la interrumpida llega por los dos lados a la platina
+function dibCruce(c, r){
+  const red = c.diag === 'redondo', tub = c.diag === 'tubo' || red, B = tub ? +(red ? c.Dt : c.Bt) : +c.bL, bPl = +c.bPl, LcX = +c.LcX;
+  const n = tub ? 0 : +c.n, s = +c.s, Le = +c.Le, l = tub ? +c.Lws : (n - 1) * s, Lp = LcX + 2 * (l + (tub ? 0 : Le + 30)), k = 380 / (Lp + 260);
+  const X = v => 200 + v * k, Y = v => 130 - v * k;
+  let h = `<line x1="${X(-180)}" y1="${Y(-150)}" x2="${X(180)}" y2="${Y(150)}" stroke="#94a3b8" stroke-width="${Math.max(8, B * k)}"/>
+    <rect x="${X(-Lp / 2)}" y="${Y(bPl / 2)}" width="${Lp * k}" height="${bPl * k}" class="pl"/>
+    <line x1="${X(-180)}" y1="${Y(-150)}" x2="${X(180)}" y2="${Y(150)}" stroke="#94a3b8" stroke-width="${Math.max(8, B * k)}" opacity=".55"/>`;
+  for(const sg of [-1, 1]){ const x0 = sg * LcX / 2, x1 = sg * (Lp / 2 + 120);
+    h += `<line x1="${X(x0 + sg * (tub ? 0 : -0))}" y1="${Y(0)}" x2="${X(x1)}" y2="${Y(0)}" stroke="#475569" stroke-width="${Math.max(7, B * k * (tub ? 1 : 0.5))}" opacity=".75"/>`;
+    for(let i = 0; i < n; i++){ const x = sg * (LcX / 2 + Le + i * s); h += `<circle cx="${X(x)}" cy="${Y(0)}" r="${Math.max(3, (r.geo?.dh || 21) / 2 * k)}" class="bolt"/>`; }
+    if(tub) h += `<line x1="${X(sg * LcX / 2)}" y1="${Y(B / 2)}" x2="${X(sg * (LcX / 2 + l))}" y2="${Y(B / 2)}" stroke="#ea580c" stroke-width="3"/>`; }
+  h += cotaH(Y(-bPl / 2) + 16, X(-LcX / 2), X(LcX / 2), `libre ${LcX}`) + cotaV(X(-Lp / 2) - 8, Y(bPl / 2), Y(-bPl / 2), `${bPl}`)
+    + `<text x="${X(150)}" y="${Y(150) - 6}" class="lbl">diagonal continua</text><text x="${X(-Lp / 2 - 120)}" y="${Y(0) - 12}" class="lbl">diagonal interrumpida</text>`;
+  return svgW(X(Lp / 2 + 130) + 10, Y(-bPl / 2) + 40, h, 'Cruce de diagonales en X', `Platina ${bPl} × ${c.tg} mm sobre la diagonal continua · la fuerza (${f2(+c.Pu, 1)} kN) pasa de una mitad a la otra por la platina`);
 }
 function dibBase(c, r){
   const cl = r.geo.cl, N = +c.N, B = +c.B, Lp = +c.Lp, Wp = +c.Wp, S1 = +c.S1, S2 = +c.S2, nB = +c.nB, R = r.geo.R || {};
@@ -821,7 +884,7 @@ function dibGrupo(c, r){
 // ── Lista en el celular (igual que el generador: una línea fija con el elemento abierto) ─────────────
 function datosPrint(c){
   const t = (l, v) => `<tr><th>${l}</th><td>${v}</td></tr>`, dn = (Conex.DIAM.find(x => x[1] === +c.d) || [c.d])[0];
-  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'base', 'soldada', 'empZ', 'empCol'].includes(c.tipo)){
+  if(['ras', 'testaV', 'asiento', 'empalme', 'cartela', 'esquina', 'cruce', 'base', 'soldada', 'empZ', 'empCol'].includes(c.tipo)){
     const carga = cargasTxt(c);
     return `<table class="t kv">${t('Cargas', carga)}${seccionesDe(c).map(([, tt, res]) => t(esc(tt), esc(res()))).join('')}</table>`; }
   if(c.tipo === 'angular') return `<table class="t kv">${t('Cargas', cargasTxt(c))}${t('Viga', `${esc(c.viga)} · ${esc(c.aceroViga)} · holgura ${c.holgura} mm`)}${t('Soporte', `${SOPN[c.soporte]} · t = ${c.tSop} mm · ${esc(c.aceroSop)} · angulares ${c.unSop === 'sold' ? `soldados (filete ${c.wS} mm ${esc(c.electrodo || '')}, retorno 2w)` : 'atornillados'}`)}

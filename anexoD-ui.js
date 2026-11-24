@@ -19,11 +19,36 @@ async function filasModelo(){
   if(_filas?.clave === clave) return _filas.G;
   const G = AnexoC.filasGrupos(await textoModelo(C), Fz.res); _filas = { clave, G }; return G;
 }
-function filasDe(el, G){
+function filasDe0(el, G){
   if(el.fuerzas === 'manual') return [{ ...el.manual, F:'—', c:'escritas a mano', st:0 }];
   if(G?.[el.grupo]) return G[el.grupo].filas;
   const g = S.m.anexos?.C?.modelo?.fuerzas?.grupos?.find(x => x.sec + '|' + x.fun === el.grupo);   // sin descarga: filas críticas guardadas
   return g ? [...Object.values(g.crit), ...Object.values(g.env).flatMap(e => [e.max, e.min])].filter(Boolean) : [];
+}
+function filasDe(el, G){ const ch = chevron(el); return ch?.ok ? [...filasDe0(el, G), ...ch.filas] : filasDe0(el, G); }
+// ═══ Viga de pórtico arriostrado en V o V invertida (pedido de Amo 24-nov; NSR-10 F.3 = AISC 341-10 F1.4a / F2.4a) ═══
+// Las diagonales no sostienen la gravedad; con sismo la de tensión llega a Ry·Fy·Ag y la de compresión baja a 0.3·Pn:
+// la diferencia vertical Qb = (T − C)·sen φ queda en la mitad de la viga. Se suma como una fila más de fuerzas.
+const numD = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
+function chevron(el){
+  const v = el.chev; if(!v?.on || el.tipo !== 'I') return null;
+  const Ag = numD(v.Ag), Fy = (AnexoD.ACEROS?.[v.acero] || [345])[0], Ry = numD(v.Ry) || 1.1, Pn = numD(v.Pn), phi = (numD(v.ang) || 45) * Math.PI / 180, L = numD(v.L), wD = numD(v.wD), wL = numD(v.wL);
+  if(!Ag || !L) return { ok:false, error:'Escriba el área de la diagonal y la luz de la viga.' };
+  const T = Ry * Fy * Ag / 1000, C = 0.3 * Pn, Qb = (T - C) * Math.sin(phi), Hx = (T + C) * Math.cos(phi), wu = 1.2 * wD + 0.5 * wL;
+  const M = wu * L * L / 8 + Qb * L / 4, V = wu * L / 2 + Qb / 2, P = Hx / 2;
+  const fila = (sg, txt) => ({ P:sg * P, V2:V, V3:0, T:0, M2:0, M3:M, F:'—', c:txt, st:L / 2 });
+  return { ok:true, T, C, Qb, Hx, wu, M, V, P, filas:[fila(-1, 'diagonales: tensión esperada y compresión post-pandeo (lado a compresión)'), fila(1, 'diagonales: tensión esperada y compresión post-pandeo (lado a tensión)')],
+    txt:`Pórtico en V invertida: T = Ry·Fy·Ag = ${fx(T, 1)} kN, C = 0.3·Pn = ${fx(C, 1)} kN → Qb = (T − C)·sen φ = ${fx(Qb, 1)} kN en el centro; Mu = wu·L²/8 + Qb·L/4 = ${fx(M, 2)} kN·m, Vu = ${fx(V, 2)} kN, P = ±(T + C)·cos φ/2 = ${fx(P, 1)} kN (wu = 1.2D + 0.5L = ${fx(wu, 2)} kN/m)` };
+}
+function chevFormHTML(e){
+  if(e.tipo !== 'I') return '';
+  const v = e.chev || {}, ro_ = esIng() ? '' : 'disabled', ch = chevron(e);
+  return `<details class="d-opc" ${v.on ? 'open' : ''}><summary>Viga de pórtico arriostrado en V o V invertida (sismo)</summary>
+    <label class="chk"><input type="checkbox" data-a="chev.on" ${v.on ? 'checked' : ''} ${ro_}/> Las diagonales llegan a la mitad de esta viga: revisarla con la fuerza desbalanceada</label>
+    ${v.on ? `<div class="fg g4">${fIn(e, 'chev.Ag', 'Área de una diagonal Ag [mm²]')}<div class="f"><label>Acero de la diagonal</label><select data-a="chev.acero" ${ro_}>${Object.keys(AnexoD.ACEROS || {}).map(k => `<option ${v.acero === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>${fIn(e, 'chev.Ry', 'Ry', { ph:'1.1', h:'A36 1.5 · A572 1.1 · A500 B 1.4 · A500 C 1.3' })}${fIn(e, 'chev.Pn', 'Pn de la diagonal [kN]', { h:'Resistencia nominal a compresión (sin φ)' })}</div>
+      <div class="fg g4">${fIn(e, 'chev.ang', 'Ángulo de las diagonales [°]', { ph:'45', h:'Con la horizontal' })}${fIn(e, 'chev.L', 'Luz de la viga L [m]', { h:'Entre columnas' })}${fIn(e, 'chev.wD', 'Carga muerta wD [kN/m]')}${fIn(e, 'chev.wL', 'Carga viva wL [kN/m]')}</div>
+      <p class="hint">${ch?.ok ? esc(ch.txt) : esc(ch?.error || '')}. Se agrega como una fila más a las fuerzas del elemento.</p>
+      <p class="hint">Requisitos: la viga es continua entre columnas y se arriostra lateralmente en el punto donde llegan las diagonales (alas superior e inferior).</p>` : ''}</details>`;
 }
 // ═══ Deflexiones (pedido de Amo 22-nov; calc/flechas.js, límites de la Tabla C.9.5(b)) ═══
 let _flm = null;
@@ -289,6 +314,7 @@ function detMetHTML(e){
       : Fz?.grupos?.length ? `<div class="f"><label>Grupo de elementos del modelo</label><select data-a="grupo" ${ro_}>${opt('', '— escoge —', e.grupo)}${Fz.grupos.map(g => opt(g.sec + '|' + g.fun, `${g.sec} · ${g.fun} (${g.n} elem.)`, e.grupo)).join('')}</select>
           <div class="hint">Se revisan todas las filas del grupo en las combinaciones de resistencia del Anexo C y se toma la que controla en cada chequeo.</div></div>`
       : '<div class="note amber">No hay fuerzas del modelo: súbelo con resultados en el Anexo C o escríbelas a mano.</div>'}
+    ${chevFormHTML(e)}
     <div id="dProg"></div>
     <div id="dRes" style="margin-top:12px"><p class="muted">Calculando…</p></div>
     ${typeof Flechas !== 'undefined' && e.tipo !== 'BAR' ? flFormHTML(e) : ''}</div>`;
@@ -451,8 +477,9 @@ function activarMet(e){
   const D = datosD(), re = () => { guardarMemoria(); pintarResMet(e); };
   $('#dDet [data-a="nom"]')?.addEventListener('change', () => paneAnexoD());
   $$('#dDet [data-a]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', debounce(() => {
+    if(inp.dataset.a.startsWith('chev.') && !e.chev) e.chev = {};
     setP(e, inp.dataset.a, inp.type === 'checkbox' ? inp.checked : inp.value);
-    if(['perfil','grupo','acero','flecha.on','flecha.origen','flecha.noEst','flecha.man.vol'].includes(inp.dataset.a)) paneAnexoD(); else re();
+    if(['perfil','grupo','acero','flecha.on','flecha.origen','flecha.noEst','flecha.man.vol','chev.on'].includes(inp.dataset.a)) paneAnexoD(); else re();
   }, 350)));
   $$('[data-tipo]').forEach(b => b.onclick = () => { e.tipo = b.dataset.tipo; guardarMemoria(); paneAnexoD(); });
   $$('[data-fz]').forEach(b => b.onclick = () => { e.fuerzas = b.dataset.fz; guardarMemoria(); paneAnexoD(); });
@@ -499,7 +526,7 @@ function anexoDPrintHTML(Rs, conc=''){
       <table class="ax-kv">${(ps => ps.filter((_, i) => i % 2 === 0).map((q, i) => `<tr><td>${q[0]}</td><td>${q[1]}</td>${ps[2*i+1] ? `<td>${ps[2*i+1][0]}</td><td>${ps[2*i+1][1]}</td>` : '<td></td><td></td>'}</tr>`).join(''))(propsSeccion(R.s))}</table></div>
     <table class="ax-kv"><tr><td>Longitudes Lx · Ly · Lb · Lz [m]${R.Fc ? ` (elemento ${esc(R.Fc)}${e.res?.FcEje ? `, ${esc(e.res.FcEje)}` : ''}, el que controla)` : ''}</td><td>${[R.Lx, R.Ly, R.Lb, R.Lz].map(v => fx(v/1000,2)).join(' · ')}</td></tr>
       ${R.s.tipo !== 'BAR' ? `<tr><td>Kx · Ky · Kz · Cb</td><td>${R.Kx} · ${R.Ky} · ${R.Kz} · ${R.Cb}</td></tr>` : ''}
-      <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados${e.res?.porEl?.length > 1 ? `, ${e.res.porEl.length} elementos revisados uno por uno` : ''}`}</td></tr>
+      <tr><td>Fuerzas</td><td>${e.fuerzas === 'manual' ? 'escritas por el diseñador' : `grupo ${esc(e.grupo.replace('|', ' · '))} — ${R.filas} filas de resultados${e.res?.porEl?.length > 1 ? `, ${e.res.porEl.length} elementos revisados uno por uno` : ''}`}</td></tr>${chevron(e)?.ok ? `<tr><td>Pórtico en V invertida</td><td>${esc(chevron(e).txt)} (NSR-10 F.3; la viga se arriostra lateralmente donde llegan las diagonales)</td></tr>` : ''}
       ${e.res?.porEl ? `<tr><td>Longitudes arriostradas y Cb</td><td>datos de cálculo${e.res.porEl.length > 1 ? ' de cada elemento' : ''}</td></tr>` : ''}</table>
     ${swPrintHTML(e)}
     ${tb(['Chequeo','Demanda','Capacidad φRn','Relación','Fila que controla'], Object.entries(CHK).filter(([k]) => R.checks[k]).map(([k, [n, ref, u, cap, dem]]) => { const ch = R.checks[k], fl = ch.f;
