@@ -85,6 +85,28 @@ function figLcr(tub){
     ${t(e1[0] + 4, e1[1] + 2, 'Whitmore', mo)}${t(115, 172, 'soporte (borde soldado)', ln, 'middle')}
   </svg><figcaption>Lcr = (L1 + L2 + L3)/3: se miden desde la sección de Whitmore (centro y extremos) hasta el borde soldado, en la dirección de la diagonal; si una línea sale por un borde libre, se mide hasta ese borde. K = 0.65 si la cartela está sujeta en un borde (Thornton); 0.5 si está bien sujeta en sus dos bordes (cartela de esquina compacta); 1.2 si el borde libre es largo y puede desplazarse lateralmente.</figcaption></figure>`;
 }
+// Placa de refuerzo del alma de la columna (doubler) — campos y figura (pedido de Amo 25-nov)
+function figDoubler(){
+  return `<figure class="fig-ayuda"><svg viewBox="0 0 290 150" role="img" aria-label="Placa de refuerzo del alma de la columna">
+    <text x="60" y="12" font-size="9" text-anchor="middle" fill="#475569">planta</text>
+    <rect x="20" y="22" width="80" height="8" fill="#cbd5e1" stroke="#334155"/><rect x="20" y="112" width="80" height="8" fill="#cbd5e1" stroke="#334155"/>
+    <rect x="56" y="30" width="8" height="82" fill="#cbd5e1" stroke="#334155"/><rect x="64" y="34" width="9" height="74" fill="#fde68a" stroke="#b45309"/>
+    <path d="M73 34 l4 -4 M73 108 l4 4" stroke="#ea580c" stroke-width="2"/><text x="78" y="74" font-size="9" fill="#92400e">td</text>
+    <text x="185" y="12" font-size="9" text-anchor="middle" fill="#475569">alzado (alma)</text>
+    <rect x="140" y="18" width="90" height="128" fill="#e5e7eb" stroke="#334155"/>
+    <rect x="140" y="46" width="90" height="6" fill="#93c5fd" stroke="#1d4ed8"/><rect x="140" y="108" width="90" height="6" fill="#93c5fd" stroke="#1d4ed8"/>
+    <rect x="152" y="52" width="66" height="56" fill="#fde68a" stroke="#b45309"/><text x="185" y="84" font-size="9" text-anchor="middle" fill="#92400e">placa de refuerzo</text>
+    <line x1="152" y1="52" x2="152" y2="108" stroke="#ea580c" stroke-width="3"/><line x1="218" y1="52" x2="218" y2="108" stroke="#ea580c" stroke-width="3"/>
+    <text x="235" y="50" font-size="8" fill="#1d4ed8">placas de</text><text x="235" y="60" font-size="8" fill="#1d4ed8">continuidad</text></svg>
+    <figcaption>Placa pegada al alma, entre las placas de continuidad (o 150 mm por encima y por debajo de las alas de la viga), soldada a las dos alas de la columna (naranja). Su espesor se suma al del alma en la zona de panel.</figcaption></figure>`;
+}
+function doublerHTML(c, campo, ck){
+  const un = c.unDp || '';
+  return `<h4 class="sub">Placa de refuerzo del alma (zona de panel)</h4>` + conFig(`<div class="fg g2">${[campo(c, 'dp', '¿Lleva placa de refuerzo?', { sel:[['no', 'No'], ['si', 'Sí']], h:'Si la zona de panel no alcanza' }),
+    ...(c.dp === 'si' ? [campo(c, 'tdp', 'Espesor td [mm]', { h:'Vacío = automático' }), campo(c, 'aceroDp', 'Acero', { sel:[['', '— el de la columna —'], ...SEL_ACERO] }),
+      campo(c, 'unDp', 'Soldadura a las alas', { sel:[['', 'Automática (con sismo, penetración completa)'], ['filete', 'Filete'], ['cjp', 'Penetración completa']] }),
+      ...(un === 'filete' ? [campo(c, 'wdp', 'Filete [mm]', { h:'Vacío = automático' })] : [])] : [])].join('')}</div>`, c.dp === 'si' ? figDoubler() : '');
+}
 function figContinuidad(dos, cl, sis){
   const col = '#cbd5e1', ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
   const viga = (x1, x2) => `<rect x="${x1}" y="46" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="117" width="${x2 - x1}" height="7" fill="${col}" stroke="${ln}"/><rect x="${x1}" y="53" width="${x2 - x1}" height="64" fill="#f1f5f9" stroke="none"/>`;
@@ -275,7 +297,7 @@ function seccionesDe0(c){
           ? conFig(`<div class="fg g3">${[c.miembro === 'tubo' ? `<div class="fld"><label>Unión del tubo a las placas</label><div class="hint">Placa traslapada sobre la cara superior e inferior del tubo, con filete (con tubo no se puede a tope)</div></div>` : campo(c, 'uDebil', 'Unión de las alas a las placas', { sel:[['trasl', 'B · Placa traslapada con filete'], ['tope', 'A · Alas a tope (CJP)']] }), campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }),
               ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete placa–columna [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]),
               ...(opDebil(c) === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { h:c.miembro === 'tubo' ? 'Largo de la placa sobre la cara del tubo' : 'Largo de la placa sobre el ala' }), campo(c, 'wT', c.miembro === 'tubo' ? 'Filete placa–tubo [mm]' : 'Filete placa–ala [mm]')])].join('')}</div>`, figCorteDebil(opDebil(c), c.dosLados, c.miembro === 'tubo'), 'ancho')
-          : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo)))))],
+          : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + doublerHTML(c, campo, ck)))],
     ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
         ...(c.sismo === 'DMO' || c.sismo === 'DES' ? [campo(c, 'Lh', 'Luz libre de la viga L [m]', { h:'Entre caras de columnas (la rótula queda en la cara)' }), campo(c, 'Vg', 'Vg: cortante de gravedad [kN]', { h:'1.2D + 0.5L (o la del modelo)' })] : []))
@@ -428,7 +450,7 @@ function seccionesDe0(c){
       + ck('dosLados', 'Llega otra viga a momento al otro lado de la columna')
       + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
       + `<h4 class="sub">Rigidizadores de la columna (placas de continuidad)</h4>`
-      + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:'Vacío = automático' }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo)))],
+      + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:'Vacío = automático' }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + (c.columna ? doublerHTML(c, campo, ck) : '')],
     ['placa', 'Placa de testa', () => `${e8 ? '8 pernos rigidizada (8ES)' : '4 pernos (4E)'} · PL ${c.tp} × ${c.bp} mm ${c.aceroPl} · extensión ${c.ambos ? 'arriba y abajo' : 'solo arriba'}`,
       g3(campo(c, 'config', 'Configuración', { sel:[['4E', '4 pernos sin rigidizar (4E)'], ['8ES', '8 pernos con rigidizador (8ES)']] }), campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }),
         ...(e8 ? [campo(c, 'tsE', 'Rigidizador de la extensión ts [mm]', { h:'Triangular, en el eje del alma' }), campo(c, 'wsE', 'Filete del rigidizador [mm]')] : []))
@@ -943,5 +965,5 @@ function datosPrint(c){
 
 /* Barra lateral (estilo B de Amo, 18-nov; igual al generador de memorias). En un proyecto, en el computador, la lista de
    conexiones y la galería para agregar pasan a la barra lateral; en el celular quedan como antes (lista desplegable). */
-G.ConUI = { rigHTML, CLASE_RIG, NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint };
+G.ConUI = { rigHTML, doublerHTML, CLASE_RIG, NOMBRES, CATS, PREF, recalcular, campo, SEL_DIAM, SEL_ACERO, dnom, SOPN, conFig, svgCorteEsq, figLcr, figContinuidad, opDebil, svgPlantaDebil, figDebil, svgCorteDebil, figCorteDebil, figPlacaApoyo, seccionesDe, abiertas, ejesCon, cargasHTML, cargasTxt, nz, formHTML, GRUPOS, chequeosHTML, reqHTML, resHTML, ICO_ALETA, ICO_GRUPO, cotaV, cotaH, dibujo, ICO_ANG, dibAngular, ICO_TESTA, ICO_TV, ICO_AS, ICO_EMP, ICO_CAR, ICO_BASE, ICO_SP, ICO_EZ, ICO, svgW, dibTestaV, dibAsiento, dibEmpalme, dibCartela, dibBase, dibSoldada, dibEmpZ, dibTesta, dibAleta, dibGrupo, datosPrint };
 })(window);

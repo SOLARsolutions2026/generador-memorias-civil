@@ -669,9 +669,7 @@ function calcTesta(c){
     }
     // d) zona de panel: una viga, suma (mismo sentido) o diferencia (opuestos)
     const Vp = !dos ? Ffu : opuesto ? Math.abs(Ffu - F2) : Ffu + F2, Rv = 0.9 * 0.6 * ac.Fy * dc * cl.tw / 1000;
-    add('columna', 'Zona de panel (cortante del alma)', 'F.2.10.10.6 (J10-9), φ = 0.90', Vp, Rv, 'kN', `${!dos ? 'Ffu' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`);
-    if(Vp > Rv){ const tdq = Vp * 1000 / (0.9 * 0.6 * ac.Fy * dc) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (dc - 2 * cl.tf) / 90) - 1e-6) || 38.1;
-      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${c.aceroCol}), soldada al alma y a las alas de la columna, o use una columna de alma más gruesa.`); }
+    panelConDoubler({ c, cl, ac, Vp, Rv0:Rv, dz:vg.d - 2 * vg.tf, sis:['DMO', 'DES'].includes(c.sismo), add, req, av, pasos, grupo:'columna', nomCh:'Zona de panel (cortante del alma)', ref:'F.2.10.10.6 (J10-9), φ = 0.90', txt:`${!dos ? 'Ffu' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`, FEXX:ELECTRODOS[c.electrodo] || 483, cont:usar });
     pasos.push(`Columna ${cl.nom}: bf = ${cl.bf}, tf = ${cl.tf}, tw = ${cl.tw}, k = ${r1(kc)} mm; s = ${r1(sC)}, c = ${r1(cc)} mm; Yc sin rigidizar = ${Math.round(Yc)} mm, φMcf = ${r2(phiMcf)} kN·m, tcf,req = ${r1(tcfReq)} mm`);
   } else av.push('No se revisó la columna: escoja su perfil para revisar el ala y el alma.');
 
@@ -1817,9 +1815,7 @@ function calcSoldada0(c){
     add('columna', 'Aplastamiento del alma', 'F.2.10.10.3 (J10-4/5)', Fc, Rcr + capPl, 'kN', `N/d = ${r3(rN)}${mp}`);
     if(op) add('columna', 'Pandeo del alma por las dos alas (vigas a los dos lados)', 'F.2.10.10.5 (J10-8), φ = 0.90', Math.min(Ffu, F2), Rpb + capPl, 'kN', `24·tw³·√(E·Fy)/h${mp}`);
     const Vp = !dos ? Ffu : op ? Math.abs(Ffu - F2) : Ffu + F2, Rv = 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000;
-    add('columna', 'Zona de panel', 'F.2.10.10.6 (J10-9), φ = 0.90', Vp, Rv, 'kN', `${!dos ? 'Ffu' : op ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`);
-    if(Vp > Rv){ const tdq = Vp / (Rv / cl.tw) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (cl.d - 2 * cl.tf) / 90) - 1e-6) || 38.1;
-      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${c.aceroCol}) soldada al alma y a las alas, o use una columna de alma más gruesa.`); }
+    panelConDoubler({ c, cl, ac, Vp, Rv0:Rv, dz:m.d - 2 * m.tf, sis, add, req, av, pasos, grupo:'columna', nomCh:'Zona de panel', ref:'F.2.10.10.6 (J10-9), φ = 0.90', txt:`${!dos ? 'Ffu' : op ? '|F₁ − F₂|' : 'F₁ + F₂'} contra 0.6·Fy·dc·tw (sin cortante de la columna)`, FEXX, cont:usar });
     req.push(['El miembro cabe en el ala de la columna: b ≤ bf de la columna', m.bf <= cl.bf + 1e-6, `${m.bf} ≤ ${cl.bf} mm`]);
     if(Math.abs(M2) > 0) av.push('M2 se transmite al ala de la columna como flexión fuera de su plano; si es importante, use rigidizadores o una placa.');
   } else av.push('No se revisó la columna: escoja su perfil.');
@@ -1827,6 +1823,42 @@ function calcSoldada0(c){
   const r = fin(ch, req, av, pasos, { m, Ffu, rig });
   if(sug) r.sug = sug;
   return r;
+}
+
+// ── Placa de refuerzo del alma de la columna (doubler) en la zona de panel (pedido de Amo 25-nov) ─────────────
+// o = { c (campos dp, tdp, aceroDp, wdp, unDp), cl, ac (acero de la columna), Vp, Rv0 (φRv del alma sola), dz (alto del panel = d − 2tf de la viga),
+//       sis, add, req, av, pasos, grupo, nomCh, ref, txt, FEXX, cont (hay placas de continuidad) } → φRv final (y agrega el chequeo)
+function panelConDoubler(o){
+  const { c, cl, ac, Vp, Rv0, sis, add, req, av, pasos, grupo, nomCh, ref, txt, FEXX } = o;
+  if(c.dp !== 'si'){
+    add(grupo, nomCh, ref, Vp, Rv0, 'kN', txt);
+    if(Vp > Rv0){ const tdq = Vp / (Rv0 / cl.tw) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (cl.d - 2 * cl.tf) / 90) - 1e-6) || 38.1;
+      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv0)} kN): active «Placa de refuerzo del alma» (unos ${td} mm, soldada al alma y a las alas) o use una columna de alma más gruesa.`); }
+    return Rv0;
+  }
+  const E = 200000, ad = ACEROS[c.aceroDp] || ac, fac = Math.min(1, ad.Fy / ac.Fy), rv1 = Rv0 / cl.tw;   // φRv por mm de espesor del alma
+  const wz = cl.d - 2 * cl.tf, dz = Math.max(o.dz || 0, 1), t90 = (dz + wz) / 90;
+  const tdq = Math.max(0, (Vp / rv1 - cl.tw) / fac), lim = 2.24 * Math.sqrt(E / ad.Fy);
+  const tdp = +c.tdp > 0 ? +c.tdp : (ESP_PL.find(t => t >= Math.max(tdq, sis ? t90 : 0, wz / lim, 6) - 1e-6) || 38.1);
+  const Rv = Rv0 + rv1 * tdp * fac;
+  add(grupo, nomCh + ' con placa de refuerzo', ref, Vp, Rv, 'kN', `${txt}; tw + ${tdp} mm de placa${fac < 1 ? ` × Fy,placa/Fy,col = ${r3(fac)}` : ''}`);
+  pasos.push(`Placa de refuerzo del alma (doubler) ${tdp} mm${+c.tdp > 0 ? '' : ' (automática)'} (${c.aceroDp || 'acero de la columna'}): φRv = ${r2(Rv0)} + 0.9·0.6·Fy·dc·td = ${r2(Rv)} kN (espesor que hacía falta ${r1(tdq)} mm)`);
+  // soldadura de la placa a las alas: desarrolla su resistencia a cortante (AISC 341 E3.6e.3; sin sismo, la fuerza que toma)
+  const Vd = Vp * tdp * fac / (cl.tw + tdp * fac);                    // parte del cortante del panel que toma la placa
+  const qDem = sis ? 0.9 * 0.6 * ad.Fy * tdp / 1000 : Vd / cl.d;     // por mm de cada borde vertical
+  const wMin = tdp <= 6 ? 3 : tdp <= 13 ? 5 : tdp <= 19 ? 6 : 8, un = c.unDp || (sis ? 'cjp' : 'filete');
+  if(un === 'filete' && sis && !([5, 6, 8, 10, 12, 14, 16].some(w => w <= tdp && fw2(FEXX, w) >= qDem))) av.push('Con sismo un filete no alcanza a desarrollar la resistencia de la placa de refuerzo sin pasar su espesor: suéldela a las alas con penetración completa.');
+  if(un === 'cjp') req.push(['Placa de refuerzo a las alas de la columna con penetración completa (desarrolla su resistencia)', true, 'indicar en planos']);
+  else {
+    const wdp = +c.wdp > 0 ? +c.wdp : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMin && w <= tdp && fw2(FEXX, w) >= qDem) || [5, 6, 8, 10, 12, 14, 16].find(w => w >= wMin && fw2(FEXX, w) >= qDem) || 16);
+    add(grupo, 'Placa de refuerzo: filetes a las alas de la columna (cada borde)', sis ? 'AISC 341 E3.6e.3 · F.2.10.2.4 (J2-4)' : 'F.2.10.2.4 (J2-4)', qDem, fw2(FEXX, wdp), 'kN/mm', `${sis ? 'desarrolla 0.9·0.6·Fy·td' : `cortante que toma la placa Vd/dc, Vd = ${r2(Vd)} kN`}; filete ${wdp} mm${+c.wdp > 0 ? '' : ' (automático)'}`);
+    req.push(['Placa de refuerzo: filete ≥ mínimo Tabla J2.4 y ≤ td', wdp >= wMin && wdp <= tdp + 1e-6, `${wMin} ≤ ${wdp} ≤ ${tdp} mm`]);
+    req.push(['Placa de refuerzo: bisel o separación para no soldar sobre el radio (k) de la columna', true, `k = ${r1(cl.tf + (cl.r || 0))} mm; indicar en planos`]);
+  }
+  if(sis) req.push([`Placa de refuerzo: cada placa td ≥ (dz + wz)/90 (AISC 341 E3.6e.2), o soldaduras de tapón`, tdp >= t90 - 1e-6, `${tdp} ≥ ${r1(t90)} mm`]);
+  else req.push(['Placa de refuerzo: wz/td ≤ 2.24√(E/Fy) (sin pandeo por cortante, G2.1)', wz / tdp <= lim + 1e-6, `${r1(wz / tdp)} ≤ ${r1(lim)}`]);
+  req.push([o.cont ? 'Placa de refuerzo: de placa de continuidad a placa de continuidad, soldada a ellas' : 'Placa de refuerzo: se extiende al menos 150 mm por encima y por debajo de las alas de la viga', true, 'indicar en planos']);
+  return Rv;
 }
 
 // ── Cartela bajo el ala inferior de la viga soldada (pedido de Amo 25-nov; opciones A, B y D) ─────────────
@@ -2135,9 +2167,8 @@ function calcNudo(n, lista){
     const Py = ac.Fy * Acol / 1000, Pr = Math.abs(+n.Pc || 0), base = 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000;
     const Rv = Pr <= 0.4 * Py ? base : base * (1.4 - Pr / Py);
     pasos.push(`Zona de panel: ${!dosF ? 'una viga a momento en las alas: Vu = F' : opuesto ? 'momentos opuestos (gravedad): Vu = |F₁ − F₂|' : 'momentos en el mismo sentido (sismo o viento): Vu = F₁ + F₂'} = ${r2(Vbr)} kN${+n.Vc ? ` − cortante de la columna ${r2(Math.abs(+n.Vc))} kN = ${r2(Vp)} kN` : ''}; Pr = ${r2(Pr)} kN, Py = ${r2(Py)} kN → ${Pr <= 0.4 * Py ? 'J10-11' : 'J10-12'}: φRv = ${r2(Rv)} kN.`);
-    add('panel', 'Zona de panel del eje fuerte (cortante del alma)', `F.2.10.10.6 (${Pr <= 0.4 * Py ? 'J10-11' : 'J10-12'}), φ = 0.90`, Vp, Rv, 'kN', !dosF ? 'F de la viga' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂');
-    if(Vp > Rv){ const tdq = Vp / (Rv / cl.tw) - cl.tw, td = ESP_PL.find(t => t >= Math.max(tdq, (cl.d - 2 * cl.tf) / 90) - 1e-6) || 38.1;
-      av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv)} kN): agregue una placa de refuerzo del alma (doubler) de ${td} mm (${n.aceroCol}) soldada al alma y a las alas, o use una columna con alma más gruesa.`); }
+    const vgs = [...momF('ala1'), ...momF('ala2')].map(v => v.vg), dzN = vgs.length ? Math.max(...vgs.map(v => v.d - 2 * v.tf)) : cl.d;
+    panelConDoubler({ c:n, cl, ac, Vp, Rv0:Rv, dz:dzN, sis:['DMO', 'DES'].includes(n.sismo), add, req, av, pasos, grupo:'panel', nomCh:'Zona de panel del eje fuerte (cortante del alma)', ref:`F.2.10.10.6 (${Pr <= 0.4 * Py ? 'J10-11' : 'J10-12'}), φ = 0.90`, txt:!dosF ? 'F de la viga' : opuesto ? '|F₁ − F₂|' : 'F₁ + F₂', FEXX:ELECTRODOS[n.electrodo] || 483, cont:usar });
     if(F1 > 0 && F2 > 0){ const d1 = momF('ala1')[0].vg.d, d2 = momF('ala2')[0].vg.d;
       if(Math.abs(d1 - d2) > 1) av.push(`Las vigas de las dos alas tienen alturas distintas (${d1} y ${d2} mm): las alas no quedan alineadas; ponga placas de continuidad a cada nivel o iguale la altura con una cartela.`); }
   }
