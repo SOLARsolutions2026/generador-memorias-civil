@@ -121,7 +121,10 @@ function entradaCx(c, D, T){
   // Longitud para clasificar la rigidez (K = Sj·L/EI): la del modelo (la menor de los extremos escogidos, del lado seguro para llamarla rígida)
   if(T){
     if(['testa', 'ras', 'soldada'].includes(c.tipo)){ const off = new Set((c.nudosOff || []).map(String)), Ls = extremosCx(c, D, T).filter(x => !off.has(String(x.j))).map(x => T[x.F]?.L).filter(x => x > 0);
-      if(Ls.length){ z.Lviga = +Math.min(...Ls).toFixed(3); lock.add('Lviga'); } }
+      if(Ls.length){ z.Lviga = +Math.min(...Ls).toFixed(3); lock.add('Lviga');
+        // luz libre para el sismo (Mpr): la del modelo menos el peralte de la columna (pedido de Amo 25-nov, punto C)
+        const pc = a && sa?.tipo === 'I' ? Conex.perfil(a.perfil) : null, dcol = pc && c.cara !== 'alma' ? pc.d : pc ? pc.tw : 0;
+        if(c.tipo === 'soldada'){ z.Lh = +Math.max(0.1, z.Lviga - dcol / 1000).toFixed(3); lock.add('Lh'); } } }
     if(c.tipo === 'base'){ const p = pedDe(D, c.eA), de = metDe(D, c.eDe), ns = new Set((p?.nudos || []).map(String));
       const Ls = de?.grupo ? Object.values(T).filter(f => f.g === de.grupo && (ns.has(String(f.i)) || ns.has(String(f.j)))).map(f => f.L) : [];
       if(Ls.length){ z.Lcol = +Math.min(...Ls).toFixed(3); lock.add('Lcol'); } }

@@ -629,7 +629,10 @@ function calcTesta(c){
       const fwr = w => fw2(FEXX, w);
       const wsMin = Math.min(ts, cl.tf) <= 6 ? 3 : Math.min(ts, cl.tf) <= 13 ? 5 : Math.min(ts, cl.tf) <= 19 ? 6 : 8;
       // filetes al ala: 2 placas × 2 caras × (bs − clip), transversales (×1.5); al alma: 2 placas × 2 caras × (Lr − 2·clip)
-      const wsReq = Math.max(wsMin, ...[3, 5, 6, 8, 10, 12, 14, 16].filter(w => 1.5 * fwr(w) * 4 * (bs - clip) >= Fst && fwr(w) * 4 * (Lr - 2 * KC.alma) >= Fst).slice(0, 1));
+      const LwT = Lr - 2 * KC.alma, Vp0 = !dos ? Ffu : opuesto ? Math.abs(Ffu - F2) : Ffu + F2, DB = doublerTd(c, cl, ac, Vp0, 0.9 * 0.6 * ac.Fy * dc * cl.tw / 1000, vg.d - 2 * vg.tf, sis);
+      const PA = { c, cl, ac, ar, ts, Lw:LwT, Fst, capA:capT(ts), Rv:DB.Rv, sis, FEXX, tdp:DB.tdp };
+      const demW = demPlacasAlma(PA).dem;
+      const wsReq = Math.max(wsMin, ...[3, 5, 6, 8, 10, 12, 14, 16].filter(w => 1.5 * fwr(w) * 4 * (bs - clip) >= Fst).slice(0, 1), wsAlmaAuto(FEXX, demW, LwT, cl.tw, wsMin));
       const ws = +c.wsC > 0 ? +c.wsC : wsReq;
       rig = { bs, ts, ws, Lr, clip, corte:KC };
       pasos.push(`Rigidizadores de la columna (${c.rigCol === 'si' ? 'pedidos' : sisPide ? 'exigidos con sismo' : 'necesarios'}): fuerza que deben tomar Rst = ${r2(Fst)} kN${faltas.filter(([, R, F]) => F > R).length ? ` (falla sin ellos: ${faltas.filter(([, R, F]) => F > R).map(([n]) => n).join(', ')})` : ''}`);
@@ -657,7 +660,7 @@ function calcTesta(c){
       add('rigidizador', 'Placas de continuidad: fluencia a tensión', 'F.2.10.10.8 (J10.8) · φ = 0.90', Fst, capT(ts), 'kN', `0.9·Fy·2·(bs − ${clip})·ts`);
       add('rigidizador', 'Placas de continuidad: compresión como columna (K = 0.75, 25tw de alma)', 'F.2.10.10.8 (J10.8) · F.2.5 (E3)', Fst, capC(ts), 'kN', `L = ${r1(Lr)} mm`);
       add('soldadura', 'Filetes de los rigidizadores al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 = 1.5)', Fst, 1.5 * fwr(ws) * 4 * (bs - clip), 'kN', `4 filetes de ${ws} mm × ${bs - clip} mm`);
-      add('soldadura', 'Filetes de los rigidizadores al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, fwr(ws) * 4 * (Lr - 2 * KC.alma), 'kN', `4 filetes de ${ws} mm × ${r1(Lr - 2 * KC.alma)} mm`); }
+      placasAlAlma({ ...PA, ws, add, req, av, pasos, grupo:'soldadura' }); }
       else pasos.push('El alma no necesita fuerza adicional: los rigidizadores van con las dimensiones mínimas de J10.8 para que el ala de la columna trabaje como placa gruesa (sin palanca en los pernos).');
       req.push(['Rigidizador: bs + tw/2 ≥ bf de la viga/3 (J10.8)', bs >= bsMin - 1e-6, `${bs} ≥ ${r1(bsMin)} mm`]);
       req.push(['Rigidizador: bs ≤ (bfc − twc)/2 (cabe en el ala)', bs <= bsMax + 1e-6, `${bs} ≤ ${r1(bsMax)} mm`]);
@@ -1789,13 +1792,17 @@ function calcSoldada0(c){
     let capPl = 0;
     if(usar){
       const KC = corteEsq(cl, sis), clip = KC.ala, bs = (cl.bf - cl.tw) / 2, Lf = bs - clip, Lwc = cl.d - 2 * cl.tf - 2 * KC.alma;
+      const Vp0 = !dos ? Ffu : op ? Math.abs(Ffu - F2) : Ffu + F2, Rv00 = 0.9 * 0.6 * ac.Fy * cl.d * cl.tw / 1000, DB = doublerTd(c, cl, ac, Vp0, Rv00, m.d - 2 * m.tf, sis);
       const tMinP = (dos || sis) ? m.tf : m.tf / 2;
       const Fst = Math.max(Rst, sisPide ? Ffu : 0);
       const tReq = Math.max(tMinP, bs / (0.56 * Math.sqrt(E / ar.Fy)), Fst > 0 ? Fst * 1000 / (0.9 * ar.Fy * 2 * Lf) : 0);
       const ts = +c.tsC > 0 ? +c.tsC : (ESP_PL.find(t => t >= tReq - 1e-6) || 38.1);
-      const capFl = w => 1.5 * fw2(FEXX, w) * 2 * 2 * Lf, capWb = w => fw2(FEXX, w) * 2 * 2 * Lwc;
-      const ws = +c.wsC > 0 ? +c.wsC : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMinT(Math.min(ts, cl.tf)) && capFl(w) >= Fst && capWb(w) >= Fst) || 16);
+      const capFl = w => 1.5 * fw2(FEXX, w) * 2 * 2 * Lf;
       capPl = 0.9 * ar.Fy * 2 * Lf * ts / 1000;
+      const PA = { c, cl, ac, ar, ts, Lw:Lwc, Fst, capA:capPl, Rv:DB.Rv, sis, FEXX, tdp:DB.tdp };
+      const wMinW = wMinT(Math.min(ts, cl.tw)), demW = demPlacasAlma(PA).dem;
+      // con sismo las placas van a las alas con CJP: el filete escrito o automático es el del alma
+      const ws = +c.wsC > 0 ? +c.wsC : Math.max(wsAlmaAuto(FEXX, demW, Lwc, cl.tw, wMinW), sis ? 0 : ([5, 6, 8, 10, 12, 14, 16].find(w => w >= wMinT(Math.min(ts, cl.tf)) && capFl(w) >= Fst) || 16));
       rig = { ts, ws, bs, clip, corte:KC };
       pasos.push(`Placas de continuidad (2 por ala de la viga): bs = (bf − tw)/2 = ${r1(bs)} mm, corte de esquinas ${KC.ala} × ${KC.alma} mm (ala × alma), ts = ${ts} mm (${c.aceroRigC}${+c.tsC > 0 ? ', escrito' : ', automático'}), filetes ${ws} mm${+c.wsC > 0 ? '' : ' (automático)'}; fuerza que toman ${r2(Fst)} kN`);
       req.push([`Placas: ts ≥ ${dos || sis ? 'tf' : 'tf/2'} de la viga (J10.8${sis ? ', AISC 341' : ''})`, ts >= tMinP - 1e-6, `${ts} ≥ ${r1(tMinP)} mm`]);
@@ -1805,8 +1812,8 @@ function calcSoldada0(c){
       req.push(reqCorte(KC));
       if(Fst > 0){
         add('placas', 'Placas de continuidad: fluencia (tensión / compresión corta)', 'F.2.10.10.8 (J10.8), φ = 0.90', Fst, capPl, 'kN', `0.9·Fy·2·(bs − despunte)·ts`);
-        add('placas', 'Filetes de las placas al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 ×1.5)', Fst, capFl(ws), 'kN', `2 placas × 2 caras × ${r1(Lf)} mm · ${ws} mm`);
-        add('placas', 'Filetes de las placas al alma de la columna', 'F.2.10.2.4 (J2-4)', Fst, capWb(ws), 'kN', `2 placas × 2 caras × ${r1(Lwc)} mm · ${ws} mm`); }
+        if(!sis) add('placas', 'Filetes de las placas al ala de la columna', 'F.2.10.2.4 (J2-4, J2-5 ×1.5)', Fst, capFl(ws), 'kN', `2 placas × 2 caras × ${r1(Lf)} mm · ${ws} mm`);
+        placasAlAlma({ ...PA, ws, add, req, av, pasos, grupo:'placas' }); }
       if(sis) req.push(['Sismo: placas de continuidad soldadas a las alas de la columna con penetración completa (AISC 341 E3.6f)', true, 'indicar en planos']);
     }
     const mp = usar ? ' + placas' : '';
@@ -1825,6 +1832,47 @@ function calcSoldada0(c){
   return r;
 }
 
+// Espesor de la placa de refuerzo del alma y φRv del panel con ella (lo usan la zona de panel y las placas de continuidad)
+function doublerTd(c, cl, ac, Vp, Rv0, dz0, sis){
+  if(c.dp !== 'si') return { tdp:0, Rv:Rv0 };
+  const E = 200000, ad = ACEROS[c.aceroDp] || ac, fac = Math.min(1, ad.Fy / ac.Fy), rv1 = Rv0 / cl.tw;
+  const wz = cl.d - 2 * cl.tf, dz = Math.max(dz0 || 0, 1), t90 = (dz + wz) / 90;
+  const tdq = Math.max(0, (Vp / rv1 - cl.tw) / fac), lim = 2.24 * Math.sqrt(E / ad.Fy);
+  const tdp = +c.tdp > 0 ? +c.tdp : (ESP_PL.find(t => t >= Math.max(tdq, sis ? t90 : 0, wz / lim, 6) - 1e-6) || 38.1);
+  return { tdp, Rv:Rv0 + rv1 * tdp * fac, tdq, fac, ad, rv1, wz, t90, lim };
+}
+// Unión de las placas de continuidad al alma de la columna (pedido de Amo 25-nov, puntos A y B):
+// demanda: sin sismo la fuerza que toman las placas; con sismo la MENOR de AISC 341 E3.6f: (a) tensión de las placas en las alas,
+// (b) cortante de las placas junto al alma, (c) zona de panel, (d) fuerza de las alas de la viga. Filete (≤ espesor del alma) o CJP,
+// y metal base del alma (2 planos, arriba y abajo de la placa; con placa de refuerzo se suma su espesor).
+const WS_LISTA = [5, 6, 8, 10, 12, 14, 16];
+function demPlacasAlma(o){
+  const { ar, ts, Lw, Fst, capA, Rv, sis } = o, capB = 1.0 * 0.6 * ar.Fy * ts * Lw * 2 / 1000;
+  if(!sis) return { dem:Fst, capB, txt:'fuerza que toman las placas' };
+  const op = [[Fst, '(d) fuerza de las alas de la viga'], [capA, '(a) tensión de las placas en las alas'], [capB, '(b) cortante de las placas junto al alma'], [Rv, '(c) zona de panel']].filter(x => isFinite(x[0]) && x[0] > 0);
+  const m = op.reduce((a, x) => x[0] < a[0] ? x : a, op[0] || [0, '']);
+  return { dem:m[0], capB, txt:`AISC 341 E3.6f: la menor de (a) ${r2(capA)}, (b) ${r2(capB)}, (c) ${r2(Rv)}, (d) ${r2(Fst)} kN → ${m[1]}` };
+}
+function wsAlmaAuto(FEXX, dem, Lw, tw, wMin){
+  const ok = w => fw2(FEXX, w) * 4 * Lw >= dem;
+  return WS_LISTA.find(w => w >= wMin && w <= tw + 1e-6 && ok(w)) || WS_LISTA.filter(w => w >= wMin && w <= Math.max(tw, wMin) + 1e-6).pop() || wMin;
+}
+function placasAlAlma(o){
+  const { c, cl, ac, Lw, FEXX, ws, add, req, av, pasos, grupo, tdp } = o, { dem, capB, txt } = demPlacasAlma(o);
+  if(!(dem > 0)) return;
+  pasos.push(`Unión de las placas de continuidad al alma: demanda ${r2(dem)} kN (${txt}); largo junto al alma Lw = ${r1(Lw)} mm`);
+  if(c.unPlW === 'cjp'){
+    req.push(['Placas de continuidad al alma con penetración completa (desarrolla el cortante de las placas)', true, 'indicar en planos']);
+    if(!o.sis) add(grupo, 'Placas de continuidad: cortante junto al alma (penetración completa)', 'F.2.10.10.8 · G2 · φ = 1.00', dem, capB, 'kN', `0.6·Fy·ts·Lw × 2 placas`);
+  } else {
+    add(grupo, 'Filetes de las placas al alma de la columna', 'F.2.10.2.4 (J2-4)', dem, fw2(FEXX, ws) * 4 * Lw, 'kN', `2 placas × 2 caras × ${r1(Lw)} mm · ${ws} mm`);
+    req.push(['Filete de las placas al alma ≤ espesor del alma (uno mayor no aporta: manda el metal base)', ws <= cl.tw + 1e-6, `${ws} ≤ ${cl.tw} mm`]);
+    if(fw2(FEXX, Math.min(ws, cl.tw)) * 4 * Lw < dem) av.push(`El filete de las placas al alma no alcanza sin pasar el espesor del alma (${cl.tw} mm): suéldelas con penetración completa («Placas al alma: penetración completa»).`);
+  }
+  const tAl = cl.tw + (tdp || 0), capAl = Math.min(1.0 * 0.6 * ac.Fy, 0.75 * 0.6 * ac.Fu) * tAl * Lw * 2 / 1000;
+  add('columna', 'Metal base del alma de la columna junto a las placas', 'F.2.10.2.4 · mín(1.0·0.6·Fy; 0.75·0.6·Fu)', dem, capAl, 'kN', `2 planos × ${r1(Lw)} mm × t = ${r1(tAl)} mm${tdp ? ' (alma + placa de refuerzo)' : ''}`);
+}
+
 // ── Placa de refuerzo del alma de la columna (doubler) en la zona de panel (pedido de Amo 25-nov) ─────────────
 // o = { c (campos dp, tdp, aceroDp, wdp, unDp), cl, ac (acero de la columna), Vp, Rv0 (φRv del alma sola), dz (alto del panel = d − 2tf de la viga),
 //       sis, add, req, av, pasos, grupo, nomCh, ref, txt, FEXX, cont (hay placas de continuidad) } → φRv final (y agrega el chequeo)
@@ -1836,11 +1884,7 @@ function panelConDoubler(o){
       av.push(`La zona de panel no alcanza (${r2(Vp)} > ${r2(Rv0)} kN): active «Placa de refuerzo del alma» (unos ${td} mm, soldada al alma y a las alas) o use una columna de alma más gruesa.`); }
     return Rv0;
   }
-  const E = 200000, ad = ACEROS[c.aceroDp] || ac, fac = Math.min(1, ad.Fy / ac.Fy), rv1 = Rv0 / cl.tw;   // φRv por mm de espesor del alma
-  const wz = cl.d - 2 * cl.tf, dz = Math.max(o.dz || 0, 1), t90 = (dz + wz) / 90;
-  const tdq = Math.max(0, (Vp / rv1 - cl.tw) / fac), lim = 2.24 * Math.sqrt(E / ad.Fy);
-  const tdp = +c.tdp > 0 ? +c.tdp : (ESP_PL.find(t => t >= Math.max(tdq, sis ? t90 : 0, wz / lim, 6) - 1e-6) || 38.1);
-  const Rv = Rv0 + rv1 * tdp * fac;
+  const E = 200000, { tdp, Rv, tdq, fac, ad, rv1, wz, t90, lim } = doublerTd(c, cl, ac, Vp, Rv0, o.dz, sis);
   add(grupo, nomCh + ' con placa de refuerzo', ref, Vp, Rv, 'kN', `${txt}; tw + ${tdp} mm de placa${fac < 1 ? ` × Fy,placa/Fy,col = ${r3(fac)}` : ''}`);
   pasos.push(`Placa de refuerzo del alma (doubler) ${tdp} mm${+c.tdp > 0 ? '' : ' (automática)'} (${c.aceroDp || 'acero de la columna'}): φRv = ${r2(Rv0)} + 0.9·0.6·Fy·dc·td = ${r2(Rv)} kN (espesor que hacía falta ${r1(tdq)} mm)`);
   // soldadura de la placa a las alas: desarrolla su resistencia a cortante (AISC 341 E3.6e.3; sin sismo, la fuerza que toma)
