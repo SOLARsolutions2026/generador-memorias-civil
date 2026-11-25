@@ -138,6 +138,24 @@ function svgPlantaDebil(dos, op = 'trasl', tub){
     <text x="24" y="100" font-size="9" fill="${ln}">Alma</text><line x1="44" y1="97" x2="66" y2="97" stroke="${ln}"/>`;
   return `<svg viewBox="0 0 230 190" class="dsvg" role="img" aria-label="Viga soldada al alma de la columna, en planta">${h}</svg>`;
 }
+// Figura de ayuda de la cartela (pedido de Amo 25-nov): tipo escogido con Lh, hh y θ
+function figCartela(k){
+  if(!k || k === 'no') return `<figure class="fig-ayuda"><svg viewBox="0 0 230 150" role="img" aria-label="Tipos de cartela">
+    <g font-size="9" text-anchor="middle" fill="#334155">${[['A', 'T', 8], ['B', 'arm', 83], ['D', 'pl', 158]].map(([l, t, x]) => `<g transform="translate(${x},20)">
+      <rect x="0" y="0" width="8" height="100" fill="#cbd5e1" stroke="#334155"/><rect x="8" y="24" width="56" height="18" fill="#e5e7eb" stroke="#334155"/>
+      <polygon points="8,42 8,72 56,42" fill="${t === 'pl' ? '#fef3c7' : '#dbeafe'}" stroke="${t === 'pl' ? '#b45309' : '#1d4ed8'}"/>${t === 'pl' ? '' : `<line x1="8" y1="74" x2="58" y2="42" stroke="${t === 'T' ? '#1d4ed8' : '#4338ca'}" stroke-width="3"/>`}
+      <text x="34" y="96">${l}</text></g>`).join('')}</g></svg><figcaption>A: de perfil (T cortada) · B: de platinas · D: platina sola.</figcaption></figure>`;
+  const pl = k === 'pl', col = pl ? '#b45309' : '#1d4ed8';
+  return `<figure class="fig-ayuda"><svg viewBox="0 0 230 165" role="img" aria-label="Cartela bajo la viga">
+    <rect x="16" y="6" width="16" height="150" fill="#cbd5e1" stroke="#334155"/><rect x="32" y="30" width="190" height="34" fill="#e5e7eb" stroke="#334155"/>
+    <rect x="32" y="30" width="190" height="5" fill="#475569"/><rect x="32" y="59" width="190" height="5" fill="#475569"/>
+    <polygon points="32,64 32,118 140,64" fill="${pl ? '#fef3c7' : '#dbeafe'}" stroke="${col}"/>${pl ? '<line x1="32" y1="118" x2="140" y2="64" stroke="#dc2626" stroke-width="1.6"/>' : `<line x1="32" y1="121" x2="144" y2="64" stroke="${col}" stroke-width="4"/>`}
+    <line x1="32" y1="138" x2="140" y2="138" stroke="#64748b"/><text x="86" y="150" font-size="9" text-anchor="middle">Lh</text>
+    <line x1="150" y1="64" x2="150" y2="118" stroke="#64748b" stroke-dasharray="3 2"/><line x1="140" y1="118" x2="156" y2="118" stroke="#64748b" stroke-dasharray="3 2"/><text x="156" y="95" font-size="9">hh</text>
+    <path d="M118 64 A22 22 0 0 1 120 75" fill="none" stroke="#b45309"/><text x="100" y="80" font-size="9" fill="#b45309">θ</text>
+    <text x="120" y="50" font-size="9" text-anchor="middle">viga</text></svg>
+    <figcaption>${k === 'T' ? 'Trozo del perfil cortado en diagonal: el patín inclinado trabaja a compresión y el alma toma la componente vertical.' : k === 'arm' ? 'Alma de platina triangular + patín de platina soldado en el borde inclinado.' : 'Platina triangular en el plano del alma; el borde libre (rojo) se revisa a pandeo.'} Se suelda al ala inferior de la viga (a lo largo de Lh) y a la columna.</figcaption></figure>`;
+}
 function figDebil(dos){ return `<figure class="fig-ayuda">${svgPlantaDebil(dos)}<figcaption>Vista en planta. El alma de la columna es delgada y se doblaría con la fuerza de las alas de la viga; por eso se ponen placas de continuidad (azul) a la altura de las alas, soldadas al alma y a las dos alas de la columna. Las alas de la viga se sueldan a las placas.</figcaption></figure>`; }
 function svgCorteDebil(op, o = {}){
   const ln = '#475569', az = '#93c5fd', azB = '#1d4ed8', nar = '#ea580c', t = (x, y, s, a = 'start', col = ln, fs = 11) => `<text x="${x}" y="${y}" font-size="${fs}" fill="${col}" text-anchor="${a}">${s}</text>`;
@@ -232,6 +250,18 @@ function seccionesDe0(c){
       g3(campo(c, 'union', 'Tipo de soldadura', { sel:[['filete', 'Filete en todo el contorno'], ['cjp', 'Penetración completa']] }),
         ...(c.union === 'cjp' ? [] : [campo(c, 'w', tub ? 'Filete caras horizontales (b) [mm]' : 'Filete de las alas w [mm]'), campo(c, 'wAlma', tub ? 'Filete caras verticales (d) [mm]' : 'Filete del alma [mm]', { h:'Vacío = igual al anterior' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
       + (c.union === 'cjp' ? '' : ck('kds', 'Aplicar el aumento por dirección del filete (1 + 0.5·sen^1.5θ, J2-5): más resistencia donde la fuerza va de frente al cordón'))]]),
+    ...(c.soporte === 'alma' || tub ? [] : [['cart', 'Cartela bajo la viga', () => ({ no:'sin cartela', T:'A · de perfil (T cortada)', arm:'B · de platinas', pl:'D · platina sola' }[c.cart || 'no']) + (c.cart && c.cart !== 'no' ? ` · Lh ${c.LhC} × hh ${c.hhC} mm` : ''),
+      conFig(g3(campo(c, 'cart', 'Tipo de cartela', { sel:[['no', 'Sin cartela'], ['T', 'A · De perfil (T cortada)'], ['arm', 'B · De platinas (alma + patín)'], ['pl', 'D · Platina sola (sin patín)']] }),
+        ...(c.cart && c.cart !== 'no' ? [campo(c, 'LhC', 'Largo Lh [mm]', { h:'A lo largo de la viga, desde la cara' }), campo(c, 'hhC', 'Alto hh [mm]', { h:'En la cara de la columna; θ ≈ 30° es lo usual' }),
+          ...(c.cart === 'T' ? [SELP('perfilCart', 'Perfil del que se corta', '— el mismo de la viga —')] : []),
+          ...(c.cart === 'arm' || c.cart === 'pl' ? [campo(c, 'tcw', c.cart === 'pl' ? 'Espesor de la platina [mm]' : 'Espesor del alma [mm]')] : []),
+          ...(c.cart === 'arm' ? [campo(c, 'bph', 'Ancho del patín [mm]', { h:'≤ ancho del ala de la viga' }), campo(c, 'tph', 'Espesor del patín [mm]'), campo(c, 'wPA', 'Filete patín–alma [mm]')] : []),
+          campo(c, 'aceroCart', 'Acero de la cartela', { sel:[['', '— el de la viga —'], ...SEL_ACERO.map(x => Array.isArray(x) ? x : [x, x])] }),
+          campo(c, 'wC', 'Filete cartela–viga [mm]', { h:'2 cordones a lo largo de Lh' }), ...(c.union === 'cjp' ? [] : [campo(c, 'wCc', 'Filete cartela–columna [mm]', { h:'Con penetración completa no aplica' })])] : []))
+        + (c.cart && c.cart !== 'no' ? ck('rigPunta', 'Rigidizadores en la viga en la punta de la cartela (si el alma no aguanta la fuerza del patín)') : '')
+        + (c.cart === 'pl' ? '<div class="note amber">Platina sola: solo para estructuras livianas; se revisa el largo del borde libre. Con sismo DMO o DES no sirve.</div>' : '')
+        + (c.cart && c.cart !== 'no' && (c.sismo === 'DMO' || c.sismo === 'DES') ? '<div class="note red">La viga con cartela soldada no es una conexión precalificada (AISC 358): con DMO o DES la conexión sale «No cumple».</div>' : ''),
+        figCartela(c.cart))]]),
     ['sop', 'Soporte', () => c.soporte === 'placa' ? `Placa t ${c.tSop} mm · ${c.aceroSop}` : c.columna ? `${c.soporte === 'alma' ? 'Alma' : 'Ala'} de ${c.columna} · ${c.aceroCol}${c.dosLados ? ` · viga al otro lado M₂ ${c.Mu2}` : ''} · placas: ${(RIGS[c.rigCol || 'auto'] || '').split(' (')[0].toLowerCase()}` : 'columna sin revisar',
       g3(campo(c, 'soporte', 'Se suelda a', { sel:[['col', 'Ala de una columna (eje fuerte)'], ['alma', 'Alma de una columna (eje débil)'], ['placa', 'Una placa']] }),
         ...(c.soporte === 'placa' ? [campo(c, 'tSop', 'Espesor de la placa [mm]'), campo(c, 'aceroSop', 'Acero', { sel:SEL_ACERO })]
@@ -735,22 +765,32 @@ function dibSoldada(c, r){
   if(c.soporte === 'alma'){ const g = r.geo; return `<div class="fig-par"><div><div class="fig-tit">Planta</div>${svgPlantaDebil(c.dosLados, opDebil(c), c.miembro === 'tubo')}</div><div><div class="fig-tit">Corte por el eje de la viga</div>${svgCorteDebil(opDebil(c), { ts:g.rig?.ts, Lt:c.Lt, wT:c.wT, w:c.union === 'cjp' ? '' : c.w, viga:g.m.nom, tub:c.miembro === 'tubo' })}</div></div>`
     + `<div class="hint" style="text-align:center">Corte por el eje de la viga · viga al alma de ${esc(c.columna)} · ${opDebil(c) === 'tope' ? 'alas a tope (CJP) con la placa' : c.miembro === 'tubo' ? 'placas traslapadas sobre las caras del tubo' : 'placas traslapadas sobre las alas'}</div>`; }
   const al = c.soporte === 'alma', m = r.geo.m, cl0 = c.soporte !== 'placa' ? Conex.perfil(c.columna) : null, cl = al ? null : cl0, ts = al && cl0 ? cl0.tw : cl ? cl.tf : +c.tSop || 20, dc = cl ? cl.d : al && r.geo.rig ? ts + r.geo.rig.bs + 30 : al ? 60 : ts;
-  const k = 240 / (m.d + 80), X = v => 30 + (v + dc) * k, Y = v => 40 + v * k, Ls = 260, cjp = c.union === 'cjp', w = cjp ? 6 : +c.w;
-  let h = cl ? `<rect x="${X(-dc)}" y="${Y(-40)}" width="${(dc - ts) * k}" height="${(m.d + 80) * k}" class="vg"/><rect x="${X(-dc)}" y="${Y(-40)}" width="${cl.tf * k}" height="${(m.d + 80) * k}" class="sop"/>` : '';
-  h += `<rect x="${X(-ts)}" y="${Y(-40)}" width="${ts * k}" height="${(m.d + 80) * k}" class="sop"/>
+  const ca = r.geo.cart, Dt = m.d + (ca ? ca.hh : 0), k = 240 / (Dt + 80), X = v => 30 + (v + dc) * k, Y = v => 40 + v * k, Ls = ca ? Math.max(260, ca.Lh + 160) : 260, cjp = c.union === 'cjp', w = cjp ? 6 : +c.w;
+  let h = cl ? `<rect x="${X(-dc)}" y="${Y(-40)}" width="${(dc - ts) * k}" height="${(Dt + 80) * k}" class="vg"/><rect x="${X(-dc)}" y="${Y(-40)}" width="${cl.tf * k}" height="${(Dt + 80) * k}" class="sop"/>` : '';
+  h += `<rect x="${X(-ts)}" y="${Y(-40)}" width="${ts * k}" height="${(Dt + 80) * k}" class="sop"/>
     <rect x="${X(0)}" y="${Y(0)}" width="${Ls * k}" height="${m.d * k}" class="vg"/><rect x="${X(0)}" y="${Y(0)}" width="${Ls * k}" height="${m.tf * k}" fill="#475569"/><rect x="${X(0)}" y="${Y(m.d - m.tf)}" width="${Ls * k}" height="${m.tf * k}" fill="#475569"/>`;
   if(al && r.geo.rig){ const tp = r.geo.rig.ts, Lp = r.geo.rig.bs; h += `<rect x="${X(-ts - Lp)}" y="${Y(0)}" width="${Lp * k}" height="${tp * k}" fill="#93c5fd" stroke="#1d4ed8"/><rect x="${X(-ts - Lp)}" y="${Y(m.d - tp)}" width="${Lp * k}" height="${tp * k}" fill="#93c5fd" stroke="#1d4ed8"/>
     <text x="${X(-ts - Lp / 2)}" y="${Y(0) - 4}" class="lbl" text-anchor="middle" fill="#1d4ed8">placas ${tp} mm (a ambos lados del alma)</text>`; }
   const tri = (y, sg) => `<path d="M${X(0)} ${Y(y)} l${w * k * 1.6} 0 l${-w * k * 1.6} ${sg * w * k * 1.6} z" class="wld"/>`;
   h += cjp ? `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(m.d)}" class="wl"/>` : tri(0, -1) + tri(m.tf, 1) + tri(m.d - m.tf, -1) + tri(m.d, 1) + `<line x1="${X(0)}" y1="${Y(m.tf)}" x2="${X(0)}" y2="${Y(m.d - m.tf)}" class="wl"/>`;
-  h += `<text x="${X(Ls / 2)}" y="${Y(m.d / 2) + 3}" class="lbl" text-anchor="middle">${esc(m.nom)}</text><text x="${al ? X(-ts / 2) : X(-dc / 2)}" y="${Y(m.d + 40) + 12}" class="lbl" text-anchor="middle">${cl ? esc(cl.nom) : al && cl0 ? `alma de ${esc(cl0.nom)}` : `placa ${ts} mm`}</text>`;
+  h += `<text x="${X(Ls / 2)}" y="${Y(m.d / 2) + 3}" class="lbl" text-anchor="middle">${esc(m.nom)}</text><text x="${al ? X(-ts / 2) : X(-dc / 2)}" y="${Y(Dt + 40) + 12}" class="lbl" text-anchor="middle">${cl ? esc(cl.nom) : al && cl0 ? `alma de ${esc(cl0.nom)}` : `placa ${ts} mm`}</text>`;
+  if(ca){   // cartela bajo el ala inferior (pedido de Amo 25-nov)
+    const y0 = m.d, pl = ca.k === 'pl', col = pl ? '#b45309' : '#1d4ed8', tf2 = pl ? 0 : ca.tfh / Math.cos(ca.th * Math.PI / 180);
+    h += `<polygon points="${X(0)},${Y(y0)} ${X(0)},${Y(y0 + ca.hh)} ${X(ca.Lh)},${Y(y0)}" fill="${pl ? '#fef3c7' : '#dbeafe'}" stroke="${col}"/>`;
+    h += pl ? `<line x1="${X(0)}" y1="${Y(y0 + ca.hh)}" x2="${X(ca.Lh)}" y2="${Y(y0)}" stroke="#dc2626" stroke-width="1.6"/>`
+      : `<polygon points="${X(0)},${Y(y0 + ca.hh - tf2)} ${X(0)},${Y(y0 + ca.hh)} ${X(ca.Lh + tf2 / Math.tan(ca.th * Math.PI / 180))},${Y(y0)} ${X(ca.Lh)},${Y(y0)}" fill="${ca.k === 'T' ? '#60a5fa' : '#a5b4fc'}" stroke="${col}"/>`;
+    h += `<line x1="${X(0) + 2}" y1="${Y(y0) + 2}" x2="${X(ca.Lh)}" y2="${Y(y0) + 2}" stroke="#ea580c" stroke-width="3" stroke-dasharray="4 2"/>`;
+    if(!cjp) h += `<line x1="${X(0) + 1.5}" y1="${Y(y0)}" x2="${X(0) + 1.5}" y2="${Y(y0 + ca.hh)}" stroke="#ea580c" stroke-width="3"/>`;
+    if(ca.rigPunta) h += `<rect x="${X(ca.Lh) - 2}" y="${Y(m.tf)}" width="4" height="${(m.d - 2 * m.tf) * k}" fill="#93c5fd" stroke="#1d4ed8"/>`;
+    h += `<line x1="${X(0)}" y1="${Y(y0 + ca.hh + 18)}" x2="${X(ca.Lh)}" y2="${Y(y0 + ca.hh + 18)}" stroke="#64748b"/><text x="${X(ca.Lh / 2)}" y="${Y(y0 + ca.hh + 18) + 12}" class="lbl" text-anchor="middle">Lh = ${ca.Lh} mm</text>
+      <line x1="${X(ca.Lh + 24)}" y1="${Y(y0)}" x2="${X(ca.Lh + 24)}" y2="${Y(y0 + ca.hh)}" stroke="#64748b"/><text x="${X(ca.Lh + 30)}" y="${Y(y0 + ca.hh / 2) + 4}" class="lbl">hh = ${ca.hh} · θ ${ca.th.toFixed(1)}°</text>`; }
   // sección vista desde el soporte: contorno soldado
   const ox = X(Ls + 50), k2 = Math.min(k, 150 / Math.max(m.bf, 1)), S = (u, v) => `${ox + u * k2},${Y(0) + v * k2}`;
   const perfilPath = m.tub ? `M${S(0, 0)} L${S(m.bf, 0)} L${S(m.bf, m.d)} L${S(0, m.d)} Z M${S(m.tw, m.tf)} L${S(m.tw, m.d - m.tf)} L${S(m.bf - m.tw, m.d - m.tf)} L${S(m.bf - m.tw, m.tf)} Z`
     : `M${S(0, 0)} L${S(m.bf, 0)} L${S(m.bf, m.tf)} L${S((m.bf + m.tw) / 2, m.tf)} L${S((m.bf + m.tw) / 2, m.d - m.tf)} L${S(m.bf, m.d - m.tf)} L${S(m.bf, m.d)} L${S(0, m.d)} L${S(0, m.d - m.tf)} L${S((m.bf - m.tw) / 2, m.d - m.tf)} L${S((m.bf - m.tw) / 2, m.tf)} L${S(0, m.tf)} Z`;
   h += `<path d="${perfilPath}" fill="#f1f5f9" stroke="#b45309" stroke-width="${cjp ? 2 : 3.2}" fill-rule="evenodd"/>
     <text x="${ox + m.bf * k2 / 2}" y="${Y(m.d) + 16}" class="lbl" text-anchor="middle">${cjp ? 'penetración completa' : `filete ${c.w} mm en todo el contorno`}</text>`;
-  return `<svg viewBox="0 0 ${ox + m.bf * k2 + 30} ${Y(m.d + 40) + 22}" class="dsvg" role="img" aria-label="Unión soldada en todo el perímetro">${h}</svg>
+  return `<svg viewBox="0 0 ${ox + m.bf * k2 + 30} ${Y(Dt + 40) + 22}" class="dsvg" role="img" aria-label="Unión soldada en todo el perímetro">${h}</svg>
     <div class="hint" style="text-align:center">Izquierda: elevación · Derecha: sección en la cara del soporte (en naranja la soldadura)</div>`;
 }
 function dibEmpCol(c, r){

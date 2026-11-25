@@ -1553,7 +1553,9 @@ function defaultsSoldada(){
     dosLados:false, Mu2:40, sentido2:'opuesto',                  // viga al otro lado de la columna
     rigCol:'auto', tsC:'', wsC:'', aceroRigC:'A36',              // placas de continuidad de la columna
     sismo:'no', Lh:6, Vg:30,                                     // WUF-W (AISC 358 cap. 8)
-    uDebil:'trasl', Lt:150, wT:6 };                              // viga al alma de la columna: placas traslapadas (B) o alas a tope (A)
+    uDebil:'trasl', Lt:150, wT:6,                                // viga al alma de la columna: placas traslapadas (B) o alas a tope (A)
+    // Cartela bajo el ala inferior (pedido de Amo 25-nov): 'no' | 'T' (de perfil) | 'arm' (platinas) | 'pl' (platina sola)
+    cart:'no', LhC:600, hhC:300, perfilCart:'', tcw:10, bph:150, tph:12.7, aceroCart:'', wC:6, wCc:8, wPA:5, rigPunta:false };
 }
 // Cordón en todo el perímetro por el método elástico con la garganta de cada tramo (alas y alma pueden tener filetes distintos).
 // Cada punto: σ = P/A + M3·y/Ix + M2·x/Iy; V2 lo toman los cordones del alma (lados verticales del tubo), V3 los de las alas; torsión T·r/J.
@@ -1590,7 +1592,7 @@ const corteEsq = (cl, sis) => { const r = Math.max(+cl.r || 0, 15); return { ala
 const reqCorte = k => [`Corte de las esquinas de las placas (radio alma–ala de la columna): ${k.ala} mm a lo largo del ala × ${k.alma} mm a lo largo del alma${k.sis ? ' (AWS D1.8 cl. 4.1 / AISC 341 I2.4)' : ' (a 45°, cateto = radio del perfil, mín. 15 mm)'}`, true, 'indicar en planos'];
 // Ancho de la placa de continuidad que recibe el ala en el eje débil: con tubo, la lengüeta queda en la parte plana (B − 4t, pedido de Amo 20-nov)
 const bPlDebil = (m, cl) => Math.min(m.tub ? m.bf - 4 * m.tf : m.bf, cl.d - 2 * cl.tf);
-function calcSoldada(c){
+function calcSoldada0(c){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch), E = 200000;
   const P = nz(c.P), V3 = nz(c.V3), T = nz(c.T), M2 = nz(c.M2);
   let V2 = nz(c.Vu), M3 = nz(c.Mu);
@@ -1824,6 +1826,108 @@ function calcSoldada(c){
   req.push(['Acceso para soldar todo el contorno (también por dentro de las alas)', true, 'verificar en obra']);
   const r = fin(ch, req, av, pasos, { m, Ffu, rig });
   if(sug) r.sug = sug;
+  return r;
+}
+
+// ── Cartela bajo el ala inferior de la viga soldada (pedido de Amo 25-nov; opciones A, B y D) ─────────────
+// Modelo de cercha en la cara: el ala superior de la viga toma la tensión y el patín inclinado de la cartela la compresión,
+// con brazo z entre sus centroides → F = M/z + |P|/2 (horizontal). El patín lleva F/cosθ; la componente vertical F·tanθ la toma el alma
+// de la cartela en la cara y entra como carga concentrada al alma de la viga en la punta. La unión viga–columna (perímetro o CJP)
+// y la columna se revisan con la misma fuerza de ala (momento equivalente M·(d − tf)/z). Con sismo la rótula queda en la punta.
+const CART_TIPOS = { T:'de perfil (T cortada)', arm:'de platinas (alma + patín)', pl:'de platina sola (sin patín)' };
+function calcSoldada(c){
+  const k = c.cart;
+  if(!CART_TIPOS[k]) return calcSoldada0(c);
+  if(c.miembro === 'tubo' || c.soporte === 'alma'){ const r = calcSoldada0(c);
+    r.av.push('La cartela solo se calcula con viga de perfil I soldada al ala de una columna o a una placa; no se tuvo en cuenta.'); return r; }
+  const E = 200000, ch = [], req = [], av = [], pasos = [], add = addF(ch);
+  const m = perfilX(c.viga); if(!m) return { error:'Escoja el perfil de la viga.' };
+  const am = ACEROS[c.aceroViga], ac = ACEROS[c.aceroCart] || am, FEXX = ELECTRODOS[c.electrodo] || 483;
+  const Lh = +c.LhC || 0, hh = +c.hhC || 0; if(!(Lh > 0 && hh > 0)) return { error:'Escriba el largo Lh y el alto hh de la cartela.' };
+  const th = Math.atan(hh / Lh), cs = Math.cos(th), sn = Math.sin(th), Lc = Math.hypot(Lh, hh), deg = th * 180 / Math.PI;
+  let bfh = 0, tfh = 0, twh = 0, pc = null;
+  if(k === 'T'){ pc = perfil(c.perfilCart || c.viga); if(!pc) return { error:'Escoja el perfil del que se corta la cartela.' }; bfh = pc.bf; tfh = pc.tf; twh = pc.tw; }
+  else if(k === 'arm'){ bfh = +c.bph || 0; tfh = +c.tph || 0; twh = +c.tcw || 0; }
+  else twh = +c.tcw || 0;
+  if(!(twh > 0) || (k !== 'pl' && !(bfh > 0 && tfh > 0))) return { error:'Faltan los espesores de la cartela.' };
+  const be = k === 'pl' ? Math.min(12 * twh, hh * cs) : 0;                                 // franja del borde libre (platina sola)
+  const Ah = k === 'pl' ? be * twh : bfh * tfh;
+  const yH = k === 'pl' ? m.d + hh - be / (2 * cs) : m.d + hh - tfh / (2 * cs), z = yH - m.tf / 2;
+  const P = nz(c.P); let V2 = nz(c.Vu), Mf = Math.abs(nz(c.Mu));
+  pasos.push(`Cartela ${CART_TIPOS[k]} bajo el ala inferior (${c.aceroCart || c.aceroViga}): Lh = ${Lh} mm, hh = ${hh} mm → θ = atan(hh/Lh) = ${r1(deg)}°, largo del borde inclinado ${r1(Lc)} mm`
+    + (k === 'T' ? `; cortada de ${pc.nom} (patín ${bfh} × ${tfh} mm, alma ${twh} mm)` : k === 'arm' ? `; alma ${twh} mm y patín ${bfh} × ${tfh} mm` : `; platina ${twh} mm, franja del borde be = mín(12t; hh·cosθ) = ${r1(be)} mm`));
+  // Sismo: no precalificada; la rótula se forma en la punta de la cartela
+  const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '';
+  if(sis){
+    const Fy = am.Fy, Ry = RY(c.aceroViga), Cpr = Math.min(1.2, (Fy + am.Fu) / (2 * Fy)), Mpr = Cpr * Ry * Fy * m.Zx / 1e6;
+    const Lrot = Math.max(100, Math.max(0.1, +c.Lh || 6) * 1000 - 2 * Lh);    // luz entre rótulas (en las puntas de las cartelas; c.Lh = luz libre en m)
+    const Vh = 2 * Mpr * 1000 / Lrot + Math.abs(+c.Vg || 0);
+    Mf = Math.max(Mf, Mpr + Vh * Lh / 1000); V2 = Math.max(Math.abs(V2), Vh);
+    pasos.push(`Sismo ${sis}: la rótula plástica se forma en la punta de la cartela → Mpr = Cpr·Ry·Fy·Zx = ${r2(Mpr)} kN·m, Vu = 2Mpr/L' + Vg = ${r2(Vh)} kN (L' = L − 2Lh = ${r2(Lrot / 1000)} m) → en la cara Mf = Mpr + Vu·Lh = ${r2(Mf)} kN·m`);
+    req.push([`Sismo ${sis}: la viga con cartela soldada no es una conexión precalificada (AISC 358 / NSR-10 F.3)`, false, 'necesita ensayos de calificación; use una conexión precalificada (WUF-W o chapa extendida)']);
+  }
+  const F = Mf * 1000 / z + Math.abs(P) / 2, Fh = F / cs, Fv = F * Math.tan(th);
+  pasos.push(`Brazo entre el centroide del ala superior y el del ${k === 'pl' ? 'borde de la platina' : 'patín de la cartela'}: z = ${r1(z)} mm (altura total en la cara d + hh = ${r1(m.d + hh)} mm) → F = M/z + |P|/2 = ${r2(F)} kN; patín: F/cosθ = ${r2(Fh)} kN; componente vertical F·tanθ = ${r2(Fv)} kN`);
+  // Unión viga–columna y columna: con la fuerza de ala F (momento equivalente M·(d − tf)/z)
+  const Meq = Mf * (m.d - m.tf) / z;
+  const base = calcSoldada0({ ...c, cart:'no', Mu:Meq, Vu:V2, sismo:'no' });
+  if(base.error) return base;
+  pasos.push(...base.pasos.map(t => t.replace(/^Miembro /, 'Unión viga–columna — miembro ')));
+  pasos.splice(3, 0, `La unión de la viga a la columna y la columna se revisan con la fuerza de ala F (momento equivalente M·(d − tf)/z = ${r2(Meq)} kN·m); el ala inferior de la viga queda del lado seguro.`);
+  // ── Cartela ──
+  const lam = k === 'pl' ? null : (bfh / 2) / tfh, lamLim = 0.56 * Math.sqrt(E / ac.Fy);
+  add('cartela', k === 'pl' ? 'Borde inclinado de la platina a compresión' : 'Patín de la cartela a compresión', 'F.2.5 (E3) · φ = 0.90 · sin pandeo global (arriostrado por el alma)', Fh, 0.9 * ac.Fy * Ah / 1000, 'kN', k === 'pl' ? `franja be × t = ${r1(be)} × ${twh} mm` : `${bfh} × ${tfh} mm`);
+  if(k === 'pl'){ const lim = 0.75 * Math.sqrt(E / ac.Fy), okB = Lc / twh <= lim + 1e-6;
+    req.push(['Platina sola: borde libre L/t ≤ 0.75√(E/Fy) (Manual AISC, cartelas)', okB, `${r1(Lc / twh)} ≤ ${r1(lim)}`]);
+    if(!okB){ const tq = ESP_PL.find(t => Lc / t <= lim + 1e-6); av.push(`💡 El borde libre es muy largo para la platina: ${tq ? `use platina de ${tq} mm, ` : ''}acorte la cartela o agréguele un patín (opción B, cartela de platinas).`); } }
+  else req.push(['Patín de la cartela: b/2t ≤ 0.56√(E/Fy) (pandeo local, Tabla B4.1a)', lam <= lamLim + 1e-6, `${r1(lam)} ≤ ${r1(lamLim)}`]);
+  add('cartela', 'Alma de la cartela a cortante en la cara (componente vertical)', 'F.2.7 (G2-1), φ = 0.90', Fv, 0.9 * 0.6 * ac.Fy * hh * twh / 1000, 'kN', `0.6·Fy·hh·t, t = ${twh} mm`);
+  if(k === 'T') req.push([`La cartela cabe en el perfil del que se corta: hh·cosθ ≤ d − tf de ${pc.nom}`, hh * cs <= pc.d - pc.tf + 1e-6, `${r1(hh * cs)} ≤ ${r1(pc.d - pc.tf)} mm`]);
+  if(k === 'T' && (bfh > m.bf + 1e-6)) req.push(['El patín de la cartela no sobresale del ala de la viga', false, `${bfh} > ${m.bf} mm`]);
+  if(k === 'arm' && bfh > m.bf + 1e-6) req.push(['El patín de la cartela no sobresale del ala de la viga', false, `${bfh} > ${m.bf} mm`]);
+  if(deg < 20 - 1e-6 || deg > 45 + 1e-6) av.push(`El ángulo de la cartela (${r1(deg)}°) está fuera de lo usual (20°–45°; se recomienda unos 30°).`);
+  // ── Soldaduras de la cartela ──
+  const wMinT = t => t <= 6 ? 3 : t <= 13 ? 5 : t <= 19 ? 6 : 8, wC = +c.wC || 0, wCc = +c.wCc || 0;
+  add('soldadura', 'Cartela–ala inferior de la viga: 2 filetes a lo largo de Lh', 'F.2.10.2.4 (J2-4), φ = 0.75', F / (2 * Lh), fw2(FEXX, wC), 'kN/mm', `F/(2·Lh), w = ${wC} mm`);
+  add('soldadura', 'Metal base del alma de la cartela junto a esos filetes', 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', F / Lh, 0.45 * ac.Fu * twh / 1000, 'kN/mm', `t = ${twh} mm`);
+  req.push(['Filete cartela–viga ≥ mínimo Tabla J2.4', wC >= wMinT(Math.min(twh, m.tf)), `${wC} ≥ ${wMinT(Math.min(twh, m.tf))} mm`]);
+  const tSop = c.soporte === 'placa' ? +c.tSop : (perfil(c.columna)?.tf || 0), acS = c.soporte === 'placa' ? ACEROS[c.aceroSop] : ACEROS[c.aceroCol];
+  if(c.union === 'cjp'){
+    pasos.push('Cartela a la columna con penetración completa (patín y alma): resistencia del metal base de la cartela, ya revisada.');
+    req.push(['Cartela a la columna: penetración completa en el patín y el alma (bisel y respaldo)', true, 'indicar en planos']);
+  } else {
+    let qMax;
+    if(k === 'pl'){ qMax = Math.hypot(F, Fv) / (2 * hh);
+      add('soldadura', 'Platina a la columna: 2 filetes de alto hh (F y F·tanθ)', 'F.2.10.2.4 (J2-4), φ = 0.75', qMax, fw2(FEXX, wCc), 'kN/mm', `√(F² + (F·tanθ)²)/(2·hh), w = ${wCc} mm`); }
+    else { const Lpat = 2 * bfh - twh, qF = Fh * cs / Lpat, qW = Fv / (2 * hh); qMax = Math.max(qF, qW);
+      add('soldadura', 'Patín de la cartela a la columna: filetes por las dos caras (F)', 'F.2.10.2.4 (J2-4), φ = 0.75', qF, fw2(FEXX, wCc), 'kN/mm', `F/(2bf − tw), largo ${r1(Lpat)} mm, w = ${wCc} mm`);
+      add('soldadura', 'Alma de la cartela a la columna: 2 filetes de alto hh (F·tanθ)', 'F.2.10.2.4 (J2-4), φ = 0.75', qW, fw2(FEXX, wCc), 'kN/mm', `F·tanθ/(2·hh), w = ${wCc} mm`); }
+    if(acS && tSop) add(c.soporte === 'placa' ? 'soporte' : 'columna', `Metal base del ${c.soporte === 'placa' ? 'soporte' : 'ala de la columna'} junto a los filetes de la cartela`, 'F.2.10.2.4 · φ = 0.75 · 0.6·Fu·t', qMax, 0.45 * acS.Fu * tSop / 1000, 'kN/mm', `t = ${tSop} mm`);
+    const tm = Math.min(k === 'pl' ? twh : Math.min(tfh, twh), tSop || 99);
+    req.push(['Filete cartela–columna ≥ mínimo Tabla J2.4', wCc >= wMinT(tm), `${wCc} ≥ ${wMinT(tm)} mm`]);
+  }
+  if(k === 'arm'){ const wPA = +c.wPA || 0; req.push(['Patín–alma de la cartela: filetes por las dos caras ≥ mínimo Tabla J2.4', wPA >= wMinT(Math.min(tfh, twh)), `${wPA} ≥ ${wMinT(Math.min(tfh, twh))} mm`]); }
+  // ── Viga en la punta de la cartela ──
+  const Mtip = Math.max(0, Mf - Math.abs(V2) * Lh / 1000), phiMp = 0.9 * am.Fy * m.Zx / 1e6;
+  if(!sis) add('viga', 'Viga sola en la punta de la cartela (flexión)', 'F.2.6 (F2-1), φ = 0.90', Mtip, phiMp, 'kN·m', `M − V2·Lh = ${r2(Mtip)} kN·m (sin pandeo lateral: viga arriostrada)`);
+  else pasos.push(`Con sismo la rótula plástica de la viga queda en la punta de la cartela (diseño por capacidad); allí no se revisa la flexión.`);
+  if(!sis) av.push('La flexión en la punta de la cartela se estima con M − V2·Lh (momento que baja con el cortante); revísela con el diagrama de momentos del modelo si la carga es distinta.');
+  const kb = m.tf + (m.r || 0), N = Math.max(tfh / Math.max(sn, 0.2), 2 * kb);
+  if(c.rigPunta){ const tsP = Math.max(tfh || twh, 6.4), Ast = (m.bf - m.tw) * tsP;
+    add('viga', 'Rigidizadores de la viga en la punta de la cartela', 'F.2.10.10.8 (J10.8), φ = 0.90', Fv, 0.9 * am.Fy * Ast / 1000, 'kN', `par de placas ${r1((m.bf - m.tw) / 2)} × ${tsP} mm`);
+    req.push(['Rigidizadores en la punta: soldados al alma y a las dos alas de la viga', true, 'indicar en planos']); }
+  else {
+    add('viga', 'Alma de la viga en la punta: fluencia local', 'F.2.10.10.2 (J10-2), φ = 1.00', Fv, am.Fy * m.tw * (5 * kb + N) / 1000, 'kN', `F·tanθ con N = ${r1(N)} mm`);
+    const crip = 0.75 * 0.8 * m.tw ** 2 * (1 + 3 * (N / m.d) * (m.tw / m.tf) ** 1.5) * Math.sqrt(E * am.Fy * m.tf / m.tw) / 1000;
+    add('viga', 'Alma de la viga en la punta: aplastamiento', 'F.2.10.10.3 (J10-4), φ = 0.75', Fv, crip, 'kN', 'carga concentrada del patín de la cartela');
+    if(Fv > Math.min(am.Fy * m.tw * (5 * kb + N) / 1000, crip)) av.push('El alma de la viga no aguanta la fuerza del patín en la punta: marque «Rigidizadores en la punta de la cartela».'); }
+  if(c.soporte !== 'placa' && c.columna) av.push('Placas de continuidad de la columna: a la altura del ala superior de la viga y del patín de la cartela (recomendable también al nivel del ala inferior de la viga).');
+  // ── Unir ──
+  const failed = req.filter(r => !r[1]).map(r => `${r[0]}: ${r[2]}`);
+  const allCh = [...ch, ...base.ch], allReq = [...base.req, ...req], max = allCh.reduce((a, x) => Math.max(a, x.ratio), 0);
+  const r = { ok:max <= 1 && !allReq.some(x => !x[1]), max, ch:allCh, req:allReq, av:[...base.av, ...av, ...failed], pasos,
+    geo:{ ...base.geo, cart:{ k, Lh, hh, th:deg, bfh, tfh, twh, be, z, F, Fh, Fv, rigPunta:!!c.rigPunta } } };
+  if(base.sug) r.sug = base.sug;
   return r;
 }
 

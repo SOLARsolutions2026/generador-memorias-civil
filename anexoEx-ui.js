@@ -319,7 +319,7 @@ function pintarCx(c, D){
   activarCx(c, D); pintarListo();
 }
 let _debCx = null; const debCx = (c, D) => { _debCx = _debCx || debounce((c2, D2) => pintarCx(c2, D2), 350); _debCx(c, D); };
-const CX_RENDER = ['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw', 'diag', 'colTipo', 'cortante', 'refT', 'refV', 'mortero', 'unSop', 'destaje', 'viga', 'soldAla', 'ambos', 'filas', 'nL'];
+const CX_RENDER = ['cizalla', 'd', 'rig', 'config', 'dosLados', 'rigCol', 'sismo', 'placaTipo', 'cortTodos', 'union', 'soporte', 'miembro', 'columna', 'uDebil', 'interior', 'desliz', 'resComp', 'ncw', 'diag', 'colTipo', 'cortante', 'refT', 'refV', 'mortero', 'unSop', 'destaje', 'viga', 'soldAla', 'ambos', 'filas', 'nL', 'cart', 'rigPunta'];
 function activarCx(c, D){
   const guardaAb = () => { try{ localStorage.conSecc = JSON.stringify($$('#form .sec.on').map(x => x.dataset.sec)); }catch(e){} };
   $$('#form .sec-hd').forEach(b => b.onclick = () => { const s = b.parentElement; s.classList.toggle('on'); b.setAttribute('aria-expanded', s.classList.contains('on')); guardaAb(); });
