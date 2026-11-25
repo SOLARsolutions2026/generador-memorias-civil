@@ -20,7 +20,11 @@ function leer(texto){
       const k = s.slice(i, eq).trim(); i = eq + 1; let v = '';
       if(s[i] === '"'){                      // valor entre comillas (puede tener espacios y hasta comillas internas)
         let j = i + 1;
-        while(j < s.length && !(s[j] === '"' && (j + 1 >= s.length || s[j+1] === ' ' || s[j+1] === '\t'))) j++;
+        // "" = comilla interna (se salta en pareja; antes 'SEC 4""X2"" CAL14' se cortaba en 'SEC 4"X2"')
+        while(j < s.length){
+          if(s[j] === '"'){ if(s[j+1] === '"'){ j += 2; continue; } if(j + 1 >= s.length || s[j+1] === ' ' || s[j+1] === '\t') break; }
+          j++;
+        }
         v = s.slice(i + 1, j).replace(/""/g, '"'); i = j + 1;   // SAP escribe la comilla interna doble: 3/8"" → 3/8"
       } else { let j = i; while(j < s.length && s[j] !== ' ' && s[j] !== '\t') j++; v = s.slice(i, j); i = j; }
       if(k) o[k] = v;
