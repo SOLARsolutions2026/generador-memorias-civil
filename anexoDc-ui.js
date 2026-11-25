@@ -102,6 +102,7 @@ function detZapHTML(z, D, M){
     <h4 class="sub">Suelo y materiales</h4>
     <div class="fg g4">${fIn(z,'qa','qa admisible [kN/m²]',{h:'Estudio de suelos'})}${fIn(z,'gs','γ suelo [kN/m³]')}${fIn(z,'qsup','Carga sobre el terreno [kN/m²]',{h:'Placa, acabados, sobrecarga'})}${fIn(z,'rec','Recubrimiento [m]')}</div>
     <div class="fg g4">${fIn(z,'fc',"f'c [MPa]")}${fIn(z,'fy','fy [MPa]')}<div class="f"><label>Barra en x</label><select data-a="barX" ${ro_}>${BAR_OPC(z.barX)}</select></div><div class="f"><label>Barra en y</label><select data-a="barY" ${ro_}>${BAR_OPC(z.barY)}</select></div></div>
+    <div class="cim-vista" id="zVista"></div>
     <details class="d-opc"><summary>Comparación con el modelo sobre resortes (opcional)</summary>
       <div class="fg g4">${fIn(z,'MmX','Momento del modelo para las barras en x [kN·m/m]')}${fIn(z,'MmY','Momento del modelo para las barras en y [kN·m/m]')}</div>
       <div class="hint">El momento del modelo viene por metro: la app lo multiplica por el ancho, lo compara con el método clásico y usa el mayor.</div>
@@ -144,14 +145,19 @@ function calcCim(el, tipo, D, R){
 async function pintarResCim(el, tipo, D){
   let R = null; try{ R = await reacModelo(); }catch(e){ console.warn(e); }
   const box = $('#cRes'); if(!box) return;
+  // gráficos con las medidas: se pintan ya con lo escrito y se repintan con el resultado (barras, Lo)
+  const vista = X => { const ok = X?.ok ? X : null;
+    if(tipo === 'zap' && $('#zVista')) $('#zVista').innerHTML = svgZapataVista(el, D, ok);
+    if(tipo === 'ped' && $('#pVista')) $('#pVista').innerHTML = (ok ? svgPedestal(ok) : '<div></div>') + svgPedElev(el, D, ok) + (ok ? svgDiagrama(ok) : ''); };
+  vista(null);
   const man = usaManCim(el);
   if(!man && !R){ box.innerHTML = '<div class="note amber">Sin reacciones del modelo.</div>'; return; }
   if(!man && !el.nudos.length){ box.innerHTML = '<div class="note amber">Escoge los nudos de apoyo.</div>'; el.res = { ok:false, error:'sin nudos' }; return; }
   const X = calcCim(el, tipo, D, R);
+  vista(X);
   if(!X.ok){ box.innerHTML = `<div class="note amber">${esc(X.error)}</div>`; return; }
   const sg = esIng() && typeof Sugerir !== 'undefined' ? (k => bulbHTML(tipo === 'zap' ? Sugerir.zapata(X._in.obj, X._in.fs, X._in.fr, k) : Sugerir.pedestal(X._in.obj, X._in.fr, k))) : null;
   box.innerHTML = tipo === 'zap' ? resZapHTML(X, false, sg) : resPedHTML(X, false, sg);
-  if(tipo === 'ped' && $('#pVista')) $('#pVista').innerHTML = svgPedestal(X) + svgDiagrama(X);
   if(tipo === 'ped' && $('#pArmado')) $('#pArmado').textContent = armadoTxt(el) + '. Si escoges el mismo diámetro en las dos casillas, todas las barras quedan iguales.';
   const lista = document.querySelector(`[data-selc="${el.id}"] .pill`); if(lista) lista.outerHTML = pillRes(el.res);
   pintarListo();
@@ -284,6 +290,84 @@ function svgPedestal(X){
     ${faltan > 0 ? `<text x="${W/2}" y="${y0 + h + 49}" text-anchor="middle" font-size="7.5" fill="#b91c1c">Faltan barras intermedias para ${faltan} rama${faltan > 1 ? 's' : ''}</text>`
       : desbal ? `<text x="${W/2}" y="${y0 + h + 49}" text-anchor="middle" font-size="7.5" fill="#b45309">No queda centrado: usa barras impares por cara</text>` : ''}</svg>`;
 }
+// ═══ Gráficos con las medidas (opción A de Amo, 25-nov): se dibujan con los datos escritos, aunque falten otros para el cálculo ═══
+// Zapata: planta (B × L, pedestal según la posición, barras en x y en y) + corte en x (terreno, Df, h, recubrimiento, pedestal y sus barras)
+function svgZapataVista(z, D, X){
+  const e = zapEf(z, D), B = num0(e.B)*1000, L = num0(e.L)*1000, h = num0(e.h)*1000, Df = num0(e.Df)*1000, rec = num0(e.rec || 0.075)*1000;
+  const bx = num0(e.bx)*1000, by = num0(e.by)*1000, Hp = num0(e.Hp)*1000, pos = e.pos || 'centrada';
+  if(!(B > 0 && L > 0 && h > 0)) return '<p class="muted" style="margin:6px 0">Escribe B, L y h para ver el gráfico.</p>';
+  const az = '#1d4ed8', vd = '#059669', cota = '#64748b', m2 = v => fx(v/1000, 2);
+  // barras: las del cálculo o, sin cálculo, las mínimas (0.0018·b·h y s ≤ mín(3h, 450))
+  const minimo = (ancho, bar) => { const [db, Ab] = Concreto.BARRAS[bar] || Concreto.BARRAS['1/2"']; let n = Math.max(2, Math.ceil(0.0018*ancho*h/Ab)); while((ancho - 2*rec - db)/(n - 1) > Math.min(3*h, 450)) n++; return n; };
+  const nX = X?.ok ? X.fx.n : minimo(L, e.barX), nY = X?.ok ? X.fy.n : minimo(B, e.barY), sMin = !X?.ok;
+  // ── planta ──
+  const sp = 170/Math.max(B, L), pw = B*sp, ph = L*sp, x0 = 30 + (170 - pw)/2, y0 = 38 + (170 - ph)/2, r = Math.min(rec*sp, 8);
+  const xc = pos === 'centrada' ? 0 : (B - bx)/2, yc = pos === 'esquinera' ? (L - by)/2 : 0;
+  const pX = x0 + (B/2 + xc - bx/2)*sp, pY = y0 + (L/2 - yc - by/2)*sp;
+  const linX = [...Array(nX)].map((_, i) => { const y = y0 + r + (ph - 2*r)*i/(nX - 1); return `<line x1="${x0 + r}" y1="${y}" x2="${x0 + pw - r}" y2="${y}"/>`; }).join('');
+  const linY = [...Array(nY)].map((_, i) => { const x = x0 + r + (pw - 2*r)*i/(nY - 1); return `<line x1="${x}" y1="${y0 + r}" x2="${x}" y2="${y0 + ph - r}"/>`; }).join('');
+  const ped = bx > 0 && by > 0 ? `<rect x="${pX}" y="${pY}" width="${bx*sp}" height="${by*sp}" fill="#cbd5e1" stroke="#0f2d5e" stroke-width="1.5"/>
+    <text x="${pX + bx*sp/2}" y="${pY + by*sp/2 + 3}" font-size="9" text-anchor="middle" fill="#0f2d5e">${bx*sp > 34 ? esc(D.ped.find(p => p.id === z.ped)?.nom || 'pedestal') : ''}</text>` : '';
+  const planta = `<text x="115" y="16" font-size="12" font-weight="700" fill="#0f2d5e" text-anchor="middle">PLANTA</text>
+    <rect x="${x0}" y="${y0}" width="${pw}" height="${ph}" fill="#e5e7eb" stroke="#334155" stroke-width="1.5"/>
+    <g stroke="${vd}" stroke-width="1.1">${linY}</g><g stroke="${az}" stroke-width="1.1">${linX}</g>${ped}
+    <line x1="${x0}" y1="${y0 + ph + 12}" x2="${x0 + pw}" y2="${y0 + ph + 12}" stroke="${cota}"/><text x="${x0 + pw/2}" y="${y0 + ph + 25}" font-size="11" text-anchor="middle">B = ${m2(B)} m</text>
+    <line x1="${x0 + pw + 12}" y1="${y0}" x2="${x0 + pw + 12}" y2="${y0 + ph}" stroke="${cota}"/><text x="${x0 + pw + 24}" y="${y0 + ph/2}" font-size="11" text-anchor="middle" transform="rotate(90 ${x0 + pw + 24} ${y0 + ph/2})">L = ${m2(L)} m</text>
+    <text x="115" y="${y0 + ph + 44}" font-size="10.5" text-anchor="middle" fill="${az}">${nX} Ø${esc(e.barX || '1/2"')} en x${X?.ok ? ` c/ ${fx(X.fx.s, 0)} mm` : ''}</text>
+    <text x="115" y="${y0 + ph + 58}" font-size="10.5" text-anchor="middle" fill="${vd}">${nY} Ø${esc(e.barY || '1/2"')} en y${X?.ok ? ` c/ ${fx(X.fy.s, 0)} mm` : ''}</text>
+    ${sMin ? `<text x="115" y="${y0 + ph + 71}" font-size="9" text-anchor="middle" fill="#b45309">(cantidad mínima; el cálculo la confirma)</text>` : ''}
+    <g transform="translate(14,${y0 + ph + 4})" font-size="9"><line x1="0" y1="0" x2="14" y2="0" stroke="#334155"/><line x1="0" y1="0" x2="0" y2="-14" stroke="#334155"/><text x="16" y="3">x</text><text x="-3" y="-17">y</text></g>`;
+  // ── corte en x ──
+  const sobre = Math.max(0, Hp - Math.max(0, Df - h)), alto = Math.max(Df, h) + sobre;
+  const sc = Math.min(190/B, 220/Math.max(alto, 1)), cx0 = 300 + (190 - B*sc)/2, base = 268, yTop = base - h*sc, yTer = Df > 0 ? base - Df*sc : null;
+  const pcx = cx0 + (B/2 + xc - bx/2)*sc, pTop = yTop - Hp*sc, pw2 = bx*sc;
+  const pedC = bx > 0 && Hp > 0 ? `<rect x="${pcx}" y="${pTop}" width="${pw2}" height="${Hp*sc}" fill="#cbd5e1" stroke="#0f2d5e" stroke-width="1.5"/>
+    ${(() => { const a = pcx + Math.min(8, pw2*0.18), b2 = pcx + pw2 - Math.min(8, pw2*0.18), yb = base - rec*sc - 4, iz = cx0 + rec*sc, de = cx0 + B*sc - rec*sc;
+      const ga = a - 14 >= iz ? -14 : 14, gb = b2 + 14 <= de ? 14 : -14;   // ganchos hacia afuera si caben; si no (pedestal en el borde), hacia adentro
+      return `<path d="M${a} ${pTop + 6} V${yb} h${ga} M${b2} ${pTop + 6} V${yb} h${gb}" fill="none" stroke="#0f2d5e" stroke-width="1.3"/>`; })()}` : '';
+  const ter = yTer != null ? `<line x1="282" y1="${yTer}" x2="510" y2="${yTer}" stroke="#92400e" stroke-width="1.5"/>
+    <g stroke="#b45309" stroke-width=".7" opacity=".6">${[286, 302, 318, 470, 486, 502].map(x => `<line x1="${x}" y1="${yTer}" x2="${x - 8}" y2="${yTer + 8}"/>`).join('')}</g>
+    <text x="286" y="${yTer - 6}" font-size="10" fill="#92400e">terreno</text>
+    <line x1="${cx0 + B*sc + 16}" y1="${yTer}" x2="${cx0 + B*sc + 16}" y2="${base}" stroke="${cota}"/><text x="${cx0 + B*sc + 22}" y="${(yTer + base)/2 - 2}" font-size="11">Df</text><text x="${cx0 + B*sc + 22}" y="${(yTer + base)/2 + 11}" font-size="11">${m2(Df)} m</text>` : '';
+  const corte = `<text x="395" y="16" font-size="12" font-weight="700" fill="#0f2d5e" text-anchor="middle">CORTE (en x)</text>${ter}
+    <rect x="${cx0}" y="${yTop}" width="${B*sc}" height="${h*sc}" fill="#e5e7eb" stroke="#334155" stroke-width="1.5"/>${pedC}
+    <line x1="${cx0 + rec*sc}" y1="${base - rec*sc}" x2="${cx0 + B*sc - rec*sc}" y2="${base - rec*sc}" stroke="${az}" stroke-width="2"/>
+    <line x1="${cx0 - 12}" y1="${yTop}" x2="${cx0 - 12}" y2="${base}" stroke="${cota}"/><text x="${cx0 - 16}" y="${(yTop + base)/2 + 4}" font-size="11" text-anchor="end">h = ${m2(h)}</text>
+    <text x="${cx0}" y="${base + 28}" font-size="9" fill="${az}">rec. ${fx(rec, 0)} mm</text>
+    <text x="${cx0 + B*sc/2}" y="${base + 15}" font-size="11" text-anchor="middle">B = ${m2(B)} m</text>
+    ${sobre > 0 && yTer != null ? `<line x1="${pcx - 8}" y1="${pTop}" x2="${pcx - 8}" y2="${yTer}" stroke="${cota}"/><text x="${pcx - 12}" y="${(pTop + yTer)/2 + 4}" font-size="10" fill="${cota}" text-anchor="end">${m2(sobre)}</text>` : ''}`;
+  return `<svg viewBox="0 0 520 ${Math.max(300, y0 + ph + 80)}" class="cim-svg" role="img" aria-label="Planta y corte de la zapata">${planta}${corte}</svg>`;
+}
+// Pedestal: elevación con las zonas Lo arriba y abajo (C.21.3.5) y la separación de los estribos
+function svgPedElev(p, D, X){
+  const b = num0(p.b), hh = num0(p.h), Hp = num0(p.Hp)*1000, sC = num0(p.sConf), sF = num0(p.sFuera);
+  if(!(Hp > 0)) return '<p class="muted" style="margin:6px 0">Escribe la altura Hp para ver la elevación.</p>';
+  const Lo = X?.ok ? X.Lo : Math.max(Hp/6, Math.max(b, hh), 500), z = D.zap.find(x => x.id === p.zap);
+  const az = '#1d4ed8', ca = '#b45309', y0 = 34, H = 210, sc = H/Hp, xL = 110, w = 80, base = y0 + H;
+  const todo = 2*Lo >= Hp, LoPx = Math.min(Lo, Hp/2)*sc;
+  const est = (ya, yb, s) => { if(!(s > 0)) return ''; const n = Math.floor((yb - ya)/(s*sc)), paso = n > 45 ? (yb - ya)/45 : s*sc; let o = '';
+    for(let y = ya + Math.min(paso/2, 4); y <= yb - 1; y += paso) o += `<line x1="${xL + 4}" y1="${y.toFixed(1)}" x2="${xL + w - 4}" y2="${y.toFixed(1)}"/>`; return o; };
+  const zonas = todo ? `<rect x="${xL + 1}" y="${y0 + 1}" width="${w - 2}" height="${H - 2}" fill="#fde68a" opacity=".55"/>`
+    : `<rect x="${xL + 1}" y="${y0 + 1}" width="${w - 2}" height="${LoPx}" fill="#fde68a" opacity=".55"/><rect x="${xL + 1}" y="${base - LoPx - 1}" width="${w - 2}" height="${LoPx}" fill="#fde68a" opacity=".55"/>`;
+  const lineas = todo ? est(y0, base, sC) : est(y0, y0 + LoPx, sC) + est(y0 + LoPx, base - LoPx, sF) + est(base - LoPx, base, sC);
+  const E = `E Ø${esc(p.est || '3/8"')}`, tx = xL + w + 18, mm = v => fx(v, 0);
+  const etq = todo ? `<line x1="${tx - 8}" y1="${y0}" x2="${tx - 8}" y2="${base}" stroke="${ca}"/><text x="${tx}" y="${y0 + H/2 - 6}" font-size="10.5" fill="#92400e">Lo cubre toda la altura</text><text x="${tx}" y="${y0 + H/2 + 8}" font-size="10.5" fill="${az}">${E} c/ ${mm(sC)} mm</text>`
+    : `<line x1="${tx - 8}" y1="${y0}" x2="${tx - 8}" y2="${y0 + LoPx}" stroke="${ca}"/><text x="${tx}" y="${y0 + LoPx/2 - 2}" font-size="10.5" fill="#92400e">Lo = ${mm(Lo)} mm</text><text x="${tx}" y="${y0 + LoPx/2 + 12}" font-size="10.5" fill="${az}">${E} c/ ${mm(sC)} mm</text>
+      <line x1="${tx - 8}" y1="${y0 + LoPx + 3}" x2="${tx - 8}" y2="${base - LoPx - 3}" stroke="${'#64748b'}"/><text x="${tx}" y="${y0 + H/2 - 2}" font-size="10.5" fill="#334155">fuera de Lo (${mm(Hp - 2*Lo)} mm)</text><text x="${tx}" y="${y0 + H/2 + 12}" font-size="10.5" fill="${az}">${E} c/ ${mm(sF)} mm</text>
+      <line x1="${tx - 8}" y1="${base - LoPx}" x2="${tx - 8}" y2="${base}" stroke="${ca}"/><text x="${tx}" y="${base - LoPx/2 - 2}" font-size="10.5" fill="#92400e">Lo = ${mm(Lo)} mm</text><text x="${tx}" y="${base - LoPx/2 + 12}" font-size="10.5" fill="${az}">${E} c/ ${mm(sC)} mm</text>`;
+  const barras = X?.ok ? (X.dos ? `4 Ø${esc(X.nomE)} + ${X.nI} Ø${esc(X.nomI)}` : `${X.bars.length} Ø${esc(X.nomI)}`) : esc(armadoTxt(p));
+  return `<svg viewBox="0 0 330 ${base + 62}" class="ped-svg" role="img" aria-label="Elevación del pedestal con las zonas de confinamiento">
+    <text x="${xL + w/2}" y="14" font-size="12" font-weight="700" fill="#0f2d5e" text-anchor="middle">ELEVACIÓN</text>
+    <rect x="${xL - 14}" y="${y0 - 12}" width="${w + 28}" height="12" fill="#94a3b8"/><text x="${xL + w/2}" y="${y0 - 3}" font-size="9" fill="#fff" text-anchor="middle">placa base</text>
+    <rect x="${xL}" y="${y0}" width="${w}" height="${H}" fill="#e5e7eb" stroke="#334155" stroke-width="1.5"/>${zonas}
+    <g stroke="${az}" stroke-width="1.2">${lineas}</g>
+    ${z ? `<rect x="${xL - 40}" y="${base}" width="${w + 80}" height="40" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="4 3"/><text x="${xL + w/2}" y="${base + 24}" font-size="10" fill="#64748b" text-anchor="middle">zapata ${esc(z.nom)}</text>` : ''}
+    <g stroke="#0f2d5e" stroke-width="1.6"><line x1="${xL + 8}" y1="${y0 + 2}" x2="${xL + 8}" y2="${base + (z ? 32 : 0)}"/><line x1="${xL + w - 8}" y1="${y0 + 2}" x2="${xL + w - 8}" y2="${base + (z ? 32 : 0)}"/>${z ? `<path d="M${xL + 8} ${base + 32} h-22 M${xL + w - 8} ${base + 32} h22"/>` : ''}</g>
+    <line x1="${xL - 18}" y1="${y0}" x2="${xL - 18}" y2="${base}" stroke="#64748b"/><text x="${xL - 24}" y="${y0 + H/2 - 4}" font-size="11" text-anchor="end">Hp</text><text x="${xL - 24}" y="${y0 + H/2 + 10}" font-size="11" text-anchor="end">${fx(Hp/1000, 2)} m</text>
+    ${etq}
+    <text x="${xL + w/2}" y="${base + (z ? 54 : 16)}" font-size="10" fill="#0f2d5e" text-anchor="middle">${barras}${z ? ' · gancho en la zapata' : ''}</text></svg>`;
+}
+
 function svgDiagrama(X){
   const W = 360, H = 230, x0 = 46, y0 = 12, w = W - x0 - 12, h = H - y0 - 30;
   const all = [...X.dgx.pts, ...X.dgy.pts], Mmax = Math.max(...all.map(p => p.phiMn), ...X.filas.map(f => Math.max(f.Mux, f.Muy)))*1.1 || 1;
@@ -332,12 +416,13 @@ async function conPrintHTML(D, L){
   return `${zs.length ? `<section class="ax-cont"><h3>${L}-${n} Zapatas — NSR-10 Título C</h3>
     <p>Las zapatas se revisan con el método clásico: presión de contacto con las cargas de servicio frente a la capacidad admisible del suelo (incluye los pesos de la zapata, el pedestal y el relleno), y diseño del concreto con las reacciones mayoradas: cortante en una dirección, punzonamiento, flexión en la cara del pedestal, anclaje del refuerzo y aplastamiento.</p>
     ${zs.map(({ z, X }, i) => `<div class="ax-cont"><h4>${L}-${n}.${i+1} ${esc(z.nom)} — ${fx(X.B/1000,2)} × ${fx(X.L/1000,2)} × ${fx(X.h/1000,2)} m, pedestal ${z.pos} (nudos ${esc(z.nudos.join(', '))})</h4>
+      <div class="ax-mapas" style="grid-template-columns:1fr"><figure>${svgZapataVista(z, D, X)}<figcaption>Planta y corte de la zapata</figcaption></figure></div>
       <table class="ax-kv"><tr><td>f'c · fy · recubrimiento</td><td>${X.fc} MPa · ${esc(z.fy)} MPa · ${fx(X.rec,0)} mm</td></tr><tr><td>qa · γ suelo · Df</td><td>${fx(X.qa,1)} kN/m² · ${esc(z.gs)} kN/m³ · ${fx(X.Df/1000,2)} m</td></tr></table>
       ${resZapHTML(X, true)}
       ${(z.imgs || []).length ? `<div class="ax-mapas">${z.imgs.map(im => `<figure><img src="${esc(urls[im.path] || '')}" style="max-width:100%;max-height:2.6in" alt=""/><figcaption>${esc(im.nota || 'Modelo de la zapata')}</figcaption></figure>`).join('')}</div>` : ''}</div>`).join('')}</section>` : ''}
   ${ps.length ? `<section class="ax-cont"><h3>${L}-${n + (zs.length ? 1 : 0)} Pedestales — NSR-10 Título C</h3>
     <p>Los pedestales se revisan con las reacciones de cada combinación de resistencia (carga axial, momentos y cortantes que actúan al mismo tiempo), trasladando los momentos a la base. La flexo-compresión se verifica con el diagrama de interacción calculado por compatibilidad de deformaciones.</p>
     ${ps.map(({ p, X }, i) => `<div class="ax-cont"><h4>${L}-${n + (zs.length ? 1 : 0)}.${i+1} ${esc(p.nom)} — ${X.b} × ${X.h} mm, ${esc(armadoTxt(p))}, estribo ${esc(p.est)} (nudos ${esc(p.nudos.join(', '))})</h4>
-      <div class="ax-mapas" style="grid-template-columns:1fr 2fr"><figure>${svgPedestal(X)}<figcaption>Sección</figcaption></figure><figure>${svgDiagrama(X)}<figcaption>Diagrama de interacción φPn–φMn</figcaption></figure></div>
+      <div class="ax-mapas" style="grid-template-columns:1fr 1.3fr 2fr"><figure>${svgPedestal(X)}<figcaption>Sección</figcaption></figure><figure>${svgPedElev(p, D, X)}<figcaption>Elevación y zonas de confinamiento Lo</figcaption></figure><figure>${svgDiagrama(X)}<figcaption>Diagrama de interacción φPn–φMn</figcaption></figure></div>
       ${resPedHTML(X, true)}</div>`).join('')}</section>` : ''}`;
 }
