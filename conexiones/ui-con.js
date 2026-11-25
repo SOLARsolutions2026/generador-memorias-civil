@@ -410,7 +410,7 @@ function seccionesDe0(c){
     ['anc', 'Pernos de anclaje', () => `${2 * c.nB} × ${c.perno} ${c.anclaje} · S1 ${c.S1} · S2 ${c.S2} · hef ${c.hef}`,
       g3(campo(c, 'perno', 'Diámetro', { sel:['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'] }), campo(c, 'anclaje', 'Acero', { sel:['A36', 'F1554 Gr 36', 'F1554 Gr 55', 'F1554 Gr 105'] }), campo(c, 'nB', 'Pernos por fila', { sel:['2', '3', '4'] }),
         campo(c, 'S1', 'S1: entre filas (sentido N) [mm]'), campo(c, 'S2', 'S2: extremos de la fila (sentido B) [mm]'), campo(c, 'hef', 'Empotramiento hef [mm]'),
-        campo(c, 'cabeza', 'Anclaje', { sel:[['tuerca', 'Tuerca y arandela'], ['gancho', 'Gancho']] }), campo(c, 'arandela', 'Lado de la arandela [mm]'))
+        campo(c, 'cabeza', 'Anclaje', { sel:[['tuerca', 'Tuerca y arandela'], ['gancho', 'Gancho']] }), campo(c, 'arandela', 'Lado de la arandela embebida [mm] (no el espesor)'))
       + `<div class="f"><label class="ck"><input type="checkbox" data-k="arandSold" ${c.arandSold !== false ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Arandelas de placa soldadas a la placa base (agujeros agrandados: si no se sueldan, el cortante lo toma la mitad de los pernos)</label></div>`],
     ['cort', 'Transmisión del cortante', () => cv === 'friccion' ? 'fricción (μ = 0.55)' : cv === 'llave' ? `llave ${c.lugB} × ${c.lugH} × ${c.lugT} mm · filete ${c.lugW} mm` : 'por los anclajes',
       g3(campo(c, 'cortante', 'El cortante lo toma', { sel:[['anclajes', 'Los pernos de anclaje'], ['friccion', 'Fricción placa–mortero (solo con compresión)'], ['llave', 'Llave de cortante bajo la placa']] }),
@@ -523,7 +523,7 @@ function formHTML(c){
 const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad', cortante:'Transmisión del cortante', scwb:'Columna fuerte – viga débil' };
 // «Qué cambiar» bajo un chequeo que no cumple (opción A de Amo, 25-nov; por ahora en la placa base)
 function fixRow(f){
-  const res = !f.patch ? '' : f.ratio == null ? ' → este chequeo deja de aplicar' : ` → relación ${f2(f.ratio, 2)}`;
+  const res = !f.patch || f.ratio === undefined ? '' : f.ratio == null ? ' → este chequeo deja de aplicar' : ` → relación ${f2(f.ratio, 2)}`;
   return `<tr class="fix-row"><td colspan="5"><div class="fx-q"><span>👉 <b>${esc(f.txt)}</b>${res}${f.todo ? ' · <b>con esto cumple todo</b>' : ''}</span>${f.patch ? `<button type="button" class="btn sm" data-fixap='${esc(JSON.stringify(f.patch))}'>Aplicar</button>` : ''}</div></td></tr>`;
 }
 function chequeosHTML(r){

@@ -257,6 +257,7 @@ function placaBase(c, filas){
   if(Math.min(a, aB) < 1.5*da) avisos.push(`Distancia del perno al borde de la placa ${Math.min(a, aB).toFixed(0)} mm < 1.5·d = ${(1.5*da).toFixed(0)} mm.`);
   if(Math.min(S1, S2) < 4*da) avisos.push(`Separación entre pernos ${Math.min(S1, S2).toFixed(0)} mm < 4·da = ${(4*da).toFixed(0)} mm (C-D.8.1).`);
   if(hef0 > ha - 50) avisos.push(`La longitud de anclaje hef = ${hef0} mm no cabe en el pedestal (altura ${ha} mm).`);
+  if(c.cabeza !== 'gancho' && num(c.arandela, 50) < 2*da) avisos.push(`La arandela embebida tiene ${num(c.arandela, 50)} mm de lado: es casi del tamaño del perno (${da} mm), así que la extracción, el reventón y el anclaje dúctil quedan sin capacidad. Ese dato es el LADO de la arandela (por ejemplo 50 mm), no su espesor.`);
   // Agujeros agrandados de la placa y arandelas (Guía 1, Tabla 2.3)
   const AGU = { '1/2"':[24, 51, 6], '5/8"':[27, 51, 6], '3/4"':[33, 51, 6], '7/8"':[40, 64, 8], '1"':[46, 76, 10], '1-1/8"':[52, 76, 13], '1-1/4"':[52, 76, 13] }, ag = AGU[c.perno] || AGU['3/4"'];
   avisos.push(`Agujeros de la placa para pernos de ${c.perno}: ${ag[0]} mm (agrandados, Guía 1 Tabla 2.3) con arandela de placa de ${ag[1]} × ${ag[1]} × ${ag[2]} mm${c.arandSold === false ? '; las arandelas no se sueldan: el cortante lo toma la mitad de los pernos' : '; las arandelas se sueldan a la placa para que todos los pernos tomen cortante'}.`);

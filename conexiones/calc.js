@@ -1348,13 +1348,15 @@ function arreglosBase(c, out){
     hef: () => [300, 400, 500, 600, 700, 800, 900].filter(h => h > +c.hef && h <= +c.ha - 50).map(h => ({ patch:{ hef:h }, txt:`Ancle más profundo: hef = ${h} mm (ahora ${c.hef})` })),
     fric: () => c.cortante === 'friccion' ? [] : [{ patch:{ cortante:'friccion' }, txt:'Pase el cortante por fricción con la carga axial, no por los pernos' }],
     llave: () => c.cortante === 'llave' ? [] : [{ patch:{ cortante:'llave' }, txt:`Ponga una llave de cortante bajo la placa (${c.lugB} × ${c.lugH} × ${c.lugT} mm)` }],
+    arandela: () => c.cabeza === 'gancho' ? [] : [50, 64, 76, 100].filter(a => a > (+c.arandela || 0)).map(a => ({ patch:{ arandela:a }, txt:+c.arandela < 30 ? `Escriba el LADO de la arandela embebida, no su espesor: ${a} mm (ahora ${c.arandela} mm)` : `Use una arandela embebida más grande: ${a} × ${a} mm (ahora ${c.arandela})` })),
     refT: () => c.refT ? [] : [{ patch:{ refT:true }, txt:'Agregue refuerzo de anclaje a tensión (barras junto a los pernos)' }],
+    refTmas: () => !c.refT ? [] : [[6, 12.7], [4, 15.9], [8, 12.7], [6, 15.9], [4, 19.1], [8, 15.9], [6, 19.1], [8, 19.1]].filter(([n, d]) => n*d*d > (+c.refNT || 4)*(+c.refDT || 12.7)**2).map(([n, d]) => ({ patch:{ refNT:n, refDT:d }, txt:`Más refuerzo de anclaje a tensión: ${n} barras de ${{ 12.7:'1/2"', 15.9:'5/8"', 19.1:'3/4"' }[d]} (ahora ${c.refNT || 4} de ${{ 12.7:'1/2"', 15.9:'5/8"', 19.1:'3/4"' }[+c.refDT || 12.7] || (c.refDT + ' mm')})` })),
     refV: () => c.refV ? [] : [{ patch:{ refV:true }, txt:'Agregue refuerzo de anclaje a cortante (barras en el borde del pedestal)' }],
     w: () => [5, 6, 8, 10, 12, 14, 16].filter(w => w > +c.w).map(w => ({ patch:{ w }, txt:`Suba el filete columna–placa de ${c.w} a ${w} mm` })) };
   const ORDEN = [[/Espesor/, ['tp', 'NB']], [/Aplastamiento del concreto|Longitud de apoyo/, ['NB', 'tp']], [/Tensión en el acero/, ['perno', 'nB']],
-    [/Arrancamiento del concreto a tensión|cono/i, ['hef', 'refT', 'nB', 'NB']], [/Extracción|pullout/i, ['perno']], [/Interacción/, ['fric', 'llave', 'refV', 'perno', 'nB', 'hef']],
+    [/Arrancamiento del concreto a tensión|cono/i, ['hef', 'refT', 'refTmas', 'nB', 'NB']], [/Refuerzo de anclaje a tensión/, ['refTmas']], [/Extracción|pullout/i, ['arandela', 'perno']], [/dúctil/, ['arandela', 'refT', 'refTmas', 'hef']], [/Interacción/, ['fric', 'llave', 'refV', 'perno', 'nB', 'hef']],
     [/Cortante en el acero/, ['perno', 'nB', 'fric', 'llave']], [/borde/, ['fric', 'llave', 'refV']], [/pryout/i, ['hef', 'fric', 'llave']], [/Soldadura/, ['w']],
-    [/[Rr]event/, ['hef', 'NB']], [/llave|Llave/, ['llave']]];
+    [/[Rr]event/, ['arandela', 'hef', 'NB']], [/llave|Llave/, ['llave']]];
   const cache = new Map(), prueba = patch => { const k = JSON.stringify(patch); if(!cache.has(k)) cache.set(k, calcBase({ ...c, ...patch, _sinSug:true })); return cache.get(k); };
   for(const x of out.ch.filter(x => x.ratio > 1)){
     const kx = clave(x.nombre), orden = (ORDEN.find(([re]) => re.test(x.nombre)) || [, []])[1];
@@ -1365,7 +1367,8 @@ function arreglosBase(c, out){
       const y = r.ch.find(z => clave(z.nombre) === kx);
       if(!y || y.ratio <= 1){ fx = { txt:cand.txt, patch:cand.patch, ratio:y ? y.ratio : null, todo:!!r.ok, otro:!orden.includes(t) }; break busca; }
     }
-    x.fix = fx || { txt:'Ningún cambio de una sola medida lo arregla: agrande el pedestal, suba el f\'c o combine cambios', patch:null };
+    const arMal = c.cabeza !== 'gancho' && (+c.arandela || 50) < 30;
+    x.fix = fx || (arMal ? { txt:`Primero corrija la arandela embebida: escriba su LADO (p. ej. 50 mm), no el espesor (ahora ${c.arandela} mm)`, patch:{ arandela:50 }, ratio:undefined } : null) || { txt:'Ningún cambio de una sola medida lo arregla: agrande el pedestal, suba el f\'c o combine cambios', patch:null };
   }
 }
 
@@ -1391,6 +1394,8 @@ function calcBase(c){
   req.push(['Empotramiento cabe en el pedestal: hef ≤ altura − 50 mm', R.hef <= R.ha - 50 + 1e-6, `${R.hef} ≤ ${R.ha - 50} mm`]);
   req.push(['Borde de la placa a los pernos ≥ 1.5·da', Math.min(R.a, R.aB) >= 1.5 * R.da - 1e-6, `${r1(Math.min(R.a, R.aB))} ≥ ${r1(1.5 * R.da)} mm`]);
   if(R.modoV === 'llave') req.push(['Llave: alto bajo el mortero ≥ 50 mm y espesor ≥ 13 mm (práctica de la Guía 1)', (+c.lugH - (c.mortero ? +c.grout : 0)) >= 50 && +c.lugT >= 12.7, `${+c.lugH - (c.mortero ? +c.grout : 0)} mm · t ${c.lugT} mm`]);
+  if(c.cabeza !== 'gancho'){ const dA = { '1/2"':12.7, '5/8"':15.9, '3/4"':19.1, '7/8"':22.2, '1"':25.4, '1-1/8"':28.6, '1-1/4"':31.8 }[c.perno] || 19.1;
+    req.push([`Arandela embebida: lado ≥ 2·d = ${Math.ceil(2*dA)} mm (el dato es el LADO, no el espesor)`, (+c.arandela || 50) >= 2*dA - 0.5, `${c.arandela || 50} mm`]); }
   if(R.sis) req.push(['Sismo: anclajes de acero dúctil (F1554 Gr 36/55 o A36) con tuerca y arandela; soldaduras con electrodo de tenacidad', !/105/.test(c.anclaje), c.anclaje]);
   const f = R.peor, pasos = [
     `Columna ${cl.nom} sobre placa N × B × tp = ${R.N} × ${R.B} × ${R.tp} mm; pedestal ${R.Lp} × ${R.Wp} mm, f'c = ${R.fc} MPa`,
