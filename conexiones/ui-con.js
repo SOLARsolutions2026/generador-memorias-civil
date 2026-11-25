@@ -521,13 +521,19 @@ function formHTML(c){
       <div class="sec-bd">${body}</div></section>`).join('');
 }
 const GRUPOS = { pernos:'Pernos', chapa:'Chapa', angulares:'Angulares', angular:'Angular de asiento', rigidizador:'Platina de rigidez', alas:'Empalme de las alas', almaPl:'Empalme del alma', alma:'Alma', diagonal:'Diagonal', cartela:'Cartela', concreto:'Concreto', anclajes:'Anclajes', placa:'Placa', soldadura:'Soldadura', soporte:'Soporte', viga:'Viga', columna:'Columna', panel:'Zona de panel', placas:'Placas de continuidad', cortante:'Transmisión del cortante', scwb:'Columna fuerte – viga débil' };
+// «Qué cambiar» bajo un chequeo que no cumple (opción A de Amo, 25-nov; por ahora en la placa base)
+function fixRow(f){
+  const res = !f.patch ? '' : f.ratio == null ? ' → este chequeo deja de aplicar' : ` → relación ${f2(f.ratio, 2)}`;
+  return `<tr class="fix-row"><td colspan="5"><div class="fx-q"><span>👉 <b>${esc(f.txt)}</b>${res}${f.todo ? ' · <b>con esto cumple todo</b>' : ''}</span>${f.patch ? `<button type="button" class="btn sm" data-fixap='${esc(JSON.stringify(f.patch))}'>Aplicar</button>` : ''}</div></td></tr>`;
+}
 function chequeosHTML(r){
   let h = '';
   const extra = [...new Set(r.ch.map(x => x.grupo))].filter(g => !GRUPOS[g]).map(g => [g, g]);   // grupos sin nombre: no se pierden
   [...Object.entries(GRUPOS), ...extra].forEach(([g, t]) => { const L = r.ch.filter(x => x.grupo === g); if(!L.length) return;
     h += `<tr class="grp"><td colspan="5">${t}</td></tr>` + L.map(x => { const ok = x.ratio <= 1, w = Math.min(100, x.ratio * 100);
       return `<tr><td>${esc(x.nombre)}<div class="hint">${esc(x.ref)}${x.extra ? ' · ' + esc(x.extra) : ''}</div></td><td class="n">${f2(x.dem, x.ud === 'kN/mm' ? 3 : 2)} ${x.ud}</td><td class="n">${f2(x.cap, x.ud === 'kN/mm' ? 3 : 2)} ${x.ud}</td>
-        <td class="n"><span class="bar-d"><i style="width:${w}%;background:${ok ? 'var(--green)' : 'var(--red)'}"></i></span> <b>${f2(x.ratio, 3)}</b></td><td><span class="pill ${ok ? 'ok' : 'no'}">${ok ? 'Cumple' : 'No cumple'}</span></td></tr>`; }).join(''); });
+        <td class="n"><span class="bar-d"><i style="width:${w}%;background:${ok ? 'var(--green)' : 'var(--red)'}"></i></span> <b>${f2(x.ratio, 3)}</b></td><td><span class="pill ${ok ? 'ok' : 'no'}">${ok ? 'Cumple' : 'No cumple'}</span></td></tr>`
+        + (!ok && x.fix && esIng() ? fixRow(x.fix) : ''); }).join(''); });
   return `<div class="tw"><table class="t chq"><thead><tr><th>Chequeo</th><th>Demanda</th><th>Capacidad φRn</th><th>Relación</th><th></th></tr></thead><tbody>${h}</tbody></table></div>`;
 }
 function reqHTML(r){

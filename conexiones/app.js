@@ -203,6 +203,10 @@ function renderEditor(){
   if($('#dup')) $('#dup').onclick = () => { const n = JSON.parse(JSON.stringify(c)); n.id = Math.random().toString(36).slice(2, 10); n.nom = `${PREF[c.tipo]}-${S.p.datos.con.filter(x => x.tipo === c.tipo).length + 1}`;
     S.p.datos.con.splice(S.p.datos.con.indexOf(c) + 1, 0, n); S.sel = n.id; guardar(); renderProyecto(); };
 }
+// «Aplicar» de la línea «Qué cambiar» bajo un chequeo
+document.addEventListener('click', e => { const b = e.target.closest('[data-fixap]'); if(!b || !S.p) return;
+  const c = S.p.datos.con.find(x => x.id === S.sel); if(!c) return; try{ Object.assign(c, JSON.parse(b.dataset.fixap)); }catch(_){ return; }
+  renderEditor(); guardar(); toast('Cambio aplicado'); });
 // «Aplicar platina de rigidez» del asiento (sugerencia del cálculo)
 document.addEventListener('click', e => { const b = e.target.closest('[data-apsug]'); if(!b || !S.p) return;
   const c = S.p.datos.con.find(x => x.id === S.sel); if(!c) return; const r = Conex.calc(c); if(!r.sug) return;

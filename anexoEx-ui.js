@@ -344,6 +344,7 @@ function activarCx(c, D){
       guardarMemoria();
       if(CX_RENDER.includes(k) || el.tagName === 'SELECT' || el.type === 'checkbox') pintarCx(c, D); else debCx(c, D);
     }); });
+  $$('#cxRes [data-fixap]').forEach(b => b.onclick = () => { try{ Object.assign(c, JSON.parse(b.dataset.fixap)); }catch(_){ return; } guardarMemoria(); pintarCx(c, D); toast('Cambio aplicado.'); });
   $$('#cxRes [data-apsug]').forEach(b => b.onclick = () => { const X = calcE(c, D, _cxCtx); const sug = X?.R?.sug; if(!sug) return;
     if(sug.tipo === 'sold'){ const { tipo, ok, max, txt, ...v } = sug; Object.assign(c, v); }
     else { const { max, ok, peso, txt, ...v } = sug; Object.assign(c, v, c.tipo === 'asiento' ? { rig:true, aceroRig:c.aceroRig || c.aceroAng, electrodo:c.electrodo || 'E70XX' } : {}); }

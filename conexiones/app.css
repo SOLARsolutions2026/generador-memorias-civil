@@ -159,3 +159,8 @@ h4.nd-h{margin:14px 0 6px;font-size:13px;color:#0f2d5e}
 .sbar.sb-fija .sb-slot>.d-lista{flex:0 0 auto;max-height:32vh;overflow-y:auto;padding-bottom:4px}
 .sbar.sb-fija .gal-zona{flex:1 1 auto;min-height:80px;overflow-y:auto;margin:6px -6px 0;padding:0 6px 8px;border-top:1px solid #eef2f7;scrollbar-width:thin}
 .sbar.sb-fija .sb-av{flex:0 0 auto;margin-top:10px}
+
+/* «Qué cambiar» bajo cada chequeo que no cumple (opción A de Amo, 25-nov) */
+.fix-row td{border-top:0!important;padding-top:0!important}
+.fx-q{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:8px;padding:6px 10px;font-size:12.5px}
+@media print{.fix-row{display:none}}

@@ -1334,6 +1334,41 @@ function defaultsBase(){
     colTipo:'I', Ht:200, Bt:200, tt:8, cortante:'anclajes', lugB:150, lugH:100, lugT:19, lugW:8, aceroLug:'A36', grout:25,
     sismo:'no', refT:false, refNT:4, refDT:12.7, refV:false, refNV:2, refDV:12.7, fyR:420, arandSold:true };
 }
+// «Qué cambiar» debajo de cada chequeo que no cumple de la placa base (opción A de Amo, 25-nov): para cada chequeo en rojo se prueba
+// cambiar UNA medida a la vez (en el orden que más sentido tiene para ese chequeo) y se dice la primera que lo hace cumplir, con su relación.
+const PER_BASE = ['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'];
+function arreglosBase(c, out){
+  const clave = n => String(n).replace(/\(.*?\)/g, '').replace(/[\d.,]+/g, '').trim();
+  const ip = Math.max(0, PER_BASE.indexOf(c.perno));
+  const GEN = {
+    tp: () => ESP_PL.concat([44.5, 50.8]).filter(t => t > +c.tp + 1e-6).map(t => ({ patch:{ tp:t }, txt:`Suba el espesor de la placa de ${c.tp} a ${t} mm` })),
+    NB: () => [25, 50, 75, 100, 150, 200].map(k => ({ N:+c.N + k, B:+c.B + k })).filter(o => o.N <= +c.Lp - 50 && o.B <= +c.Wp - 50).map(o => ({ patch:o, txt:`Agrande la placa a ${o.N} × ${o.B} mm (ahora ${c.N} × ${c.B})` })),
+    perno: () => PER_BASE.slice(ip + 1).map(pe => ({ patch:{ perno:pe }, txt:`Use pernos de ${pe} (ahora ${c.perno})` })),
+    nB: () => [3, 4].filter(n => n > +c.nB).map(n => ({ patch:{ nB:n }, txt:`Ponga ${n} pernos por fila (ahora ${c.nB})` })),
+    hef: () => [300, 400, 500, 600, 700, 800, 900].filter(h => h > +c.hef && h <= +c.ha - 50).map(h => ({ patch:{ hef:h }, txt:`Ancle más profundo: hef = ${h} mm (ahora ${c.hef})` })),
+    fric: () => c.cortante === 'friccion' ? [] : [{ patch:{ cortante:'friccion' }, txt:'Pase el cortante por fricción con la carga axial, no por los pernos' }],
+    llave: () => c.cortante === 'llave' ? [] : [{ patch:{ cortante:'llave' }, txt:`Ponga una llave de cortante bajo la placa (${c.lugB} × ${c.lugH} × ${c.lugT} mm)` }],
+    refT: () => c.refT ? [] : [{ patch:{ refT:true }, txt:'Agregue refuerzo de anclaje a tensión (barras junto a los pernos)' }],
+    refV: () => c.refV ? [] : [{ patch:{ refV:true }, txt:'Agregue refuerzo de anclaje a cortante (barras en el borde del pedestal)' }],
+    w: () => [5, 6, 8, 10, 12, 14, 16].filter(w => w > +c.w).map(w => ({ patch:{ w }, txt:`Suba el filete columna–placa de ${c.w} a ${w} mm` })) };
+  const ORDEN = [[/Espesor/, ['tp', 'NB']], [/Aplastamiento del concreto|Longitud de apoyo/, ['NB', 'tp']], [/Tensión en el acero/, ['perno', 'nB']],
+    [/Arrancamiento del concreto a tensión|cono/i, ['hef', 'refT', 'nB', 'NB']], [/Extracción|pullout/i, ['perno']], [/Interacción/, ['fric', 'llave', 'refV', 'perno', 'nB', 'hef']],
+    [/Cortante en el acero/, ['perno', 'nB', 'fric', 'llave']], [/borde/, ['fric', 'llave', 'refV']], [/pryout/i, ['hef', 'fric', 'llave']], [/Soldadura/, ['w']],
+    [/[Rr]event/, ['hef', 'NB']], [/llave|Llave/, ['llave']]];
+  const cache = new Map(), prueba = patch => { const k = JSON.stringify(patch); if(!cache.has(k)) cache.set(k, calcBase({ ...c, ...patch, _sinSug:true })); return cache.get(k); };
+  for(const x of out.ch.filter(x => x.ratio > 1)){
+    const kx = clave(x.nombre), orden = (ORDEN.find(([re]) => re.test(x.nombre)) || [, []])[1];
+    const tipos = [...orden, ...Object.keys(GEN).filter(t => !orden.includes(t))];
+    let fx = null;
+    busca: for(const t of tipos) for(const cand of GEN[t]()){
+      const r = prueba(cand.patch); if(r.error) continue;
+      const y = r.ch.find(z => clave(z.nombre) === kx);
+      if(!y || y.ratio <= 1){ fx = { txt:cand.txt, patch:cand.patch, ratio:y ? y.ratio : null, todo:!!r.ok, otro:!orden.includes(t) }; break busca; }
+    }
+    x.fix = fx || { txt:'Ningún cambio de una sola medida lo arregla: agrande el pedestal, suba el f\'c o combine cambios', patch:null };
+  }
+}
+
 function calcBase(c){
   const AE = G.AnexoE || (typeof require !== 'undefined' ? require('../calc/anexoE.js') : null);
   if(!AE) return { error:'No se cargó el cálculo de la placa base.' };
@@ -1365,6 +1400,7 @@ function calcBase(c){
     `Anclajes ${R.n} × ${c.perno} ${c.anclaje}: φNsa = ${r2(R.phiNsa / 1000)} kN, φVsa = ${r2(R.phiVsa / 1000)} kN por perno; hef = ${R.hef} mm` ];
   pasos.push(`Cortante: ${R.modoV === 'friccion' ? 'por fricción (μ = 0.55 con la compresión)' : R.modoV === 'llave' ? `llave de cortante ${c.lugB} × ${c.lugH} × ${c.lugT} mm (${c.aceroLug}) con filete ${c.lugW} mm` : `en los anclajes (${R.nV} de ${R.n} toman cortante)`}${R.sis ? ` · sismo ${c.sismo}: resistencias del concreto ×0.75 (C-D.3.3)` : ''}${R.refT ? ` · refuerzo de anclaje a tensión φNn = ${r2(R.refT / 1000)} kN` : ''}${R.refV ? ` · a cortante φVn = ${r2(R.refV / 1000)} kN` : ''}`);
   const out = fin(ch, req, [...R.avisos], pasos, { R, cl });
+  if(!c._sinSug && !out.ok) arreglosBase(c, out);
   // 💡 mínimo que sirve (pedido de Amo 20-nov): espesor, tamaño de la placa, hef, pernos por fila y diámetro
   if(!c._sinSug && !out.ok){
     const PER = ['1/2"', '5/8"', '3/4"', '7/8"', '1"', '1-1/8"', '1-1/4"'], ip = Math.max(0, PER.indexOf(c.perno)), esp = ESP_PL.concat([44.5, 50.8]).filter(t => t >= +c.tp - 1e-6);
