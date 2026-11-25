@@ -51,6 +51,9 @@ function extremosCx(c, D, T){
   const out = []; for(const F in T) if(en(de.grupo, F)){ if(nA.has(T[F].i)) out.push({ F, e:'i', j:T[F].i }); if(nA.has(T[F].j)) out.push({ F, e:'j', j:T[F].j }); }
   return out.sort((x, y) => (+x.j || 0) - (+y.j || 0) || String(x.j).localeCompare(String(y.j)));
 }
+// Extremo quitado de la conexión: por extremo «E<F><i|j>» (25-nov, corrección de Amo: quitar la viga de un nudo no debe quitar
+// la otra viga que llega al mismo nudo) o, en memorias viejas, por nudo completo.
+const cxQuitado = (off, x) => off.has(String(x.j)) || off.has(`E${x.F}${x.e}`);
 // Fila del modelo → campos de la conexión (ejes del miembro: 1 = P y T, 2 = V2 y M2, 3 = V3 y M3)
 function cargasDeFila(tipo, f0){
   const f = {}; for(const k of ['P', 'V2', 'V3', 'T', 'M2', 'M3', 'Vx', 'Vy', 'Mx', 'My']) f[k] = Math.round((+f0[k] || 0) * 1000) / 1000;
@@ -76,7 +79,7 @@ function filasCx(c, D, ctx){
       return fs.filter(f => Math.abs(f.st - st) < 1e-6).map(f => fila(f)); }
     return g.filas.map(f => fila(f));
   }
-  const off = new Set(c.nudosOff || []), ext = (ctx.T ? extremosCx(c, D, ctx.T) : []).filter(x => !off.has(String(x.j)));
+  const off = new Set(c.nudosOff || []), ext = (ctx.T ? extremosCx(c, D, ctx.T) : []).filter(x => !cxQuitado(off, x));
   const out = [];
   for(const x of ext){ const l = lim[x.F]; if(!l) continue; const st = x.e === 'i' ? l[0] : l[1];
     for(const f of g.filas) if(f.F === x.F && Math.abs(f.st - st) < 1e-6) out.push(fila(f, x.e, x.j)); }
@@ -120,7 +123,7 @@ function entradaCx(c, D, T){
   }
   // Longitud para clasificar la rigidez (K = Sj·L/EI): la del modelo (la menor de los extremos escogidos, del lado seguro para llamarla rígida)
   if(T){
-    if(['testa', 'ras', 'soldada'].includes(c.tipo)){ const off = new Set((c.nudosOff || []).map(String)), Ls = extremosCx(c, D, T).filter(x => !off.has(String(x.j))).map(x => T[x.F]?.L).filter(x => x > 0);
+    if(['testa', 'ras', 'soldada'].includes(c.tipo)){ const off = new Set((c.nudosOff || []).map(String)), Ls = extremosCx(c, D, T).filter(x => !cxQuitado(off, x)).map(x => T[x.F]?.L).filter(x => x > 0);
       if(Ls.length){ z.Lviga = +Math.min(...Ls).toFixed(3); lock.add('Lviga');
         // luz libre para el sismo (Mpr): la del modelo menos el peralte de la columna (pedido de Amo 25-nov, punto C)
         const pc = a && sa?.tipo === 'I' ? Conex.perfil(a.perfil) : null, dcol = pc && c.cara !== 'alma' ? pc.d : pc ? pc.tw : 0;
@@ -187,7 +190,7 @@ function compRig(c, D, X, T){
     if(!mal.length) return { tono:'ok', txt:pre + ok.join('; ') + ': coherente con el modelo.' };
     return { tono:'amber', txt:pre + mal.concat(ok).join('; ') + '. Deje en 0 las traslaciones y «Rotation about 3» del resorte, vuelva a correr y suba el archivo.' };
   }
-  const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
+  const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !cxQuitado(off, x));
   if(!ext.length) return null;
   const est = ext.map(x => ({ x, r:relExt(T, x), k:x.e === 'i' ? T[x.F]?.ki : T[x.F]?.kj }));
   const nud = f => { const l = [...new Set(est.filter(f).map(e => e.x.j))]; return !l.length ? '' : (l.length > 1 ? 'los nudos ' : 'el nudo ') + l.join(', '); };
@@ -251,9 +254,9 @@ function uneHTML(c, D, T){
       : ext === null ? '<p class="hint" style="margin:2px 0 0">Buscando los nudos en el modelo…</p>'
       : !de || !a ? '<p class="hint" style="margin:2px 0 0">Escoja los dos elementos.</p>'
       : !nudos.length ? `<div class="note amber" style="margin-top:6px">En el modelo, ${esc(de.nom)} (${esc(de.grupo || 'sin grupo')}) no llega a ${esc(a.nom)} (${esc(a.grupo || 'sin grupo')}) en ningún nudo. Revise los grupos en el Anexo D.</div>`
-      : `<p class="hint" style="margin:4px 0 0">En el modelo, ${esc(de.nom)} llega a ${esc(a.nom)} en <b>${nudos.length} nudo${nudos.length > 1 ? 's' : ''}</b>. Toque un nudo para quitarlo si esa unión es de otro tipo:</p>
-        <div class="chips">${ext.map(x => { const r = relExt(T, x); return `<button type="button" class="chip ${off.has(String(x.j)) ? 'off' : ''} ${CX_CORT.includes(c.tipo) && r === 'emp' ? 'rig' : ''}" data-cxnudo="${esc(x.j)}" ${ro_} title="${esc(REL_TXT[r])}">nudo ${esc(x.j)}${ejeNudo(T, x.j) ? ` · ${esc(ejeNudo(T, x.j))}` : ''} · E${esc(x.F)} (${x.e})${REL_ICO[r]}</button>`; }).join('')}</div>
-        ${avisoRel(c, ext.filter(x => !off.has(String(x.j))), T)}`}</div>`;
+      : `<p class="hint" style="margin:4px 0 0">En el modelo, ${esc(de.nom)} llega a ${esc(a.nom)} en <b>${nudos.length} nudo${nudos.length > 1 ? 's' : ''}</b>. Toque una viga para quitarla si esa unión es de otro tipo (por ejemplo, si llega al alma de la columna):</p>
+        <div class="chips">${ext.map(x => { const r = relExt(T, x); return `<button type="button" class="chip ${cxQuitado(off, x) ? 'off' : ''} ${CX_CORT.includes(c.tipo) && r === 'emp' ? 'rig' : ''}" data-cxnudo="${esc(x.j)}" data-cxext="E${esc(x.F)}${x.e}" ${ro_} title="${esc(REL_TXT[r])}">nudo ${esc(x.j)}${ejeNudo(T, x.j) ? ` · ${esc(ejeNudo(T, x.j))}` : ''} · E${esc(x.F)} (${x.e})${REL_ICO[r]}</button>`; }).join('')}</div>
+        ${avisoRel(c, ext.filter(x => !cxQuitado(off, x)), T)}`}</div>`;
 }
 async function crearCx(t){
   const E = datosE(), D = datosD(), c = nuevaCx(t, E, D);
@@ -270,7 +273,10 @@ async function crearCx(t){
 function enlazaUne(c, D, raiz, alCambiar){
   $$('[data-cxu]', raiz).forEach(s => s.addEventListener(s.tagName === 'SELECT' ? 'change' : 'input', () => { const k = s.dataset.cxu; c[k] = s.value;
     if(k === 'eDe' || k === 'eA') c.nudosOff = []; if(k === 'empF' && !s.value) c.empX = ''; if(s.tagName === 'SELECT') alCambiar(); else alCambiar(true); }));
-  $$('[data-cxnudo]', raiz).forEach(b => b.onclick = () => { const j = b.dataset.cxnudo, s = new Set((c.nudosOff || []).map(String)); s.has(j) ? s.delete(j) : s.add(j); c.nudosOff = [...s]; alCambiar(); });
+  $$('[data-cxnudo]', raiz).forEach(b => b.onclick = () => { const j = b.dataset.cxnudo, k = b.dataset.cxext, s = new Set((c.nudosOff || []).map(String));
+    if(s.has(j)){ s.delete(j); $$(`[data-cxnudo="${CSS.escape(j)}"]`, raiz).forEach(o => { if(o.dataset.cxext !== k) s.add(o.dataset.cxext); }); }   // memoria vieja: el nudo entero estaba quitado
+    else s.has(k) ? s.delete(k) : s.add(k);
+    c.nudosOff = [...s]; alCambiar(); });
 }
 
 // ─── Editor dentro del Anexo E ───
@@ -415,7 +421,7 @@ async function pintarResortes(){
       }
       continue;
     }
-    const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !off.has(String(x.j)));
+    const off = new Set((c.nudosOff || []).map(String)), ext = extremosCx(c, D, T).filter(x => !cxQuitado(off, x));
     const rs = g.tipo === 'cortante' ? null : g.Sj / g.eta;
     const que = g.clase === 'rigida' ? 'Extremo empotrado (sin liberar)' : g.clase === 'art' ? `M3 liberado${g._req ? '<br/><small style="color:#b45309">no cumple todos los requisitos de detallado</small>' : ''}` : `Partial Fixity M3 = <b>${fmt(rs)}</b> kN·m/rad`;
     const est = ext.map(x => { const r = relExt(T, x), k = x.e === 'i' ? T[x.F]?.ki : T[x.F]?.kj;
