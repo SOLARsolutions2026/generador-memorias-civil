@@ -245,7 +245,7 @@ function nudoFormHTML(n){
       ${g3(campo(n, 'sentido', 'Vigas de las dos alas', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }),
         campo(n, 'sentidoW', 'Vigas a los dos lados del alma', { sel:[['opuesto', 'Momentos opuestos (gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']] }))}`)
     + sec(3, 'Placas de continuidad', { auto:'automático', si:'siempre', no:'sin placas' }[n.rigCol] + (n.tsC ? ` · ts ${n.tsC} mm` : ''),
-      conFig(`<div class="fg g2">${[campo(n, 'rigCol', '¿Lleva placas?', { sel:[['auto', 'Automático (si hacen falta)'], ['si', 'Sí'], ['no', 'No']] }), campo(n, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(n, 'wsC', 'Filete a las alas [mm]', { h:'Vacío = automático' }),
+      conFig(`<div class="fg g2">${[campo(n, 'rigCol', '¿Lleva placas?', { info:true, sel:[['auto', 'Automático (si hacen falta)'], ['si', 'Sí'], ['no', 'No']] }), campo(n, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático', info:true }), campo(n, 'wsC', 'Filete a las alas [mm]', { h:'Vacío = automático', info:true }),
         campo(n, 'aceroRigC', 'Acero de las placas', { sel:SEL_ACERO }), campo(n, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })].join('')}</div>`, figContinuidad(nudoCons(n).some(x => x.cara === 'ala2'), Conex.perfil(n.columna), false)))
     + sec(4, 'Placa de refuerzo del alma', n.dp === 'si' ? `sí${n.tdp ? ` · td ${n.tdp} mm` : ' · automática'}` : 'no', ConUI.doublerHTML(n, campo, () => '').replace(/^<h4 class="sub">[^<]*<\/h4>/, ''));
 }

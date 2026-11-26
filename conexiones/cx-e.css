@@ -123,3 +123,11 @@
 .cxE .fix-row td{border-top:0!important;padding-top:0!important}
 .cxE .fx-q{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff7ed;border-left:3px solid #f97316;border-radius:8px;padding:6px 10px;font-size:12.5px}
 @media print{.cxE .fix-row{display:none}}
+
+/* ⓘ ayuda con dibujo junto a la casilla (opción A de Amo, 26-nov) */
+.cxE .ii{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;border:1.5px solid #1d4ed8;color:#1d4ed8;font:700 10.5px Georgia,serif;cursor:help;vertical-align:1px;outline:none}
+.cxE .ii:hover,.cxE .ii:focus{background:#1d4ed8;color:#fff}
+.cxE .ii-pop{display:none;position:fixed;z-index:200;width:280px;max-width:86vw;background:#fff;border:1px solid #cbd5e1;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,.22);padding:10px 12px;font:400 12.3px/1.45 Segoe UI,Arial,sans-serif;color:#334155;text-align:left;cursor:default;white-space:normal}
+.cxE .ii-pop b{color:#0f2d5e}.cxE .ii-pop svg{display:block;margin-bottom:6px}.cxE .ii-t{display:block}
+.cxE .ii:hover .ii-pop,.cxE .ii:focus .ii-pop,.cxE .ii:focus-within .ii-pop{display:block}
+@media print{.cxE .ii{display:none}}

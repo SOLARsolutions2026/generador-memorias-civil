@@ -14,7 +14,119 @@ const PREF = { aleta:'CA', angular:'DA', testaV:'TV', asiento:'AS', testa:'CT', 
 function recalcular(c){ const r = Conex.calc(c); c.res = r.error ? null : { ok:r.ok, max:r.max }; return r; }
 
 // ── Editor de una conexión ─────────────
+// ⓘ Ayudas con dibujo en las platinas auxiliares (opción A de Amo, 26-nov): un ícono junto a la casilla; al pasar el mouse (o tocar en el celular) sale el dibujo con la medida en rojo
+const IR = '#dc2626', IAZ = '#93c5fd', IAB = '#1d4ed8', IGR = '#cbd5e1', ILN = '#475569', INA = '#ea580c', IMO = '#c4b5fd', IMB = '#7c3aed';
+const iMk = '';
+// cota con puntas dibujadas (las puntas «marker» de SVG no se ven dentro de un recuadro oculto)
+const iCota = (x1, y1, x2, y2, t, tx, ty) => { const a = Math.atan2(y2 - y1, x2 - x1), h = (x, y, s) => { const c = Math.cos(a) * s, n = Math.sin(a) * s;
+    return `<path d="M${x} ${y} L${x - 5 * c + 3 * n} ${y - 5 * n - 3 * c} L${x - 5 * c - 3 * n} ${y - 5 * n + 3 * c}Z" fill="${IR}"/>`; };
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${IR}" stroke-width="1.6"/>${h(x2, y2, 1)}${h(x1, y1, -1)}${t ? `<text x="${tx}" y="${ty}" font-size="11" font-weight="700" fill="${IR}">${t}</text>` : ''}`; };
+const iSvg = (w, h, s) => `<svg viewBox="0 0 ${w} ${h}" width="100%">${iMk}${s}</svg>`;
+// Placas de continuidad: planta (izq.) y alzado (der.)
+function iFigPC(hl){
+  const sol = (on) => on ? IR : INA, wd = (on) => on ? 3.5 : 2;
+  const planta = `<text x="62" y="9" font-size="8.5" text-anchor="middle" fill="#64748b">planta (columna)</text>
+    <rect x="10" y="14" width="7" height="96" fill="${IGR}" stroke="${ILN}"/><rect x="107" y="14" width="7" height="96" fill="${IGR}" stroke="${ILN}"/><rect x="17" y="59" width="90" height="5" fill="${IGR}" stroke="${ILN}"/>
+    <path d="M17 14 H107 V53 L101 59 H23 L17 53Z" fill="${IAZ}" stroke="${IAB}"/><path d="M17 110 H107 V70 L101 64 H23 L17 70Z" fill="${IAZ}" stroke="${IAB}"/>
+    ${hl === 'ws' || hl === 'alma' ? `<line x1="23" y1="57" x2="101" y2="57" stroke="${hl === 'alma' ? IR : INA}" stroke-width="${hl === 'alma' ? 3 : 2}"/><line x1="23" y1="66" x2="101" y2="66" stroke="${hl === 'alma' ? IR : INA}" stroke-width="${hl === 'alma' ? 3 : 2}"/>` : ''}
+    ${hl === 'ws' ? `<line x1="19" y1="16" x2="19" y2="52" stroke="${IR}" stroke-width="3"/><line x1="105" y1="16" x2="105" y2="52" stroke="${IR}" stroke-width="3"/>` : ''}
+    ${hl === 'bs' ? iCota(122, 14, 122, 59, 'bs', 126, 40) : ''}
+    ${hl === 'corte' ? `<circle cx="20" cy="56" r="7" fill="none" stroke="${IR}" stroke-width="1.6"/><circle cx="104" cy="56" r="7" fill="none" stroke="${IR}" stroke-width="1.6"/>` : ''}
+    <text x="62" y="36" font-size="8.5" text-anchor="middle" fill="${IAB}">placa</text><text x="62" y="92" font-size="8.5" text-anchor="middle" fill="${IAB}">placa</text>`;
+  const alzado = `<text x="205" y="9" font-size="8.5" text-anchor="middle" fill="#64748b">alzado</text>
+    <rect x="160" y="14" width="6" height="106" fill="${IGR}" stroke="${ILN}"/><rect x="214" y="14" width="6" height="106" fill="${IGR}" stroke="${ILN}"/>
+    <rect x="166" y="44" width="48" height="6" fill="${IAZ}" stroke="${IAB}"/><rect x="166" y="86" width="48" height="6" fill="${IAZ}" stroke="${IAB}"/>
+    <rect x="220" y="44" width="34" height="48" fill="#f1f5f9" stroke="${ILN}"/><text x="237" y="71" font-size="8" text-anchor="middle">viga</text>
+    ${hl === 'ts' ? `<line x1="176" y1="30" x2="176" y2="64" stroke="${IR}" stroke-width="1.4"/><path d="M176 44 l-3 -6 h6z M176 50 l-3 6 h6z" fill="${IR}"/><text x="181" y="36" font-size="11" font-weight="700" fill="${IR}">ts</text>` : ''}
+    ${hl === 'ws' ? `<path d="M166 44 l5 -5 v5z M214 44 l-5 -5 v5z M166 92 l5 5 v-5z M214 92 l-5 5 v-5z" fill="${IR}"/>` : ''}`;
+  return iSvg(260, 122, planta + alzado);
+}
+function iFigDP(hl){
+  return iSvg(260, 110, `<text x="130" y="9" font-size="8.5" text-anchor="middle" fill="#64748b">planta (columna)</text>
+    <rect x="40" y="14" width="8" height="90" fill="${IGR}" stroke="${ILN}"/><rect x="212" y="14" width="8" height="90" fill="${IGR}" stroke="${ILN}"/><rect x="48" y="62" width="164" height="6" fill="${IGR}" stroke="${ILN}"/>
+    <rect x="56" y="52" width="148" height="10" fill="${IMO}" stroke="${IMB}"/><text x="130" y="44" font-size="9" text-anchor="middle" fill="${IMB}">placa de refuerzo</text>
+    ${hl === 'td' ? `<line x1="232" y1="40" x2="232" y2="74" stroke="${IR}" stroke-width="1.4"/><path d="M232 52 l-3 -6 h6z M232 62 l-3 6 h6z" fill="${IR}"/><text x="237" y="48" font-size="11" font-weight="700" fill="${IR}">td</text>` : ''}
+    ${hl === 'sold' ? `<path d="M48 52 l8 0 l-8 10z M212 52 l-8 0 l8 10z" fill="${IR}"/><text x="130" y="88" font-size="9" text-anchor="middle" fill="${IR}">soldadura a las dos alas</text>` : `<text x="130" y="88" font-size="9" text-anchor="middle" fill="#64748b">alma de la columna</text>`}`);
+}
+function iFigCart(hl){
+  const r = k => hl === k;
+  return iSvg(260, 130, `<rect x="10" y="6" width="22" height="120" fill="${IGR}" stroke="${ILN}"/>
+    <rect x="32" y="24" width="220" height="6" fill="${IGR}" stroke="${ILN}"/><rect x="32" y="30" width="220" height="30" fill="#f1f5f9" stroke="${ILN}"/><rect x="32" y="60" width="220" height="6" fill="${IGR}" stroke="${ILN}"/>
+    <text x="215" y="49" font-size="9">viga</text>
+    <polygon points="32,66 32,104 132,66" fill="${r('tcw') ? '#fecaca' : IAZ}" stroke="${IAB}"/>
+    ${hl === 'patin' ? `<line x1="32" y1="104" x2="132" y2="66" stroke="${IR}" stroke-width="4"/>` : `<line x1="32" y1="104" x2="132" y2="66" stroke="${IAB}" stroke-width="2.5"/>`}
+    ${r('wC') ? `<line x1="34" y1="68" x2="130" y2="68" stroke="${IR}" stroke-width="3"/>` : ''}${r('wCc') ? `<line x1="34" y1="66" x2="34" y2="104" stroke="${IR}" stroke-width="3"/>` : ''}
+    ${r('wPA') ? `<line x1="36" y1="100" x2="128" y2="66" stroke="${IR}" stroke-width="2" stroke-dasharray="4 2"/>` : ''}
+    ${r('Lh') ? iCota(32, 118, 132, 118, 'Lh', 150, 122) : ''}${r('hh') ? iCota(44, 66, 44, 104, 'hh', 50, 92) : ''}
+    ${r('tcw') ? `<text x="140" y="96" font-size="10" font-weight="700" fill="${IR}">alma (platina)</text>` : ''}${r('patin') ? `<text x="140" y="96" font-size="10" font-weight="700" fill="${IR}">patín</text>` : ''}`);
+}
+function iFigExt(hl){
+  return iSvg(260, 120, `<rect x="20" y="6" width="16" height="110" fill="${IGR}" stroke="${ILN}"/><rect x="36" y="10" width="7" height="100" fill="${IAZ}" stroke="${IAB}"/><text x="40" y="122" font-size="8" text-anchor="middle" fill="${IAB}">placa de testa</text>
+    <rect x="43" y="38" width="200" height="5" fill="${IGR}" stroke="${ILN}"/><rect x="43" y="43" width="200" height="40" fill="#f1f5f9" stroke="${ILN}"/><rect x="43" y="83" width="200" height="5" fill="${IGR}" stroke="${ILN}"/><text x="200" y="66" font-size="9">viga</text>
+    <polygon points="43,10 43,38 92,38" fill="${hl === 'ts' ? '#fecaca' : IAZ}" stroke="${IAB}"/>
+    ${hl === 'ws' ? `<line x1="45" y1="12" x2="45" y2="36" stroke="${IR}" stroke-width="3"/><line x1="45" y1="36" x2="90" y2="36" stroke="${IR}" stroke-width="3"/>` : ''}
+    <text x="100" y="26" font-size="10" font-weight="${hl ? 700 : 400}" fill="${hl ? IR : IAB}">${hl === 'ws' ? 'filetes del rigidizador' : 'rigidizador (espesor ts)'}</text>`);
+}
+function iFigAs(hl){
+  const r = k => hl === k;
+  return iSvg(260, 130, `<rect x="20" y="4" width="14" height="122" fill="${IGR}" stroke="${ILN}"/>
+    <path d="M34 30 h6 v-24 h0" fill="none"/><rect x="34" y="20" width="6" height="40" fill="#94a3b8" stroke="${ILN}"/><rect x="34" y="20" width="90" height="6" fill="#94a3b8" stroke="${ILN}"/>
+    <rect x="46" y="4" width="200" height="16" fill="#f1f5f9" stroke="${ILN}"/><text x="200" y="15" font-size="9">viga</text>
+    <polygon points="40,26 40,${26 + 70} 110,26" fill="${r('ts') ? '#fecaca' : IAZ}" stroke="${IAB}"/>
+    ${r('W') ? iCota(40, 112, 110, 112, 'W', 70, 125) : ''}${r('hs') ? iCota(128, 26, 128, 96, 'alto', 132, 66) : ''}
+    ${r('wR') ? `<line x1="42" y1="28" x2="42" y2="94" stroke="${IR}" stroke-width="3"/><line x1="42" y1="28" x2="108" y2="28" stroke="${IR}" stroke-width="3"/>` : ''}
+    ${r('ts') ? `<text x="140" y="60" font-size="10" font-weight="700" fill="${IR}">platina triangular (ts)</text>` : ''}`);
+}
+function iFigTras(hl){
+  return iSvg(260, 110, `<text x="130" y="9" font-size="8.5" text-anchor="middle" fill="#64748b">planta: la placa pasa sobre el ala de la viga</text>
+    <rect x="10" y="20" width="60" height="80" fill="#f8fafc" stroke="${ILN}"/><text x="40" y="64" font-size="8" text-anchor="middle">columna</text>
+    <rect x="70" y="40" width="180" height="40" fill="${IGR}" stroke="${ILN}"/><text x="215" y="64" font-size="8.5">ala de la viga</text>
+    <rect x="40" y="46" width="110" height="28" fill="${IAZ}" stroke="${IAB}" opacity=".9"/><text x="95" y="63" font-size="8.5" text-anchor="middle" fill="${IAB}">placa</text>
+    ${hl === 'Lt' ? iCota(70, 92, 150, 92, 'Lt', 104, 106) : ''}
+    ${hl === 'wT' ? `<line x1="70" y1="46" x2="150" y2="46" stroke="${IR}" stroke-width="3"/><line x1="70" y1="74" x2="150" y2="74" stroke="${IR}" stroke-width="3"/><line x1="150" y1="46" x2="150" y2="74" stroke="${IR}" stroke-width="3"/>` : ''}`);
+}
+const INFO = {
+  rigCol: c => [iFigPC(''), '<b>Placas de continuidad:</b> láminas dentro de la columna, entre sus dos alas, a la altura de cada ala de la viga (2 por ala, una a cada lado del alma). Llevan la fuerza de las alas de la viga a la columna. «Automático» las pone solo si hacen falta.'],
+  bsC: c => { const cl = Conex.perfil(c.columna); const mx = cl ? Math.floor((cl.bf - cl.tw) / 2 - 2) : null;
+    return [iFigPC('bs'), `<b>Ancho bs:</b> de cada placa, en planta, desde el alma hasta la punta del ala de la columna.${mx ? `<br>${esc(c.columna)}: máximo ≈ <b>${mx} mm</b>.` : ''}<br>Vacío = la app usa el máximo.`]; },
+  tsC: c => [iFigPC('ts'), '<b>Espesor ts</b> de cada placa de continuidad. Mínimo la mitad del espesor del ala de la viga (con sismo o viga a los dos lados, el ala completa).<br>Vacío = la app escoge el menor que cumple.'],
+  wsC: c => [iFigPC('ws'), '<b>Filete</b> que une cada placa a las alas y al alma de la columna (en rojo). Vacío = la app escoge el que hace falta.'],
+  unPlW: c => [iFigPC('alma'), '<b>Placas al alma:</b> cómo se suelda el borde de la placa contra el alma de la columna (en rojo). El filete no puede ser más grueso que el alma; si no alcanza, penetración completa.'],
+  dp: c => [iFigDP(''), '<b>Placa de refuerzo del alma:</b> una placa pegada al alma de la columna, paralela a ella, que la engruesa en el nudo. Solo se pone si el alma no aguanta el cortante del nudo (chequeo «Zona de panel»). Es distinta de las placas de continuidad.'],
+  tdp: c => [iFigDP('td'), '<b>Espesor td</b> de la placa de refuerzo. Se suma al del alma. Vacío = la app pone el que falta.'],
+  unDp: c => [iFigDP('sold'), '<b>Soldadura a las alas:</b> la placa de refuerzo se suelda por sus dos bordes a las alas de la columna (en rojo). Con sismo va de penetración completa.'],
+  wdp: c => [iFigDP('sold'), '<b>Filete</b> de la placa de refuerzo a cada ala de la columna. Vacío = automático.'],
+  cart: c => [iFigCart(''), '<b>Cartela bajo la viga:</b> un triángulo soldado bajo el ala inferior y a la columna, que agranda la viga en el apoyo. A = trozo del mismo perfil (T cortada) · B = platinas (alma + patín) · D = platina sola.'],
+  LhC: c => [iFigCart('Lh'), '<b>Largo Lh:</b> cuánto avanza la cartela a lo largo de la viga, desde la cara de la columna.'],
+  hhC: c => [iFigCart('hh'), '<b>Alto hh:</b> altura de la cartela contra la columna, bajo el ala de la viga. Lo usual: ángulo de unos 30° (hh ≈ 0.58·Lh).'],
+  tcw: c => [iFigCart('tcw'), '<b>Espesor de la platina</b> triangular de la cartela (el alma de la cartela).'],
+  bph: c => [iFigCart('patin'), '<b>Patín:</b> tira inclinada soldada al borde de la platina triangular. Ancho: no mayor que el ala de la viga.'],
+  tph: c => [iFigCart('patin'), '<b>Espesor del patín</b> (la tira inclinada de la cartela).'],
+  wPA: c => [iFigCart('wPA'), '<b>Filete patín–alma:</b> une la tira inclinada (patín) con la platina triangular.'],
+  wC: c => [iFigCart('wC'), '<b>Filete cartela–viga:</b> dos cordones a lo largo de Lh, bajo el ala inferior de la viga.'],
+  wCc: c => [iFigCart('wCc'), '<b>Filete cartela–columna:</b> une la cartela a la cara de la columna.'],
+  tsE: c => [iFigExt('ts'), '<b>Rigidizador de la extensión:</b> platina triangular soldada a la placa de testa y al ala de la viga, en el eje del alma (8 pernos). ts = su espesor.'],
+  wsE: c => [iFigExt('ws'), '<b>Filetes del rigidizador</b> de la extensión: a la placa de testa y al ala de la viga (en rojo).'],
+  tsA: c => [iFigAs('ts'), '<b>Platina de rigidez (pie de amigo):</b> triángulo bajo el ala horizontal del asiento. ts = su espesor.'],
+  W: c => [iFigAs('W'), '<b>Ancho W:</b> lo que mide la platina en horizontal, bajo el ala del asiento.'],
+  hs: c => [iFigAs('hs'), '<b>Alto</b> de la platina triangular, contra el soporte.'],
+  wR: c => [iFigAs('wR'), '<b>Filetes de la platina:</b> al ala del asiento y al soporte (en rojo).'],
+  Lt: c => [iFigTras('Lt'), '<b>Traslapo Lt:</b> cuánto pasa la placa por encima del ala de la viga (eje débil, placa traslapada).'],
+  wT: c => [iFigTras('wT'), '<b>Filete placa–ala:</b> los cordones que unen la placa con el ala de la viga (en rojo).'],
+};
+// Ícono ⓘ con la ayuda dentro (se abre con el mouse, o al tocarlo en el celular)
+if(typeof document !== 'undefined' && !G._iiPos){ G._iiPos = 1;
+  const pon = e => { const ic = e.target.closest && e.target.closest('.ii'); if(!ic) return; const pop = ic.querySelector('.ii-pop'); if(!pop) return;
+    const r = ic.getBoundingClientRect(), W = Math.min(290, innerWidth - 16); pop.style.width = W + 'px';
+    let x = r.left + r.width / 2 - W / 2; x = Math.max(8, Math.min(x, innerWidth - W - 8)); pop.style.left = x + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    requestAnimationFrame(() => { const h = pop.offsetHeight; if(r.bottom + 6 + h > innerHeight - 8 && r.top - 6 - h > 8) pop.style.top = (r.top - 6 - h) + 'px'; }); };
+  document.addEventListener('mouseover', pon); document.addEventListener('focusin', pon);
+  document.addEventListener('scroll', () => { const a = document.activeElement; if(a && a.classList && a.classList.contains('ii')) a.blur(); }, true); }
+function infoIco(key, c){ const f = INFO[key]; if(!f) return ''; const [fig, txt] = f(c);
+  return `<span class="ii" tabindex="0" aria-label="Ayuda">i<span class="ii-pop" role="tooltip">${fig}<span class="ii-t">${txt}</span></span></span>`; }
+
 function campo(c, k, l, opt = {}){
+  if(opt.info) l = `${l}${infoIco(opt.info === true ? k : opt.info, c)}`;
   const ro = esIng() ? '' : 'disabled';
   // En la app de conexiones el sismo se escoge una vez para todo el proyecto (Amo 21-nov)
   if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">${c.vigaGrav ? 'Viga de gravedad (marcada abajo)' : typeof G.ConSisProy === 'string' ? G.ConSisProy : 'Se escoge arriba, en «Disipación de energía» del proyecto'}</div></div>`;
@@ -102,10 +214,10 @@ function figDoubler(){
 }
 function doublerHTML(c, campo, ck){
   const un = c.unDp || '';
-  return `<h4 class="sub">Placa de refuerzo del alma (zona de panel)</h4>` + conFig(`<div class="fg g2">${[campo(c, 'dp', '¿Lleva placa de refuerzo?', { sel:[['no', 'No'], ['si', 'Sí']], h:'Si la zona de panel no alcanza' }),
-    ...(c.dp === 'si' ? [campo(c, 'tdp', 'Espesor td [mm]', { h:'Vacío = automático' }), campo(c, 'aceroDp', 'Acero', { sel:[['', '— el de la columna —'], ...SEL_ACERO] }),
-      campo(c, 'unDp', 'Soldadura a las alas', { sel:[['', 'Automática (con sismo, penetración completa)'], ['filete', 'Filete'], ['cjp', 'Penetración completa']] }),
-      ...(un === 'filete' ? [campo(c, 'wdp', 'Filete [mm]', { h:'Vacío = automático' })] : [])] : [])].join('')}</div>`, c.dp === 'si' ? figDoubler() : '');
+  return `<h4 class="sub">Placa de refuerzo del alma (zona de panel)</h4>` + conFig(`<div class="fg g2">${[campo(c, 'dp', '¿Lleva placa de refuerzo?', { sel:[['no', 'No'], ['si', 'Sí']], h:'Si la zona de panel no alcanza', info:true }),
+    ...(c.dp === 'si' ? [campo(c, 'tdp', 'Espesor td [mm]', { h:'Vacío = automático', info:true }), campo(c, 'aceroDp', 'Acero', { sel:[['', '— el de la columna —'], ...SEL_ACERO] }),
+      campo(c, 'unDp', 'Soldadura a las alas', { info:true, sel:[['', 'Automática (con sismo, penetración completa)'], ['filete', 'Filete'], ['cjp', 'Penetración completa']] }),
+      ...(un === 'filete' ? [campo(c, 'wdp', 'Filete [mm]', { h:'Vacío = automático', info:true })] : [])] : [])].join('')}</div>`, c.dp === 'si' ? figDoubler() : '');
 }
 function figContinuidad(dos, cl, sis){
   const col = '#cbd5e1', ln = '#475569', azul = '#93c5fd', azulB = '#1d4ed8', nar = '#ea580c';
@@ -273,13 +385,13 @@ function seccionesDe0(c){
         ...(c.union === 'cjp' ? [] : [campo(c, 'w', tub ? 'Filete caras horizontales (b) [mm]' : 'Filete de las alas w [mm]'), campo(c, 'wAlma', tub ? 'Filete caras verticales (d) [mm]' : 'Filete del alma [mm]', { h:'Vacío = igual al anterior' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
       + (c.union === 'cjp' ? '' : ck('kds', 'Aplicar el aumento por dirección del filete (1 + 0.5·sen^1.5θ, J2-5): más resistencia donde la fuerza va de frente al cordón'))]]),
     ...(c.soporte === 'alma' || tub ? [] : [['cart', 'Cartela bajo la viga', () => ({ no:'sin cartela', T:'A · de perfil (T cortada)', arm:'B · de platinas', pl:'D · platina sola' }[c.cart || 'no']) + (c.cart && c.cart !== 'no' ? ` · Lh ${c.LhC} × hh ${c.hhC} mm` : ''),
-      conFig(g3(campo(c, 'cart', 'Tipo de cartela', { sel:[['no', 'Sin cartela'], ['T', 'A · De perfil (T cortada)'], ['arm', 'B · De platinas (alma + patín)'], ['pl', 'D · Platina sola (sin patín)']] }),
-        ...(c.cart && c.cart !== 'no' ? [campo(c, 'LhC', 'Largo Lh [mm]', { h:'A lo largo de la viga, desde la cara' }), campo(c, 'hhC', 'Alto hh [mm]', { h:'En la cara de la columna; θ ≈ 30° es lo usual' }),
+      conFig(g3(campo(c, 'cart', 'Tipo de cartela', { info:true, sel:[['no', 'Sin cartela'], ['T', 'A · De perfil (T cortada)'], ['arm', 'B · De platinas (alma + patín)'], ['pl', 'D · Platina sola (sin patín)']] }),
+        ...(c.cart && c.cart !== 'no' ? [campo(c, 'LhC', 'Largo Lh [mm]', { info:true, h:'A lo largo de la viga, desde la cara' }), campo(c, 'hhC', 'Alto hh [mm]', { info:true, h:'En la cara de la columna; θ ≈ 30° es lo usual' }),
           ...(c.cart === 'T' ? [SELP('perfilCart', 'Perfil del que se corta', '— el mismo de la viga —')] : []),
-          ...(c.cart === 'arm' || c.cart === 'pl' ? [campo(c, 'tcw', c.cart === 'pl' ? 'Espesor de la platina [mm]' : 'Espesor del alma [mm]')] : []),
-          ...(c.cart === 'arm' ? [campo(c, 'bph', 'Ancho del patín [mm]', { h:'≤ ancho del ala de la viga' }), campo(c, 'tph', 'Espesor del patín [mm]'), campo(c, 'wPA', 'Filete patín–alma [mm]')] : []),
+          ...(c.cart === 'arm' || c.cart === 'pl' ? [campo(c, 'tcw', c.cart === 'pl' ? 'Espesor de la platina [mm]' : 'Espesor del alma [mm]', { info:true })] : []),
+          ...(c.cart === 'arm' ? [campo(c, 'bph', 'Ancho del patín [mm]', { info:true, h:'≤ ancho del ala de la viga' }), campo(c, 'tph', 'Espesor del patín [mm]', { info:true }), campo(c, 'wPA', 'Filete patín–alma [mm]', { info:true })] : []),
           campo(c, 'aceroCart', 'Acero de la cartela', { sel:[['', '— el de la viga —'], ...SEL_ACERO.map(x => Array.isArray(x) ? x : [x, x])] }),
-          campo(c, 'wC', 'Filete cartela–viga [mm]', { h:'2 cordones a lo largo de Lh' }), ...(c.union === 'cjp' ? [] : [campo(c, 'wCc', 'Filete cartela–columna [mm]', { h:'Con penetración completa no aplica' })])] : []))
+          campo(c, 'wC', 'Filete cartela–viga [mm]', { h:'2 cordones a lo largo de Lh', info:true }), ...(c.union === 'cjp' ? [] : [campo(c, 'wCc', 'Filete cartela–columna [mm]', { info:true, h:'Con penetración completa no aplica' })])] : []))
         + (c.cart && c.cart !== 'no' ? ck('rigPunta', 'Rigidizadores en la viga en la punta de la cartela (si el alma no aguanta la fuerza del patín)') : '')
         + (c.cart === 'pl' ? '<div class="note amber">Platina sola: solo para estructuras livianas; se revisa el largo del borde libre. Con sismo DMO o DES no sirve.</div>' : '')
         + (c.cart && c.cart !== 'no' && (c.sismo === 'DMO' || c.sismo === 'DES') ? '<div class="note red">La viga con cartela soldada no es una conexión precalificada (AISC 358): con DMO o DES la conexión sale «No cumple».</div>' : ''),
@@ -294,10 +406,10 @@ function seccionesDe0(c){
         + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
         + `<h4 class="sub">Placas de continuidad de la columna${c.soporte === 'alma' ? ' (obligatorias si hay momento)' : ''}</h4>`
         + (c.soporte === 'alma'
-          ? conFig(`<div class="fg g3">${[c.miembro === 'tubo' ? `<div class="fld"><label>Unión del tubo a las placas</label><div class="hint">Placa traslapada sobre la cara superior e inferior del tubo, con filete (con tubo no se puede a tope)</div></div>` : campo(c, 'uDebil', 'Unión de las alas a las placas', { sel:[['trasl', 'B · Placa traslapada con filete'], ['tope', 'A · Alas a tope (CJP)']] }), campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }),
-              ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete placa–columna [mm]', { h:'Vacío = automático' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]),
-              ...(opDebil(c) === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { h:c.miembro === 'tubo' ? 'Largo de la placa sobre la cara del tubo' : 'Largo de la placa sobre el ala' }), campo(c, 'wT', c.miembro === 'tubo' ? 'Filete placa–tubo [mm]' : 'Filete placa–ala [mm]')])].join('')}</div>`, figCorteDebil(opDebil(c), c.dosLados, c.miembro === 'tubo'), 'ancho')
-          : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:['DMO', 'DES'].includes(c.sismo) ? 'Al alma (a las alas va con penetración completa); vacío = automático' : 'Vacío = automático' }), campo(c, 'unPlW', 'Placas al alma', { sel:[['filete', 'Filete'], ['cjp', 'Penetración completa']], h:'El filete no puede pasar el espesor del alma' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + doublerHTML(c, campo, ck)))],
+          ? conFig(`<div class="fg g3">${[c.miembro === 'tubo' ? `<div class="fld"><label>Unión del tubo a las placas</label><div class="hint">Placa traslapada sobre la cara superior e inferior del tubo, con filete (con tubo no se puede a tope)</div></div>` : campo(c, 'uDebil', 'Unión de las alas a las placas', { sel:[['trasl', 'B · Placa traslapada con filete'], ['tope', 'A · Alas a tope (CJP)']] }), campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS), info:true }),
+              ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático', info:true }), campo(c, 'wsC', 'Filete placa–columna [mm]', { h:'Vacío = automático', info:true }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })]),
+              ...(opDebil(c) === 'tope' ? [] : [campo(c, 'Lt', 'Traslapo Lt [mm]', { info:true, h:c.miembro === 'tubo' ? 'Largo de la placa sobre la cara del tubo' : 'Largo de la placa sobre el ala' }), campo(c, 'wT', c.miembro === 'tubo' ? 'Filete placa–tubo [mm]' : 'Filete placa–ala [mm]', { info:true })])].join('')}</div>`, figCorteDebil(opDebil(c), c.dosLados, c.miembro === 'tubo'), 'ancho')
+          : conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Placas', { sel:Object.entries(RIGS), info:true }), ...(c.rigCol === 'no' ? [] : [campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático', info:true }), campo(c, 'wsC', 'Filete [mm]', { info:true, h:['DMO', 'DES'].includes(c.sismo) ? 'Al alma (a las alas va con penetración completa); vacío = automático' : 'Vacío = automático' }), campo(c, 'unPlW', 'Placas al alma', { info:true, sel:[['filete', 'Filete'], ['cjp', 'Penetración completa']], h:'El filete no puede pasar el espesor del alma' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + doublerHTML(c, campo, ck)))],
     ['sis', 'Sismo', () => c.sismo === 'DMO' || c.sismo === 'DES' ? `${c.sismo} · WUF-W · L ${c.Lh} m · Vg ${c.Vg} kN` : 'sin requisitos sísmicos',
       g3(campo(c, 'sismo', 'Pórtico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (pórtico intermedio)'], ['DES', 'DES (pórtico especial)']] }),
         ...(c.sismo === 'DMO' || c.sismo === 'DES' ? [campo(c, 'Lh', 'Luz libre de la viga L [m]', { h:'Entre caras de columnas (la rótula queda en la cara); en el Anexo E sale del modelo' }), campo(c, 'Vg', 'Vg: cortante de gravedad [kN]', { h:'1.2D + 0.5L (o la del modelo)' })] : []))
@@ -333,7 +445,7 @@ function seccionesDe0(c){
       g3(campo(c, 'bv', 'Ala vertical bv [mm]'), campo(c, 'bh', 'Ala horizontal bh [mm]', { h:'Donde se apoya la viga' }), campo(c, 't', 'Espesor t [mm]'), campo(c, 'La', 'Largo del angular La [mm]', { h:'Recomendado ≥ ancho del ala de la viga' }), campo(c, 'aceroAng', 'Acero', { sel:SEL_ACERO }))],
     ['rig', 'Platina de rigidez (pie de amigo)', () => rig ? `PL triangular ${c.ts} mm · W ${c.W} × alto ${c.hs} mm · filete ${c.wR} mm` : 'sin platina',
       `<div class="f"><label class="ck"><input type="checkbox" data-k="rig" ${rig ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Asiento rigidizado con una platina triangular bajo el ala horizontal</label><div class="hint">Cuando el angular solo no resiste la flexión. La carga se toma a 0.8W de la cara del soporte (Manual AISC parte 10).</div></div>`
-      + (rig ? g3(campo(c, 'ts', 'Espesor ts [mm]'), campo(c, 'W', 'Ancho W [mm]', { h:'Horizontal, bajo el ala del asiento' }), campo(c, 'hs', 'Alto [mm]', { h:sold ? 'Vertical, soldado al soporte' : 'Vertical, dentro del ala del angular' }), campo(c, 'aceroRig', 'Acero', { sel:SEL_ACERO }), campo(c, 'wR', 'Filetes de la platina w [mm]'),
+      + (rig ? g3(campo(c, 'ts', 'Espesor ts [mm]', { info:'tsA' }), campo(c, 'W', 'Ancho W [mm]', { info:true, h:'Horizontal, bajo el ala del asiento' }), campo(c, 'hs', 'Alto [mm]', { info:true, h:sold ? 'Vertical, soldado al soporte' : 'Vertical, dentro del ala del angular' }), campo(c, 'aceroRig', 'Acero', { sel:SEL_ACERO }), campo(c, 'wR', 'Filetes de la platina w [mm]', { info:true }),
         ...(sold ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })])) : '')],
     ...(sold ? [] : [['pern', 'Pernos al soporte', () => `${2 * c.filas} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g}${c.cizalla ? ' · cizalla' : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'filas', 'Filas (2 pernos por fila)'), campo(c, 'g', 'Gramil g [mm]'), campo(c, 'ev', 'Del talón a la fila superior [mm]'))]]) ]; }
@@ -450,10 +562,10 @@ function seccionesDe0(c){
       + ck('dosLados', 'Llega otra viga a momento al otro lado de la columna')
       + (c.dosLados ? g3(campo(c, 'Mu2', 'Momento de la otra viga M₂ [kN·m]', { h:'Misma altura de viga' }), campo(c, 'sentido2', 'Los dos momentos', { sel:[['opuesto', 'Opuestos (cargas de gravedad)'], ['mismo', 'Mismo sentido (sismo o viento)']], h:'Opuestos: el alma se aprieta por los dos lados (J10-8). Mismo sentido: el panel recibe la suma' })) : '')
       + `<h4 class="sub">Rigidizadores de la columna (placas de continuidad)</h4>`
-      + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG) }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:'Vacío = automático' }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático' }), campo(c, 'wsC', 'Filete [mm]', { h:'Vacío = automático' }), campo(c, 'unPlW', 'Placas al alma', { sel:[['filete', 'Filete'], ['cjp', 'Penetración completa']], h:'El filete no puede pasar el espesor del alma' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + (c.columna ? doublerHTML(c, campo, ck) : '')],
+      + conFig(`<div class="fg g2">${[campo(c, 'rigCol', 'Rigidizadores', { sel:Object.entries(RIG), info:true }), ...(c.rigCol === 'no' ? [] : [campo(c, 'bsC', 'Ancho bs [mm]', { h:(() => { const cl = Conex.perfil(c.columna); return cl ? `Vacío = el máximo (≈ ${Math.floor((cl.bf - cl.tw) / 2 - 2)} mm)` : 'Vacío = el máximo'; })(), info:true }), campo(c, 'tsC', 'Espesor ts [mm]', { h:'Vacío = automático', info:true }), campo(c, 'wsC', 'Filete [mm]', { info:true, h:'Vacío = automático' }), campo(c, 'unPlW', 'Placas al alma', { info:true, sel:[['filete', 'Filete'], ['cjp', 'Penetración completa']], h:'El filete no puede pasar el espesor del alma' }), campo(c, 'aceroRigC', 'Acero', { sel:SEL_ACERO })])].join('')}</div>`, figContinuidad(c.dosLados, Conex.perfil(c.columna), ['DMO', 'DES'].includes(c.sismo))) + (c.columna ? doublerHTML(c, campo, ck) : '')],
     ['placa', 'Placa de testa', () => `${e8 ? '8 pernos rigidizada (8ES)' : '4 pernos (4E)'} · PL ${c.tp} × ${c.bp} mm ${c.aceroPl} · extensión ${c.ambos ? 'arriba y abajo' : 'solo arriba'}`,
       g3(campo(c, 'config', 'Configuración', { sel:[['4E', '4 pernos sin rigidizar (4E)'], ['8ES', '8 pernos con rigidizador (8ES)']] }), campo(c, 'tp', 'Espesor tp [mm]'), campo(c, 'bp', 'Ancho bp [mm]', { h:'Entre bf y bf + 25 mm' }), campo(c, 'aceroPl', 'Acero', { sel:SEL_ACERO }),
-        ...(e8 ? [campo(c, 'tsE', 'Rigidizador de la extensión ts [mm]', { h:'Triangular, en el eje del alma' }), campo(c, 'wsE', 'Filete del rigidizador [mm]')] : []))
+        ...(e8 ? [campo(c, 'tsE', 'Rigidizador de la extensión ts [mm]', { info:true, h:'Triangular, en el eje del alma' }), campo(c, 'wsE', 'Filete del rigidizador [mm]', { info:true })] : []))
       + ck('ambos', `El momento cambia de sentido (extensión arriba y abajo, ${e8 ? 16 : 8} pernos)`)],
     ['pern', 'Pernos', () => `${e8 ? (c.ambos ? 16 : 8 + (+c.nbc || 0)) : c.ambos ? 8 : 4 + (+c.nbc || 0)} × ${dnom(c)} ${c.grado}-${c.rosca} · g ${c.g} · pfo ${c.pfo} · pfi ${c.pfi} · de ${c.de}${e8 ? ` · pb ${c.pb}` : ''}`,
       g3(...pernosTipo) + g3(campo(c, 'g', 'Gramil g [mm]', { h:'Distancia horizontal entre pernos' }), campo(c, 'pfo', 'pfo: ala a fila exterior [mm]'), campo(c, 'pfi', 'pfi: ala a fila interior [mm]'),
