@@ -2669,6 +2669,90 @@ function calcEmpCol(c){
   return R;
 }
 
+
+// «Qué cambiar» en todas las conexiones (26-nov, pedido de Amo: igual a la placa base): bajo cada chequeo que no cumple, el cambio de UNA medida
+// que lo arregla con el menor paso. Se prueban los campos que tiene la conexión (pernos, espesores, filetes, cantidades, largos, acero, opciones);
+// se descarta un cambio que haga fallar más requisitos de detallado. Resultado en x.fix {txt, patch, ratio, todo} (lo pinta ui-con.js).
+const FX_W = [3, 5, 6, 8, 10, 12, 14, 16];
+const FX = {
+  pern:{ d:'pernos', grado:'grado', rosca:'rosca', n:'pernos', nf:'filas de pernos en cada ala', nw:'pernos en el alma', filas:'filas de pernos', cols:'columnas de pernos', nbc:'pernos de compresión', ncw:'columnas de pernos en el alma' },
+  esp:{ tp:'la platina', tAng:'los angulares', t:'el angular', tpf:'las cubrejuntas de las alas', tpw:'las cubrejuntas del alma', tpi:'las cubrejuntas interiores', tg:'la cartela', tL:'los angulares', ts:'la platina de rigidez', tsE:'el rigidizador de la extensión', tsC:'las placas de continuidad', tcw:'la platina de la cartela', tph:'el patín de la cartela', tdp:'la placa de refuerzo', tpb:'la placa de tope' },
+  sol:{ w:'el filete', wAla:'el filete de las alas', wAlma:'el filete del alma', wS:'el filete al soporte', wR:'los filetes de la platina', wC:'el filete cartela–viga', wCc:'el filete cartela–columna', wPA:'el filete patín–alma', wsC:'el filete de las placas de continuidad', wsE:'el filete del rigidizador', wdp:'el filete de la placa de refuerzo', wT:'el filete placa–ala', wt:'el filete al tubo', wB:'el filete cartela–viga', wI:'el filete inferior' },
+  lar:{ bp:'el ancho de la placa', bpf:'el ancho de las cubrejuntas de las alas', hpw:'el alto de las cubrejuntas del alma', Lws:'el largo de la soldadura del tubo', Lwg:'el largo de la cartela', LhC:'el largo de la cartela Lh', hhC:'el alto de la cartela hh', Lt:'el traslapo', La:'el largo del angular', W:'el ancho de la platina de rigidez', hs:'el alto de la platina de rigidez', Lh:'el largo de la cartela sobre la viga', Lv:'el alto de la cartela', a:'el desfase del corte', bPl:'el ancho de la platina del cruce', bv:'el ala vertical', bh:'el ala horizontal' },
+  ace:{ aceroPl:'la platina', aceroAng:'el angular', aceroG:'la cartela', aceroL:'los angulares', aceroRig:'la platina de rigidez', aceroRigC:'las placas de continuidad', aceroCart:'la cartela' } };
+function fxRelevante(c, k){
+  if(c[k] === '' || c[k] == null) return k === 'wAlma' && c.union !== 'cjp' && c.tipo === 'soldada';
+  if(['ts', 'W', 'hs', 'wR', 'aceroRig'].includes(k)) return c.tipo === 'asiento' && !!c.rig;
+  if(['tsC', 'wsC', 'aceroRigC'].includes(k)) return c.rigCol !== 'no';
+  if(['tdp', 'wdp'].includes(k)) return c.dp === 'si';
+  if(['LhC', 'hhC', 'tcw', 'tph', 'wC', 'wCc', 'wPA', 'aceroCart'].includes(k) && c.tipo === 'soldada') return c.cart && c.cart !== 'no';
+  if(['tsE', 'wsE'].includes(k)) return c.config === '8ES';
+  if(k === 'tpi') return !!c.interior;
+  if(['w', 'wAlma'].includes(k) && c.tipo === 'soldada') return c.union !== 'cjp';
+  if(['wS'].includes(k)) return c.unSop === 'sold' || c.tipo === 'empCol';
+  if(['tL', 'nL', 'bL'].includes(k)) return !c.diag || c.diag === 'L';
+  if(['Lws', 'wt'].includes(k)) return c.diag === 'tubo' || c.diag === 'redondo';
+  if(k === 'Lt' || k === 'wT') return c.soporte === 'alma';
+  if(k === 'a') return c.tipo === 'empZ';
+  if(['bv', 'bh', 'La', 't'].includes(k)) return c.tipo === 'asiento';
+  if(k === 'n' && c.tipo === 'cartela' && (c.diag === 'tubo' || c.diag === 'redondo')) return false;
+  if(['tpb', 'wI'].includes(k)) return c.tipo === 'empCol' && c.union === 'placa';
+  if(['tpf', 'tpw', 'nf', 'nw', 'bpf', 'hpw'].includes(k) && c.tipo === 'empCol') return c.union === 'pernos';
+  return true; }
+function fxCands(c, k, grupo){
+  const v = c[k], nv = +v, L = FX[grupo][k], out = [];
+  if(grupo === 'pern'){
+    if(k === 'd'){ const i = DIAM.findIndex(x => Math.abs(x[1] - nv) < 0.2); DIAM.slice(i + 1, i + 3).forEach(x => out.push({ patch:{ d:x[1] }, txt:`Use pernos de ${x[0]} (ahora ${(DIAM[i] || [nv + ' mm'])[0]})` })); }
+    else if(k === 'grado'){ if(v === 'A325') out.push({ patch:{ grado:'A490' }, txt:'Use pernos A490 (ahora A325)' }); }
+    else if(k === 'rosca'){ if(v === 'N') out.push({ patch:{ rosca:'X' }, txt:'Pida los pernos con la rosca fuera del plano de corte (tipo X)' }); }
+    else if(k === 'ncw'){ if(nv < 2) out.push({ patch:{ ncw:2 }, txt:'Ponga 2 columnas de pernos en el alma (ahora 1)' }); }
+    else [1, 2, 3].forEach(a => out.push({ patch:{ [k]:nv + a }, txt:`Ponga ${nv + a} ${L} (ahora ${nv})` }));
+  } else if(grupo === 'esp'){ ESP_PL.filter(t => t > nv + 1e-6).slice(0, 5).forEach(t => out.push({ patch:{ [k]:t }, txt:`Suba el espesor de ${L} de ${v} a ${t} mm`.replace(' de el ', ' del ') })); }
+  else if(grupo === 'sol'){ const b = k === 'wAlma' && v === '' ? +c.w : nv; FX_W.filter(w => w > b).slice(0, 3).forEach(w => out.push({ patch:{ [k]:w }, txt:`Suba ${L} de ${b} a ${w} mm` })); }
+  else if(grupo === 'lar'){ [25, 50, 100].forEach(a => out.push({ patch:{ [k]:nv + a }, txt:`Aumente ${L} de ${v} a ${nv + a} mm` })); }
+  else if(grupo === 'ace'){ const ac = c[k] || ''; if(!/572|A500|50/.test(ac) && ACEROS['A572 Gr 50']) out.push({ patch:{ [k]:'A572 Gr 50' }, txt:`Haga ${L} en acero A572 Gr 50 (ahora ${ac || 'el mismo del perfil'})` }); }
+  return out; }
+function fxOpciones(c){
+  const o = [];
+  if(['testa', 'ras', 'soldada'].includes(c.tipo) && c.rigCol !== 'si' && (c.columna || c.soporte === 'alma')) o.push({ patch:{ rigCol:'si' }, txt:'Ponga placas de continuidad en la columna' });
+  if(['testa', 'ras', 'soldada'].includes(c.tipo) && c.dp !== 'si' && c.columna) o.push({ patch:{ dp:'si' }, txt:'Ponga una placa de refuerzo en el alma de la columna' });
+  if(c.tipo === 'soldada' && c.union !== 'cjp') o.push({ patch:{ union:'cjp' }, txt:'Haga la soldadura de penetración completa' });
+  if((c.tipo === 'testa' || c.tipo === 'ras') && c.soldAla !== 'cjp') o.push({ patch:{ soldAla:'cjp' }, txt:'Suelde las alas a la placa con penetración completa' });
+  if(c.tipo === 'empZ' && c.union !== 'cjp') o.push({ patch:{ union:'cjp' }, txt:'Haga las soldaduras de penetración completa' });
+  if(c.tipo === 'empalme' && !c.interior) o.push({ patch:{ interior:true }, txt:'Agregue cubrejuntas interiores en las alas' });
+  if(c.tipo === 'asiento' && !c.rig) o.push({ patch:{ rig:true }, txt:'Agregue una platina de rigidez (pie de amigo) bajo el asiento' });
+  if(c.tipo === 'testa' && c.config !== '8ES') o.push({ patch:{ config:'8ES' }, txt:'Pase a la chapa de 8 pernos con rigidizador (8ES)' });
+  if(c.tipo === 'cartela' && (c.diag || 'L') === 'L' && +c.nL < 2) o.push({ patch:{ nL:2 }, txt:'Use dos angulares en vez de uno' });
+  return o; }
+const FX_ORDEN = [[/perno|aplastamiento|desgarro|deslizamiento|palanca|tensión de los/i, ['pern', 'esp', 'ace', 'lar', 'op']],
+  [/soldadura|filete|cordón|metal base|penetración|garganta/i, ['sol', 'esp', 'lar', 'op']],
+  [/columna|panel|alma de la columna|ala de la columna|J10|continuidad|refuerzo/i, ['op', 'esp', 'sol', 'ace']],
+  [/bloque|fluencia|rotura|flexión|pandeo|whitmore|cortante|tensión|compresión|platina|placa|cubrejunta|angular|cartela/i, ['esp', 'lar', 'ace', 'pern', 'op', 'sol']]];
+function arreglosGen(c, out){
+  const clave = x => x.grupo + '|' + String(x.nombre).replace(/ con placa de refuerzo/, '').replace(/\(.*?\)/g, '').replace(/[\d.,]+/g, '').trim();
+  const nReq = r => (r.req || []).filter(q => !q[1]).length, req0 = nReq(out);
+  const porG = {}; for(const g of Object.keys(FX)) porG[g] = Object.keys(FX[g]).filter(k => k in c && fxRelevante(c, k)).map(k => fxCands(c, k, g)).filter(a => a.length);
+  porG.op = fxOpciones(c).map(x => [x]);
+  // por pasos: primero el cambio más pequeño de cada campo, luego el siguiente
+  const lista = gs => { const res = []; for(const g of gs){ const fs = porG[g] || []; const m = Math.max(0, ...fs.map(a => a.length)); for(let i = 0; i < m; i++) fs.forEach(a => a[i] && res.push(a[i])); } return res; };
+  const cache = new Map(), prueba = patch => { const k = JSON.stringify(patch); if(!cache.has(k)){ let r; try{ r = Conex.calc({ ...c, ...patch, _sinSug:true }); }catch(e){ r = { error:e.message }; } cache.set(k, r); } return cache.get(k); };
+  let n = 0;
+  for(const x of out.ch.filter(x => x.ratio > 1)){
+    if(++n > 12) break;
+    const kx = clave(x), ord = (FX_ORDEN.find(([re]) => re.test(x.nombre)) || [, ['esp', 'pern', 'sol', 'lar', 'ace', 'op']])[1];
+    const gs = [...ord, ...['pern', 'esp', 'sol', 'lar', 'ace', 'op'].filter(g => !ord.includes(g))];
+    let fx = null; const L = lista(gs);
+    // 1.ª vuelta: sin dañar los requisitos de detallado; 2.ª: se acepta, avisando que hay que revisarlos
+    for(const flojo of [false, true]){
+      for(const cand of L){
+        const r = prueba(cand.patch); if(r.error || (!flojo && nReq(r) > req0)) continue;
+        const ys = r.ch.filter(z => clave(z) === kx), y = ys.length ? ys.reduce((a, b) => a.ratio >= b.ratio ? a : b) : null;
+        if(!y || y.ratio <= 1){ fx = { txt:cand.txt + (nReq(r) > req0 ? ' (luego revise los requisitos de detallado)' : ''), patch:cand.patch, ratio:y ? y.ratio : null, todo:!!r.ok }; break; }
+      }
+      if(fx) break;
+    }
+    x.fix = fx || { txt:'Ningún cambio de una sola medida lo arregla: combine cambios o use un perfil o una conexión más grande', patch:null };
+  } }
 const CALC = { esquina:calcCartela, cruce:calcCartela, aleta:calcAleta, grupo:calcGrupoS, testa:calcTesta, ras:calcTesta, angular:calcAngular, testaV:calcTestaV, asiento:calcAsiento, empalme:calcEmpalme, cartela:calcCartela, base:calcBase, soldada:calcSoldada, empZ:calcEmpZ, empCol:calcEmpCol };
 const DEF = { esquina:defaultsEsquina, cruce:defaultsCruce, aleta:defaultsAleta, grupo:defaultsGrupo, testa:defaultsTesta, ras:defaultsRas, angular:defaultsAngular, testaV:defaultsTestaV, asiento:defaultsAsiento, empalme:defaultsEmpalme, cartela:defaultsCartela, base:defaultsBase, soldada:defaultsSoldada, empZ:defaultsEmpZ, empCol:defaultsEmpCol };
 const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin, agujero, icr, elastico, pernoCorte, aplast, perfil,
@@ -2676,6 +2760,7 @@ const Conex = { ACEROS, PERNOS, DIAM, ELECTRODOS, BORDE_MIN, BORDE_CIZ, bordeMin
     if(r.error) return r;
     if(EXTRA[c.tipo]){ EXTRA[c.tipo](c, r, addF(r.ch), r.av); r.max = r.ch.reduce((m, x) => Math.max(m, x.ratio), 0); r.ok = r.max <= 1 && !r.req.some(q => !q[1]); }
     if(!c._sinSug) try{ r.rigid = rigidez(c, r); }catch(e){ r.rigid = null; }
+    if(!c._sinSug && !r.ok && c.tipo !== 'base' && r.ch) try{ arreglosGen(c, r); }catch(e){ }
     return r; },
   defaults: t => (DEF[t] || defaultsAleta)(),
   CARAS, nudo:calcNudo, defaultsNudo, ajustarNudo, vigaDe };
