@@ -126,8 +126,9 @@ function sisProyecto(p){
   if(!p.datos.sismo){ const v = p.datos.con.map(c => c.sismo); p.datos.sismo = v.includes('DES') ? 'DES' : v.includes('DMO') ? 'DMO' : 'no'; }   // proyectos viejos: el mayor que tenían
   return p.datos.sismo;
 }
+const ARR_T = ['cartela', 'esquina', 'cruce'];   // diagonales: con DMI llevan la demanda con Ω0 (27-nov)
 function aplicarSis(p){ const s = sisProyecto(p), v = ['DMO', 'DES'].includes(s) ? s : 'no';
-  p.datos.con.forEach(c => { if(TIENE_SIS.includes(c.tipo)) c.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : v; });   // empalmes de vigas de gravedad: sin sismo (Amo 21-nov)
+  p.datos.con.forEach(c => { if(TIENE_SIS.includes(c.tipo)) c.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : s === 'DMI' && ARR_T.includes(c.tipo) ? 'DMI' : v; });   // empalmes de vigas de gravedad: sin sismo (Amo 21-nov)
   (p.datos.nudos || []).forEach(n => { n.sismo = s; }); }
 const noPrecal = (p, t) => (NO_PRECAL[sisProyecto(p)] || []).includes(t);
 function renderProyecto(){
@@ -167,7 +168,7 @@ function renderProyecto(){
     p.datos.nudos.push(n); S.sel = 'N:' + n.id; recalcNudo(n); guardar(); history.replaceState(null, '', `#/p/${p.id}${hashSel()}`); renderProyecto(); });
   $$('[data-nueva]').forEach(b => b.onclick = () => { const t = b.dataset.nueva, c = Conex.defaults(t);
     c.id = Math.random().toString(36).slice(2, 10); c.nom = `${PREF[t]}-${p.datos.con.filter(x => x.tipo === t).length + 1}`;
-    if(TIENE_SIS.includes(t)) c.sismo = ['DMO', 'DES'].includes(sisP) ? sisP : 'no';
+    if(TIENE_SIS.includes(t)) c.sismo = ['DMO', 'DES'].includes(sisP) ? sisP : sisP === 'DMI' && ARR_T.includes(t) ? 'DMI' : 'no';
     p.datos.con.push(c); S.sel = c.id; recalcular(c); guardar(); history.replaceState(null, '', `#/p/${p.id}/c/${c.id}`); renderProyecto(); });
   $('#imp').onclick = imprimir;
   armarListaMovil();

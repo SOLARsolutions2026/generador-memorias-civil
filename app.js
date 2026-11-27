@@ -556,7 +556,9 @@ const ANEXOS_LISTO = {
   K: { n:'paso de combinaciones', huella: an => huella(an.K, an.B?.aplica), faltan(an){
     if(!an.K) return ['datos del paso'];
     const R = Combos.calcular(an.K, an.B?.aplica !== false), f = [];
-    if(an.B?.aplica !== false && !(R.R.R > 0)) f.push('R0 del sistema estructural');
+    if(an.B?.aplica !== false && !(R.R.Rx > 0)) f.push(an.K.dosSis ? 'R0 del sistema en X' : 'R0 del sistema estructural');
+    if(an.B?.aplica !== false && an.K.dosSis && !(R.R.Ry > 0)) f.push('R0 del sistema en Y');
+    if(an.B?.aplica !== false && R.R.dos && an.K.sisR === 'otro' && !(R.R.Om0x > 0)) f.push('Ω0 del sistema en X');
     if(R.faltaPat.length) f.push('nombre del patrón en el modelo para ' + R.faltaPat.join(', '));
     return f; } },
   D: { n:'Anexo D', huella: an => { const sin = l => (l || []).map(e => ({ ...e, res:undefined })); return huella(sin(an.D?.met), sin(an.D?.zap), sin(an.D?.ped), an.D?.cServ, an.D?.cRes, an.C?.archivo?.fecha, an.C?.modelo?.fuerzas?.res); }, faltan(an){

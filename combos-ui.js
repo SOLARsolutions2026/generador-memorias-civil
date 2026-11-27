@@ -49,15 +49,23 @@ function paneCombos(){
   h += `<div class="card"><div class="ct">Irregularidades y coeficiente de capacidad de disipación R (NSR-10 A.3.3)</div>`;
   if(!sis) h += `<div class="note green"><b>Sin análisis sísmico.</b> No se evalúan irregularidades ni se generan combinaciones con sismo.</div></div>`;
   else {
-    h += `<div class="fg g4">${fSel(K,'sisR','Sistema estructural (Tabla A.3-3)',Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}` : '')]),{cls:'span4',re:1})}
-        ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) : ''}</div>
+    const opS = Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}, Ω0 = ${s.om}` : '')]);
+    const infoS = (s, R0, om) => `<div class="hint" style="margin-top:2px">${s.tab ? `Tabla ${s.tab}` : 'Sistema escrito a mano'} · R0 = ${fx(R0,1)} · Ω0 = ${fx(om,1)}${s.niv ? ` · disipación ${s.niv.toUpperCase()}` : ''}</div>`;
+    h += `<label class="chk" style="margin-bottom:8px"><input type="checkbox" data-a="dosSis" data-re="1" ${K.dosSis ? 'checked' : ''} ${ro_}/> Un sistema distinto en cada sentido (NSR-10 A.3.2)</label>
+      <div class="fg g4">${fSel(K,'sisR',K.dosSis ? 'Sistema en el sentido X' : 'Sistema estructural (Tablas A.3-3 y A.3-2)',opS,{cls:'span4',re:1})}
+        ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) + fIn(K,'Om0','Ω0',{ph:'escribe Ω0'}) : ''}</div>${infoS(R.sis, R.R0, R.Om0x)}
+      ${K.dosSis ? `<div class="fg g4" style="margin-top:8px">${fSel(K,'sisY','Sistema en el sentido Y',opS,{cls:'span4',re:1})}
+        ${K.sisY === 'otro' ? fIn(K,'R0y','R0 (Y)',{ph:'escribe R0'}) + fIn(K,'Om0y','Ω0 (Y)',{ph:'escribe Ω0'}) : ''}</div>${infoS(R.sisY, R.R0y, R.Om0y)}
+        <div class="hint" style="margin-top:6px">Cada sentido se diseña con el R de su sistema. Los elementos comunes a los dos sistemas (columnas) cumplen el requisito de disipación más exigente.</div>` : ''}
       <div class="hint" style="margin:8px 0 2px">Toca una fila (▸) para abrir su figura y sus datos. Con los datos completos la revisión fija el Sí/No; 4P y 5P se deciden mirando la figura.</div>
       <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${Combos.IRR_P.map(i => filaIrr(i, 'irrP')).join('')}
       <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${Combos.IRR_A.map(i => filaIrr(i, 'irrA')).join('')}
       <h4 class="sub">Redundancia (A.3.3.8) → φr</h4>${fila('red', '¿Ausencia de redundancia?', 'φ ' + fx(R.phiR,2), seg('data-red', K.redundante === false), redDet,
         K.redCalc || K.redImg ? ' <span class="hint">· con cálculo</span>' : '')}
-      <div class="wtot"><span>R = φa · φp · φr · R0 = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0,1)}</span><span>R = ${fx(R.R,2)}</span></div>
-      <div class="hint" style="margin-top:6px">Estructura <b>${R.irregular ? 'irregular' : 'regular'}</b>: en la comparación modal del Anexo B se exige el ${R.irregular ? '90' : '80'} % de Vs (se actualiza solo). Las fuerzas sísmicas de diseño se dividen por R (E = Fs/R).</div></div>`;
+      ${R.dos ? `<div class="wtot"><span>Rx = φa · φp · φr · R0x = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0,1)}</span><span>Rx = ${fx(R.Rx,2)}</span></div>
+      <div class="wtot" style="margin-top:6px"><span>Ry = φa · φp · φr · R0y = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0y,1)}</span><span>Ry = ${fx(R.Ry,2)}</span></div>`
+      : `<div class="wtot"><span>R = φa · φp · φr · R0 = ${fx(R.phiA,2)} × ${fx(R.phiP,2)} × ${fx(R.phiR,2)} × ${fx(R.R0,1)}</span><span>R = ${fx(R.R,2)}</span></div>`}
+      <div class="hint" style="margin-top:6px">Estructura <b>${R.irregular ? 'irregular' : 'regular'}</b>: en la comparación modal del Anexo B se exige el ${R.irregular ? '90' : '80'} % de Vs (se actualiza solo). Las fuerzas sísmicas de diseño se dividen por ${R.dos ? 'el R de su sentido (Ex/Rx, Ey/Ry)' : 'R (E = Fs/R)'}.</div></div>`;
   }
   // 2. Resumen de cargas y patrones
   const A = datosA(), RA = AnexoA.calcular(A), RB = sis && S.m.anexos?.B ? calcB() : null;
@@ -87,7 +95,11 @@ function paneCombos(){
       <label class="chk"><input type="checkbox" data-a="impacto" data-re="1" ${K.impacto ? 'checked' : ''} ${ro_}/> Impacto de vehículos (1.2D + 1.0IMP + 1.0L)</label></div>
     ${sis ? `<div class="fg g4" style="margin-top:10px;align-items:end"><div class="f span2"><label>Método para el sismo</label><div class="seg" role="group"><button type="button" data-met="env" class="${K.metodoE !== 'lineal' ? 'on' : ''}" ${ro_}>Envolventes (100 % X / 100 % Y)</button><button type="button" data-met="lineal" class="${K.metodoE === 'lineal' ? 'on' : ''}" ${ro_}>Combinación por combinación</button></div></div>
       ${K.metodoE !== 'lineal' ? fIn(K,'nomEX','Nombre envolvente X',{num:false,ph:'100% X 30% Y'}) + fIn(K,'nomEY','Nombre envolvente Y',{num:false,ph:'30% X 100% Y'}) : ''}</div>
-      <div class="hint">${K.metodoE !== 'lineal' ? 'Componentes sin reducir (SX, SY) → envolvente por dirección (sirve para derivas y torsión) → 1.2D y 0.9D + envolvente × 1/R.' : 'Cada combinación con ±Ex ±Tx ±0.3Ey ±0.3Ty dividida por R.'}</div>` : ''}
+      <div class="hint">${K.metodoE !== 'lineal' ? `Componentes sin reducir (SX, SY) → envolvente por dirección (sirve para derivas y torsión) → 1.2D y 0.9D + envolvente × 1/${R.dos ? 'R de su sentido' : 'R'}.` : `Cada combinación con ±Ex ±Tx ±0.3Ey ±0.3Ty dividida por ${R.dos ? 'el R de su sentido (Ex, Tx / Rx; Ey, Ty / Ry)' : 'R'}.`}</div>` : ''}
+    ${sis && R.dif && K.metodoE !== 'lineal' ? (() => { const P = R.Rx > R.Ry ? 'X' : 'Y', Q = P === 'X' ? 'Y' : 'X', Rp = Math.max(R.Rx, R.Ry), Rq = Math.min(R.Rx, R.Ry);
+      return `<label class="chk" style="margin-top:10px"><input type="checkbox" data-a="ortoR" data-re="1" ${K.ortoR ? 'checked' : ''} ${ro_}/> Ajustar el 30 % ortogonal de las componentes a cada R (0.3 × ${fx(R.Rx,2)}/${fx(R.Ry,2)} = ${fx(0.3 * R.Rx / R.Ry,3)} en las de X · 0.3 × ${fx(R.Ry,2)}/${fx(R.Rx,2)} = ${fx(0.3 * R.Ry / R.Rx,3)} en las de Y)</label>
+      ${K.ortoR ? `<div class="hint">Así, al multiplicar cada envolvente por 1/R de su sentido, cada parte queda dividida por su propio R.</div>`
+        : `<div class="note amber" style="margin-top:8px">Las componentes van con 1.0 y 0.3, y cada envolvente se multiplica por 1/R de su sentido (U7X: 1/${fx(R.Rx,2)} · U7Y: 1/${fx(R.Ry,2)}). En U7${P}/U8${P} el 30 % de ${Q} queda dividido por R${P.toLowerCase()} = ${fx(Rp,2)} en vez de R${Q.toLowerCase()} = ${fx(Rq,2)}: esa parte queda ${fx((1 - Rq / Rp) * 100,0)} % por debajo de lo que pide la norma. Marque la casilla de arriba para corregirlo.</div>`}`; })() : ''}
     ${RK.faltaPat.length ? `<div class="note amber" style="margin-top:10px">Falta el nombre del patrón en el modelo para: <b>${RK.faltaPat.join(', ')}</b>.</div>` : ''}
     ${['Resistencia','Sismo: componentes','Sismo: envolventes','Servicio','Derivas','Impacto','Otras'].map(g => { const l = RK.lista.filter(c => c.grupo === g); if(!l.length) return '';
       return `<h4 class="sub">${g}${g === 'Resistencia' ? ' (B.2.4.2)' : g === 'Servicio' ? ' (B.2.3.1)' : ''}</h4>${tabla(['','Nombre','Combinación','Ref.','Factores en el modelo'], l.map(c => [
@@ -133,7 +145,7 @@ function paneCombos(){
     if(inp.dataset.re) paneCombos();
   }));
   // al salir de un campo de texto se redibuja (para ver los factores nuevos sin perder el foco mientras se escribe)
-  $$('#pane input[data-a^="pat."], #pane input[data-a^="otras."], #pane input[data-a="R0"], #pane input[data-a^="nomE"]').forEach(i => i.addEventListener('change', () => paneCombos()));
+  $$('#pane input[data-a^="pat."], #pane input[data-a^="otras."], #pane input[data-a="R0"], #pane input[data-a="R0y"], #pane input[data-a="Om0"], #pane input[data-a="Om0y"], #pane input[data-a^="nomE"]').forEach(i => i.addEventListener('change', () => paneCombos()));
   if($('#patModelo')) $('#patModelo').onclick = () => { const p = Combos.patronesDeModelo(M, AnexoC.categoria); for(const k in p) if(p[k]) K.pat[k] = p[k]; guardarMemoria(); paneCombos(); toast('Nombres tomados del modelo.'); };
   if($('#addK')) $('#addK').onclick = () => { K.otras.push({ nom:'', txt:'' }); guardarMemoria(); paneCombos(); };
   $$('[data-delk]').forEach(b => b.onclick = () => { K.otras.splice(+b.dataset.delk, 1); guardarMemoria(); paneCombos(); });

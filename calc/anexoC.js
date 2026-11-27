@@ -204,13 +204,17 @@ function revisar(M, RA, RB, CB, sisR){
     out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El archivo trae el diseño en acero del software: ${Dz.n} elementos revisados, relación máxima ${Dz.max.r} (elemento ${Dz.max.F}).${Dz.conL ? '' : ' No trae los factores de longitud y Cb (exporta también «Steel Design 2 – PMM Details»).'}` });
     if(malos.length) out.push({ grupo:'Diseño en acero del software', estado:'no', txt:`${malos.length} elemento${malos.length > 1 ? 's' : ''} con relación mayor que 1.0 en el software: ${malos.slice(0, 12).map(([id, o]) => `${id} (${o.ratio})`).join(', ')}${malos.length > 12 ? '…' : ''}.` });
     if(Dz.norma && !/360-10/.test(Dz.norma)) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`El diseño del software está con la norma «${Dz.norma}». La memoria usa NSR-10 Título F, basado en AISC 360-10: conviene escoger esa norma en las preferencias de diseño.` });
-    const esp = ({ des:'SMF', dmo:'IMF', dmi:'OMF' })[sisR];
+    // sisR = clave del sistema o lista [X, Y] cuando hay un sistema por sentido (27-nov)
+    const SIG = { des:'SMF', dmo:'IMF', dmi:'OMF', c3a:'SCBF', c3b:'OCBF', c3c:'SCBF', c3d:'OCBF' };
+    const NIV = { des:'DES', dmo:'DMO', dmi:'DMI', c3a:'DES', c3b:'DMI', c3c:'DES', c3d:'DMI' };
+    const sis = [].concat(sisR || []).filter(k => SIG[k]), espL = [...new Set(sis.map(k => SIG[k]))], esp = espL.join(' / ');
     // El software escribe el nombre completo («Special Moment Frame») o la sigla (SMF): se pasa todo a sigla
-    const sigla = p => { const t = String(p).trim(), m = /^(Special|Intermediate|Ordinary)\s+Moment\s+Frame$/i.exec(t); return m ? m[1][0].toUpperCase() + 'MF' : t.toUpperCase(); };
-    const momento = [...new Set(Dz.porticos.map(sigla).filter(p => /^(S|I|O)MF$/.test(p)))];
-    const otros = momento.filter(p => p !== esp);
-    if(esp && otros.length) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`Tipo de pórtico en el software: ${otros.join(', ')}. Con el sistema escogido en Combinaciones (${({ des:'DES', dmo:'DMO', dmi:'DMI' })[sisR]}) debería ser ${esp}.` });
-    else if(esp && momento.length) out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El tipo de pórtico del software (${esp}) coincide con el sistema escogido en Combinaciones.` });
+    const sigla = p => { const t = String(p).trim(), m = /^(Special|Intermediate|Ordinary)\s+Moment\s+Frame$/i.exec(t), c = /^(Special|Ordinary)\s+Concentrically\s+Braced\s+Frame$/i.exec(t);
+      return m ? m[1][0].toUpperCase() + 'MF' : c ? c[1][0].toUpperCase() + 'CBF' : t.toUpperCase(); };
+    const momento = [...new Set(Dz.porticos.map(sigla).filter(p => /^((S|I|O)MF|(S|O)CBF)$/.test(p)))];
+    const otros = momento.filter(p => !espL.includes(p));
+    if(esp && otros.length) out.push({ grupo:'Diseño en acero del software', estado:'info', txt:`Tipo de pórtico en el software: ${otros.join(', ')}. Con ${sis.length > 1 ? 'los sistemas escogidos' : 'el sistema escogido'} en Combinaciones (${[...new Set(sis.map(k => NIV[k]))].join(' / ')}) debería ser ${esp}.` });
+    else if(esp && momento.length) out.push({ grupo:'Diseño en acero del software', estado:'ok', txt:`El tipo de pórtico del software (${momento.join(', ')}) coincide con ${sis.length > 1 ? 'los sistemas escogidos' : 'el sistema escogido'} en Combinaciones.` });
   }
 
   // Patrones: tipo coherente con el nombre y peso propio una sola vez

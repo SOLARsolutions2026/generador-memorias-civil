@@ -91,10 +91,21 @@ const CX_LOCK = {};
 window.ConSisProy = 'Sale del paso «Combinaciones» (sistema estructural de la memoria)';
 const CX_SIS = ['testa', 'ras', 'soldada', 'empalme', 'empZ', 'cartela', 'esquina', 'cruce', 'base', 'empCol'];
 const CX_ARR = ['cartela', 'esquina', 'cruce'];   // la primera pieza es una diagonal
-function sisMemoria(){ const an = S.m?.anexos || {}, k = String(an.K?.sisR || '').toLowerCase(); return an.B && an.B.aplica !== false ? (k === 'des' ? 'DES' : k === 'dmo' ? 'DMO' : 'no') : 'no'; }
+// Un sistema por sentido (27-nov): las diagonales toman el nivel del sistema arriostrado (DMI → demanda con Ω0) y las demás conexiones el del pórtico
+const NIV_SIS = { des:'DES', dmo:'DMO', dmi:'DMI', c3a:'DES', c3b:'DMI', c3c:'DES', c3d:'DMI' }, ARR_SIS = ['c3a', 'c3b', 'c3c', 'c3d'];
+function sisMemoria(tipo){
+  const an = S.m?.anexos || {}, K = an.K || {}; if(!an.B || an.B.aplica === false) return { niv:'no', om:null };
+  const R = typeof Combos !== 'undefined' ? Combos.coefR({ ...Combos.defaults(), ...K }) : null;
+  const L = K.dosSis ? [{ k:K.sisR, om:R?.Om0x }, { k:K.sisY, om:R?.Om0y }] : [{ k:K.sisR, om:R?.Om0x }];
+  const arr = CX_ARR.includes(tipo);
+  let c = L.filter(x => ARR_SIS.includes(x.k) === arr); if(!c.length) c = L;
+  const rk = { DES:3, DMO:2, DMI:1 }, sel = c.reduce((a, x) => (rk[NIV_SIS[x.k]] || 0) > (rk[NIV_SIS[a.k]] || 0) ? x : a, c[0]);
+  const niv = NIV_SIS[String(sel.k || '').toLowerCase()] || '';
+  return { niv: niv === 'DES' || niv === 'DMO' ? niv : niv === 'DMI' && arr ? 'DMI' : 'no', om:sel.om };
+}
 function entradaCx(c, D, T){
   const z = { ...c }, lock = new Set(), avisos = [];
-  if(CX_SIS.includes(c.tipo)) z.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : sisMemoria();
+  if(CX_SIS.includes(c.tipo)){ const sm = sisMemoria(c.tipo); z.sismo = ['empalme', 'empZ'].includes(c.tipo) && c.vigaGrav ? 'no' : sm.niv; if(z.sismo === 'DMI' && sm.om){ z.om0 = sm.om; lock.add('om0'); } }
   const de = metDe(D, c.eDe), a = metDe(D, c.eA), sd = de ? secDe(de) : null, sa = a ? secDe(a) : null;
   const ponI = (k, kA, el, s) => { if(el && s?.tipo === 'I'){ z[k] = el.perfil; z[kA] = el.acero || z[kA]; lock.add(k); lock.add(kA); return true; } return false; };
   if(CX_VC.includes(c.tipo)){
@@ -447,7 +458,7 @@ const ejeNudo = (T, j) => T?._G && T._J?.[j] ? AnexoC.ubicar(T._G, T._J[j]) : ''
 // modelo en ese extremo); M*pb = Σ(1.1·Ry·Fyb·Zb + Muv), Muv = Vpr·(sh + dc/2), Vpr = 2·Mpr/Lh, rótula a sh = db/2 de la cara (sin cortante de gravedad).
 // Eje de la columna según el ángulo de sus ejes locales (0° = peralte paralelo a X). Vigas con M3 liberado en ese extremo no cuentan.
 // Excepción E3.4a(a)(i): último piso (sin columna arriba) con Puc < 0.3·Fy·Ag.
-const esDES = () => String(S.m?.anexos?.K?.sisR || '').toLowerCase() === 'des' && S.m?.anexos?.B?.aplica !== false;
+const esDES = () => { const K = S.m?.anexos?.K || {}; return (String(K.sisR || '').toLowerCase() === 'des' || (K.dosSis && String(K.sisY || '').toLowerCase() === 'des')) && S.m?.anexos?.B?.aplica !== false; };
 function scwb(D, ctx){
   const T = ctx?.T, G = ctx?.G; if(!T || !T._J) return null;
   const J = T._J, ang = T._ang || {}, PL = window.PERFILES_LAM || [];
@@ -476,7 +487,9 @@ function scwb(D, ctx){
     const lst = porNudo[j], pj = J[j]; if(!pj) continue;
     const cols = lst.filter(x => /\|Columna$/.test(x.f.g)), vigas = lst.filter(x => /\|Viga$/.test(x.f.g) && relExt(T, { F:x.F, e:x.e }) !== 'lib');
     if(!cols.length || !vigas.length) continue;
+    const Kd = S.m?.anexos?.K || {}, desEn = d => !Kd.dosSis || String((d === 'X' ? Kd.sisR : Kd.sisY) || '').toLowerCase() === 'des';   // con un sistema por sentido, solo el sentido DES
     for(const dir of ['X', 'Y']){
+      if(!desEn(dir)) continue;
       const vs = vigas.filter(v => { const q = J[v.e === 'i' ? v.f.j : v.f.i]; if(!q) return false; const dx = Math.abs(q[0] - pj[0]), dy = Math.abs(q[1] - pj[1]); return dir === 'X' ? dx >= dy : dy > dx; });
       if(!vs.length) continue;
       let Mpc = 0, Mpb = 0, arriba = false, PucMax = 0, Pc = Infinity, dc = 0, sinO = false, sinVg = false; const tC = [], tB = [], falta = [];

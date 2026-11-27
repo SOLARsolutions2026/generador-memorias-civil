@@ -23,17 +23,21 @@ const IRR_A = [ // Tabla A.3-7 — irregularidades en altura
   { k:'5aA', n:'Piso débil (discontinuidad en la resistencia)', phi:0.9 },
   { k:'5bA', n:'Piso débil (discontinuidad extrema en la resistencia)', phi:0.8 },
 ];
-const R0S = [ // Tabla A.3-3 — pórticos de acero resistentes a momento
-  { k:'des', n:'Pórtico de acero resistente a momento con disipación especial (DES)', R0:7.0 },
-  { k:'dmo', n:'Pórtico de acero resistente a momento con disipación moderada (DMO)', R0:5.0 },
-  { k:'dmi', n:'Pórtico de acero resistente a momento con disipación mínima (DMI)', R0:3.0 },
-  { k:'otro', n:'Otro sistema (escribir R0)', R0:null },
+const R0S = [ // Tabla A.3-3 — pórticos de acero resistentes a momento (Ω0 = 3.0) · Tabla A.3-2 — sistema combinado (filas 3.a–3.d)
+  { k:'des', n:'Pórtico de acero resistente a momento con disipación especial (DES)', R0:7.0, om:3.0, niv:'des', tab:'A.3-3' },
+  { k:'dmo', n:'Pórtico de acero resistente a momento con disipación moderada (DMO)', R0:5.0, om:3.0, niv:'dmo', tab:'A.3-3' },
+  { k:'dmi', n:'Pórtico de acero resistente a momento con disipación mínima (DMI)', R0:3.0, om:3.0, niv:'dmi', tab:'A.3-3' },
+  { k:'c3a', n:'3.a Pórticos de acero con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.5, niv:'des', tab:'A.3-2', arr:true },
+  { k:'c3b', n:'3.b Pórticos de acero con diagonales concéntricas DMI, pórticos no resistentes a momentos (sistema combinado)', R0:4.0, om:2.5, niv:'dmi', tab:'A.3-2', arr:true },
+  { k:'c3c', n:'3.c Pórticos mixtos con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.0, niv:'des', tab:'A.3-2', arr:true },
+  { k:'c3d', n:'3.d Pórticos mixtos con diagonales concéntricas DMI (sistema combinado)', R0:3.0, om:2.0, niv:'dmi', tab:'A.3-2', arr:true },
+  { k:'otro', n:'Otro sistema (escribir R0 y Ω0)', R0:null, om:null, niv:'', tab:'' },
 ];
 // Símbolos de carga y su nombre
 const SIMB = { D:'Muerta', Lr:'Viva de cubierta', W:'Viento', Ex:'Sismo X', Ey:'Sismo Y', Tx:'Torsión X', Ty:'Torsión Y', IMPx:'Impacto X', IMPy:'Impacto Y' };
 
 function defaults(){
-  return { irrP:{}, irrA:{}, notasIrr:{}, redundante:true, sisR:'dmo', R0:'',
+  return { irrP:{}, irrA:{}, notasIrr:{}, redundante:true, sisR:'dmo', R0:'', Om0:'', dosSis:false, sisY:'dmo', R0y:'', Om0y:'', ortoR:false,
     pat:{ D:'DEAD, DEAD SI', Lr:'LIVE', W:'WIND', Ex:'Fx', Ey:'Fy', Tx:'Tx', Ty:'Ty', IMPx:'IMPx', IMPy:'IMPy' }, patAuto:true,
     tor:{ nudos:'', nudosY:'', casoX:'', casoY:'', res:null }, redCalc:'', redImg:'', redNota:'',
     metodoE:'env', nomEX:'100% X 30% Y', nomEY:'30% X 100% Y',
@@ -66,9 +70,13 @@ function coefR(K){
   const p = pres(IRR_P, K.irrP || {}), a = pres(IRR_A, K.irrA || {});
   const phiP = p.length ? Math.min(...p.map(i => i.phi)) : 1, phiA = a.length ? Math.min(...a.map(i => i.phi)) : 1;
   const phiR = K.redundante === false ? 0.75 : 1;
-  const sis = R0S.find(s => s.k === K.sisR) || R0S[1];
-  const R0 = sis.R0 ?? num(K.R0);
-  return { p, a, phiP, phiA, phiR, R0, R: r3(phiA * phiP * phiR * R0), irregular: !!(p.length || a.length), sis };
+  // Un sistema por sentido (27-nov, Amo): X = sisR, Y = sisY si dosSis; sin dosSis los dos sentidos usan sisR
+  const sisDe = k => R0S.find(s => s.k === k) || R0S[1];
+  const dos = !!K.dosSis, sis = sisDe(K.sisR), sisY = dos ? sisDe(K.sisY || K.sisR) : sis;
+  const R0 = sis.R0 ?? num(K.R0), R0y = dos ? (sisY.R0 ?? num(K.R0y)) : R0;
+  const Om0x = sis.om ?? num(K.Om0), Om0y = dos ? (sisY.om ?? num(K.Om0y)) : Om0x, f = phiA * phiP * phiR;
+  const Rx = r3(f * R0), Ry = r3(f * R0y);
+  return { p, a, phiP, phiA, phiR, R0, R0y, R:Rx, Rx, Ry, Om0x, Om0y, dos, dif: Rx !== Ry, irregular: !!(p.length || a.length), sis, sisY };
 }
 
 const T = (k, f, lbl) => ({ k, f, lbl });   // k = símbolo, o '@Nombre' para usar otra combinación de SAP
@@ -86,12 +94,13 @@ function generar(K, conSismo){
   // con los mismos nombres de su modelo, p. ej. «FX+TX+0.3FY+0.3TY» y «0.3FX+0.3TX+FY+TY»).
   // La torsión accidental se toma con los dos signos (excentricidad ±5 %, A.3.6.7); el 30 % ortogonal según A.3.6.3.
   const casosE = [], sg = (v, first) => v < 0 ? '-' : first ? '' : '+';
-  if(conSismo && R.R > 0){
-    const e = 1 / R.R;
+  // Con un sistema por sentido cada parte se divide por el R de su sentido (Ex, Tx por Rx; Ey, Ty por Ry).
+  const Rd = { x:R.Rx, y:R.Ry }, dirT = k => k.slice(-1).toLowerCase();
+  if(conSismo && R.Rx > 0 && R.Ry > 0){
     for(const [P, S] of [['x','y'], ['y','x']])
       for(const sp of [1, -1]) for(const st of [1, -1]) for(const ss of (K.orto ? [1, -1] : [0])) for(const sq of (K.orto ? [1, -1] : [0])){
-        const ts = [T('E' + P, sp * e), T('T' + P, st * e)];
-        if(ss) ts.push(T('E' + S, ss * 0.3 * e), T('T' + S, sq * 0.3 * e));
+        const ts = [T('E' + P, sp / Rd[P]), T('T' + P, st / Rd[P])];
+        if(ss) ts.push(T('E' + S, ss * 0.3 / Rd[S]), T('T' + S, sq * 0.3 / Rd[S]));
         const p1 = `${sg(sp, P === 'x')}F${P.toUpperCase()}${sg(st)}T${P.toUpperCase()}`, p2 = ss ? `${sg(ss, P === 'y')}0.3F${S.toUpperCase()}${sg(sq)}0.3T${S.toUpperCase()}` : '';
         casosE.push({ P:P.toUpperCase(), sp, st, ss, sq, ts, nom:P === 'x' ? p1 + p2 : p2 + (p2 ? p1.replace(/^(?=F)/, '+') : p1) });
       }
@@ -108,11 +117,14 @@ function generar(K, conSismo){
   if(env && casosE.length){
     const cont = { X:0, Y:0 };
     casosE.forEach(c => { const n = K.orto ? c.nom : `S${c.P}${++cont[c.P]}`; c.id = n;
-      add(n, 'Sismo: componentes', 'A.3.6.3', c.ts.map(t => T(t.k, t.f * R.R)), 'sin reducir'); out[out.length - 1].dir = c.P; });
+      // Sin reducir (método de Amo: 1.0 y 0.3). Con dos sistemas y «ortoR» el 0.3 ortogonal se ajusta a 0.3·R_principal/R_ortogonal
+      // para que, al multiplicar la envolvente por 1/R del sentido, cada parte quede dividida por su propio R.
+      const aj = R.dif && K.ortoR, P = c.P.toLowerCase();
+      add(n, 'Sismo: componentes', 'A.3.6.3', c.ts.map(t => T(t.k, t.f * (aj ? Rd[P] : Rd[dirT(t.k)]))), aj ? 'sin reducir; 30 % ajustado a Rx/Ry' : 'sin reducir'); out[out.length - 1].dir = c.P; });
     for(const P of ['X','Y']) add(nomE[P], 'Sismo: envolventes', 'A.3.6.3', casosE.filter(c => c.P === P).map(c => T('@' + c.id, 1, c.id)), 'derivas y torsión', 'Envelope');
-    const e = 1 / R.R;
-    for(const P of ['X','Y']) add(`U7${P}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), T('@' + nomE[P], e, 'E' + P)], 'E = envolvente / R');
-    for(const P of ['X','Y']) add(`U8${P}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), T('@' + nomE[P], e, 'E' + P)], 'E = envolvente / R');
+    const eE = P => 1 / Rd[P.toLowerCase()], nR = P => R.dos ? `E = envolvente / R${P.toLowerCase()}` : 'E = envolvente / R';
+    for(const P of ['X','Y']) add(`U7${P}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), T('@' + nomE[P], eE(P), 'E' + P)], nR(P));
+    for(const P of ['X','Y']) add(`U8${P}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), T('@' + nomE[P], eE(P), 'E' + P)], nR(P));
   } else {
     casosE.forEach((c, i) => add(`U7-${i+1}`, 'Resistencia', 'B.2.4-5', [T('D', 1.2), ...c.ts], 'E = Fs/R'));
     casosE.forEach((c, i) => add(`U8-${i+1}`, 'Resistencia', 'B.2.4-7', [T('D', 0.9), ...c.ts], 'E = Fs/R'));
@@ -125,15 +137,15 @@ function generar(K, conSismo){
     add('S4', 'Servicio', 'B.2.3-6', [T('D', 1), T('W', 0.75), T('Lr', 0.75)]);
     add('S5', 'Servicio', 'B.2.3-7', [T('D', 0.6), T('W', 1)]);
     if(K.servicioSismo && env && casosE.length) for(const P of ['X','Y']){
-      add(`S6${P}`, 'Servicio', 'B.2.3-5', [T('D', 1), T('@' + nomE[P], 0.7 / R.R, 'E' + P)], '0.7E');
-      add(`S7${P}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), T('@' + nomE[P], 0.7 / R.R, 'E' + P)], '0.7E'); }
+      add(`S6${P}`, 'Servicio', 'B.2.3-5', [T('D', 1), T('@' + nomE[P], 0.7 / Rd[P.toLowerCase()], 'E' + P)], '0.7E');
+      add(`S7${P}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), T('@' + nomE[P], 0.7 / Rd[P.toLowerCase()], 'E' + P)], '0.7E'); }
     if(K.servicioSismo && !env) casosE.forEach((c, i) => add(`S6-${i+1}`, 'Servicio', 'B.2.3-5', [T('D', 1), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
     if(K.servicioSismo && !env) casosE.forEach((c, i) => add(`S7-${i+1}`, 'Servicio', 'B.2.3-8', [T('D', 0.6), ...c.ts.map(t => T(t.k, t.f * 0.7))], '0.7E'));
   }
   // Derivas (A.6): fuerzas sísmicas sin dividir por R
   if(K.derivas && casosE.length && !env){
     const cd = { X:0, Y:0 };
-    casosE.filter(c => c.sp === 1).forEach(c => add(`DER${c.P}-${++cd[c.P]}`, 'Derivas', 'A.6', c.ts.map(t => T(t.k, t.f * R.R)), 'Fs sin dividir por R'));
+    casosE.filter(c => c.sp === 1).forEach(c => add(`DER${c.P}-${++cd[c.P]}`, 'Derivas', 'A.6', c.ts.map(t => T(t.k, t.f * Rd[dirT(t.k)])), 'Fs sin dividir por R'));
   }
   // Impacto de vehículos (combinación aparte, criterio de Amo)
   if(K.impacto){

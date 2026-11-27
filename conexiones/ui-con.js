@@ -145,7 +145,7 @@ function campo(c, k, l, opt = {}){
   if(opt.info) l = `${l}${infoIco(opt.info === true ? k : opt.info, c)}`;
   const ro = esIng() ? '' : 'disabled';
   // En la app de conexiones el sismo se escoge una vez para todo el proyecto (Amo 21-nov)
-  if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)' })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">${c.vigaGrav ? 'Viga de gravedad (marcada abajo)' : typeof G.ConSisProy === 'string' ? G.ConSisProy : 'Se escoge arriba, en «Disipación de energía» del proyecto'}</div></div>`;
+  if(k === 'sismo' && G.ConSisProy) return `<div class="f"><label>${l}</label><div class="sis-proy">${esc(({ DMO:'DMO (pórtico intermedio)', DES:'DES (pórtico especial)', DMI:`DMI (diagonales: demanda con Ω0 = ${c.om0 || 2.5})` })[c.sismo] || 'Sin requisitos sísmicos (DMI o gravedad)')}</div><div class="hint">${c.vigaGrav ? 'Viga de gravedad (marcada abajo)' : typeof G.ConSisProy === 'string' ? G.ConSisProy : 'Se escoge arriba, en «Disipación de energía» del proyecto'}</div></div>`;
   if(opt.sel) return `<div class="f"><label>${l}</label><select data-k="${k}" ${ro}>${opt.sel.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(c[k]) === String(v) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
   return `<div class="f"><label>${l}</label><input data-k="${k}" ${opt.num === false ? '' : 'inputmode="decimal" data-num="1"'} value="${esc(c[k] ?? '')}" ${ro}/>${opt.h ? `<div class="hint">${opt.h}</div>` : ''}</div>`;
 }
@@ -530,9 +530,11 @@ function seccionesDe0(c){
       g3(campo(c, 'Lwg', 'Largo del cordón L [mm]'), campo(c, 'w', 'Filete w [mm]', { h:'Por ambas caras' }), campo(c, 'theta', 'θ: fuerza–cordón [°]', { h:'90° = fuerza perpendicular al cordón' }),
         campo(c, 'eW', 'Excentricidad e [mm]', { h:'Del eje de la diagonal al centro del cordón; 0 = pasa por el centro' }), ...(tbo ? [] : [campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) })]))
       + `<div class="f"><label class="ck"><input type="checkbox" data-k="duct" ${c.duct !== false ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Diseñar la soldadura para 1.25 veces la fuerza (ductilidad, Manual AISC parte 13)</label></div>`],   // vacío en conexiones viejas = sí
-    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · tensión Ry·Fy·Ag${nz(c.Pnd) ? ` · compresión 1.1·Ry·Pn (Pn ${c.Pnd} kN)` : ''}` : 'sin requisitos sísmicos',
-      g3(campo(c, 'sismo', 'Pórtico arriostrado concéntrico', { sel:[['no', 'Sin requisitos sísmicos (DMI o gravedad)'], ['DMO', 'DMO (ordinario/moderado)'], ['DES', 'DES (especial)']] }),
-        ...(['DMO', 'DES'].includes(c.sismo) ? [campo(c, 'Pnd', 'Pn de la diagonal a compresión [kN]', { h:'Resistencia nominal (sin φ), del Anexo D' })] : []))] ]; }
+    ['sis', 'Sismo', () => ['DMO', 'DES'].includes(c.sismo) ? `${c.sismo} · tensión Ry·Fy·Ag${nz(c.Pnd) ? ` · compresión 1.1·Ry·Pn (Pn ${c.Pnd} kN)` : ''}` : c.sismo === 'DMI' ? `DMI · menor entre Ry·Fy·Ag y Ω0·Pu (Ω0 = ${c.om0 || 2.5})` : 'sin requisitos sísmicos',
+      g3(campo(c, 'sismo', 'Pórtico arriostrado concéntrico', { sel:[['no', 'Sin requisitos sísmicos (gravedad)'], ['DMI', 'DMI (mínima: demanda con Ω0)'], ['DMO', 'DMO (ordinario/moderado)'], ['DES', 'DES (especial)']] }),
+        ...(['DMO', 'DES', 'DMI'].includes(c.sismo) ? [campo(c, 'Pnd', 'Pn de la diagonal a compresión [kN]', { h:'Resistencia nominal (sin φ), del Anexo D' })] : []),
+        ...(c.sismo === 'DMI' ? [campo(c, 'om0', 'Ω0 del sistema', { h:'Vacío = 2.5. Tabla A.3-2: 3.b → 2.5 · 3.d → 2.0' })] : []))
+      + (c.sismo === 'DMI' ? '<div class="hint">DMI: la conexión se diseña con la menor entre la tensión que puede dar la diagonal (Ry·Fy·Ag) y la fuerza del modelo amplificada por Ω0 (AISC 341 F1.6a). Si Pu del modelo ya trae Ω0, escriba Ω0 = 1.</div>' : '')] ]; }
   if(c.tipo === 'base'){ const tb = c.colTipo === 'tubo', sisB = ['DMO', 'DES'].includes(c.sismo), cv = c.cortante || 'anclajes'; return [
     ['col', 'Columna', () => tb ? `Tubo ${c.Ht}×${c.Bt}×${c.tt} mm` : c.columna,
       g3(campo(c, 'colTipo', 'Tipo', { sel:[['I', 'Perfil I'], ['tubo', 'Tubo cuadrado o rectangular']] }),

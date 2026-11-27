@@ -109,7 +109,9 @@ function memDoc(ctx, ed){
     '• ANSI/AISC 341-10, Seismic Provisions for Structural Steel Buildings.',
     '• ACI 318 (incorporado en el Título C de la NSR-10) para los elementos de concreto y los anclajes.'].join('\n'));
   H(2, 'Sistema estructural');
-  T('gen.sis', `• ${sisN}${Rk?.R0 ? `, R0 = ${fx(Rk.R0, 1)} (Tabla A.3-3)` : ''}.`);
+  const sisTxt = (sx, R0, om) => `${sx.n}${R0 ? `, R0 = ${fx(R0, 1)}${om ? `, Ω0 = ${fx(om, 1)}` : ''}${sx.tab ? ` (Tabla ${sx.tab})` : ''}` : ''}`;
+  T('gen.sis', Rk?.dos ? `• Sentido X: ${sisTxt(Rk.sis, Rk.R0, Rk.Om0x)}.\n• Sentido Y: ${sisTxt(Rk.sisY, Rk.R0y, Rk.Om0y)}.`
+    : `• ${Rk?.sis ? sisTxt(Rk.sis, Rk.R0, Rk.Om0x) : sisN}.`);
   H(2, 'Materiales');
   T('gen.mat', ['• Materiales cementantes: NTC 121, NTC 321, ASTM C150.', '• Agregados de peso normal: NTC 174 (ASTM C33).', '• Agua: NTC 3459 (ASTM C1602).',
     ...uniq(ctx.D.met.map(e => e.acero)).map(a => `• Perfiles de acero estructural: ${NOM_ACERO[a] || a}.`),
@@ -207,7 +209,9 @@ function memDoc(ctx, ed){
   H(1, 'Coeficiente de disipación de energía');
   if(!ctx.sismo || !Rk) T('r.no', 'El alcance no incluye la evaluación sísmica; no se calcula el coeficiente de disipación de energía.');
   else {
-    T('r.txt', `El sistema estructural es de ${sisN.charAt(0).toLowerCase() + sisN.slice(1)}; el coeficiente básico de disipación de energía es R0 = ${fx(Rk.R0, 1)} (Tabla A.3-3).`);
+    const minus = t => t.charAt(0).toLowerCase() + t.slice(1), tb = sx => sx.tab ? ` (Tabla ${sx.tab})` : '';
+    if(Rk.dos) T('r.txt', `La estructura emplea un sistema distinto en cada dirección principal (NSR-10 A.3.2), y cada dirección se diseña con el coeficiente de su sistema. En la dirección X el sistema es de ${minus(Rk.sis.n)}, con R0 = ${fx(Rk.R0, 1)} y Ω0 = ${fx(Rk.Om0x, 1)}${tb(Rk.sis)}. En la dirección Y es de ${minus(Rk.sisY.n)}, con R0 = ${fx(Rk.R0y, 1)} y Ω0 = ${fx(Rk.Om0y, 1)}${tb(Rk.sisY)}. Los elementos comunes a los dos sistemas cumplen los requisitos de la capacidad de disipación de energía más exigente.`);
+    else T('r.txt', `El sistema estructural es de ${minus(sisN)}; el coeficiente básico de disipación de energía es R0 = ${fx(Rk.R0, 1)}${Rk.sis?.tab ? ` (Tabla ${Rk.sis.tab})` : ' (Tabla A.3-3)'}.`);
     H(2, 'Irregularidades de la estructura');
     H(3, 'Redundancia');
     tabla(['Irregularidad', 'Sí / No', 'φr'], [['Ausencia de redundancia', K.redundante === false ? 'SÍ' : 'NO', fx(Rk.phiR, 2)]], 'Irregularidad por redundancia (A.3.3.8)');
@@ -225,7 +229,12 @@ function memDoc(ctx, ed){
     tabla(['', 'Irregularidad', 'Sí / No', 'φa'], Combos.IRR_A.map(i => [i.k, esc(i.n), K.irrA?.[i.k] ? 'SÍ' : 'NO', K.irrA?.[i.k] ? fx(i.phi, 2) : '—']).concat([['', '<b>φa</b>', '', `<b>${fx(Rk.phiA, 2)}</b>`]]), 'Irregularidades en altura (Tabla A.3-7)');
     irrTxt(Combos.IRR_A);
     H(3, 'Coeficiente de disipación de energía R');
-    out(`<p class="m-eq">R = φa · φp · φr · R0 = ${fx(Rk.phiA, 2)} × ${fx(Rk.phiP, 2)} × ${fx(Rk.phiR, 2)} × ${fx(Rk.R0, 1)} = <b>${fx(Rk.R, 2)}</b> &nbsp;(Ec. A.3.3-1)</p>`);
+    if(Rk.dos){
+      out(`<p class="m-eq">Rx = φa · φp · φr · R0x = ${fx(Rk.phiA, 2)} × ${fx(Rk.phiP, 2)} × ${fx(Rk.phiR, 2)} × ${fx(Rk.R0, 1)} = <b>${fx(Rk.Rx, 2)}</b> &nbsp;(Ec. A.3.3-1)</p>`);
+      out(`<p class="m-eq">Ry = φa · φp · φr · R0y = ${fx(Rk.phiA, 2)} × ${fx(Rk.phiP, 2)} × ${fx(Rk.phiR, 2)} × ${fx(Rk.R0y, 1)} = <b>${fx(Rk.Ry, 2)}</b> &nbsp;(Ec. A.3.3-1)</p>`);
+      tabla(['Dirección', 'Sistema', 'R0', 'Ω0', 'φa', 'φp', 'φr', 'R'], [['X', esc(Rk.sis.n), fx(Rk.R0, 1), fx(Rk.Om0x, 1), fx(Rk.phiA, 2), fx(Rk.phiP, 2), fx(Rk.phiR, 2), `<b>${fx(Rk.Rx, 2)}</b>`],
+        ['Y', esc(Rk.sisY.n), fx(Rk.R0y, 1), fx(Rk.Om0y, 1), fx(Rk.phiA, 2), fx(Rk.phiP, 2), fx(Rk.phiR, 2), `<b>${fx(Rk.Ry, 2)}</b>`]], 'Coeficiente de disipación de energía por dirección');
+    } else out(`<p class="m-eq">R = φa · φp · φr · R0 = ${fx(Rk.phiA, 2)} × ${fx(Rk.phiP, 2)} × ${fx(Rk.phiR, 2)} × ${fx(Rk.R0, 1)} = <b>${fx(Rk.R, 2)}</b> &nbsp;(Ec. A.3.3-1)</p>`);
   }
 
   // ══ 8. Combinaciones ══
@@ -235,17 +244,18 @@ function memDoc(ctx, ed){
     H(2, 'Combinaciones para el diseño por resistencia');
     T('comb', 'Las combinaciones de carga para el diseño por resistencia se toman de B.2.4.2 de la NSR-10. La carga viva de la cubierta se representa con Lr.');
     tabla(['Nombre', 'Combinación', 'Referencia'], act.map(c => [esc(c.id), esc(c.txt), esc(c.ref)]), 'Combinaciones de carga para el diseño por resistencia');
-    out(`<p class="m-eq">D = carga muerta · Lr = carga viva de cubierta · W = viento${ctx.sismo && Rk?.R ? ` · E = fuerzas sísmicas reducidas de diseño, E = Fs/R = ${fx(1 / Rk.R, 3)}·Fs` : ''}${K?.impacto ? ' · IMP = impacto vehicular' : ''}</p>`);
+    out(`<p class="m-eq">D = carga muerta · Lr = carga viva de cubierta · W = viento${ctx.sismo && Rk?.R ? (Rk.dos ? ` · E = fuerzas sísmicas reducidas de diseño: en la dirección X, E = Fs/Rx = ${fx(1 / Rk.Rx, 3)}·Fs; en la dirección Y, E = Fs/Ry = ${fx(1 / Rk.Ry, 3)}·Fs` : ` · E = fuerzas sísmicas reducidas de diseño, E = Fs/R = ${fx(1 / Rk.R, 3)}·Fs`) : ''}${K?.impacto ? ' · IMP = impacto vehicular' : ''}</p>`);
     // Sismo por componentes y envolventes, y servicio (pedido de Amo 21-nov: que se vea cómo se arma E y con qué se revisan derivas y deflexiones)
     const grp = n => RK.activas.filter(c => c.grupo === n), comp = grp('Sismo: componentes'), env = grp('Sismo: envolventes'), serv = grp('Servicio');
     if(ctx.sismo && comp.length){
       H(2, 'Fuerzas sísmicas: componentes y envolventes');
       T('comb.sis', 'Las fuerzas sísmicas se combinan según A.3.6.3: en cada dirección se toma el 100 % de las fuerzas en esa dirección más el 30 % de las de la dirección perpendicular, con la torsión accidental (T) en los dos sentidos. Así se obtienen 8 componentes en cada dirección, sin dividir por R:');
+      if(Rk?.dif && K.ortoR && K.metodoE !== 'lineal') T('comb.aj', `Como cada dirección tiene su propio coeficiente R, el 30 % de la dirección perpendicular se multiplica por la relación entre los coeficientes (0.3 × Rx/Ry = ${fx(0.3 * Rk.Rx / Rk.Ry, 3)} en las componentes de X y 0.3 × Ry/Rx = ${fx(0.3 * Rk.Ry / Rk.Rx, 3)} en las de Y), de modo que, al reducir cada envolvente por el R de su dirección, cada parte queda dividida por el coeficiente de su propio sistema.`);
       const sx = comp.filter(c => c.dir === 'X' || /^SX/.test(c.id)), sy = comp.filter(c => c.dir === 'Y' || /^SY/.test(c.id)), n = Math.max(sx.length, sy.length);
       tabla(['Sismo en X', '', 'Sismo en Y', ''], Array.from({ length:n }, (_, i) => [esc(sx[i]?.id || ''), esc(sx[i]?.txt || ''), esc(sy[i]?.id || ''), esc(sy[i]?.txt || '')]), 'Componentes de las fuerzas sísmicas (A.3.6.3)');
       if(env.length){
         T('comb.env', `Con ellas se forman ${env.length === 1 ? 'una envolvente, que toma' : 'dos envolventes, que toman'} en cada elemento el valor más desfavorable de sus 8 componentes:`);
-        const usa = (i) => { const d = i === 0 ? 'X' : 'Y', us = act.filter(c => new RegExp(d + '$').test(c.id) && /E/.test(c.txt)).map(c => c.id); return `Derivas, torsión${us.length ? ` y, dividida por R, las combinaciones ${us.join(' y ')}` : ''}`; };
+        const usa = (i) => { const d = i === 0 ? 'X' : 'Y', us = act.filter(c => new RegExp(d + '$').test(c.id) && /E/.test(c.txt)).map(c => c.id); return `Derivas, torsión${us.length ? ` y, dividida por ${Rk?.dos ? 'R' + d.toLowerCase() : 'R'}, las combinaciones ${us.join(' y ')}` : ''}`; };
         tabla(['Nombre', 'Contiene', 'Se usa para'], env.map((c, i) => [esc(c.id), esc(c.txt), usa(i)]), 'Envolventes de las fuerzas sísmicas');
         T('comb.der', 'Las derivas (capítulo 9) se revisan con las envolventes sin dividir por R, como exige A.6.');
       }

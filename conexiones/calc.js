@@ -1107,7 +1107,7 @@ function defaultsCartela(){
     // Diagonal de tubo cuadrado ranurado y soldado a la cartela (opción A de Amo, 20-nov)
     diag:'L', Bt:100, Dt:114.3, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4,
     // Revisión con Amo (20-nov, puntos 1–8)
-    Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'',
+    Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'', om0:'',
     // Platinas de refuerzo en la ranura del tubo cuadrado (27-nov, pedido de Amo; AISC 341 F2.5b): 2 platinas sobre las caras sin ranura
     rRef:false, bRf:100, tRf:6.4, LRf:'', aceroRf:'A572 Gr 50', wRf:4 };
 }
@@ -1313,6 +1313,22 @@ function diagDe(c){
 }
 // Envoltura (20-nov): sismo (pórtico arriostrado concéntrico) y 💡 sugerencia
 function calcCartela(c){
+  // DMI (27-nov, sistema 3.b / 3.d de la Tabla A.3-2): la conexión de la diagonal se diseña con la MENOR entre Ry·Fy·Ag y
+  // Ω0 × la fuerza del modelo (AISC 341 F1.6a). Si manda Ry·Fy·Ag se sigue igual que DMO; si manda Ω0·Pu es un diseño normal con esa fuerza.
+  if(c.sismo === 'DMI'){
+    const { Ag, ac } = diagDe(c), A = ACEROS[ac] || ACEROS.A36, Ry = RY(ac), Pt = Ry * A.Fy * Ag / 1000, om = nz(c.om0) || 2.5, Pu = nz(c.Pu);
+    const PuO = om * Pu;
+    if(Pu > 0 && Pt <= PuO){ const R = calcCartela({ ...c, sismo:'DMO', _dmi:true });
+      if(!R.error) R.pasos.unshift(`Sismo DMI: la demanda es la menor entre Ry·Fy·Ag = ${r2(Pt)} kN y Ω0·Pu = ${om}·${r2(Pu)} = ${r2(PuO)} kN → manda Ry·Fy·Ag (se revisa como diagonal que fluye).`);
+      return R; }
+    const R = calcCartela({ ...c, sismo:'no', Pu:PuO });
+    if(R.error) return R;
+    R.ch.forEach(x => { x.nombre += ' · con Ω0'; });
+    R.pasos.unshift(`Sismo DMI (pórtico arriostrado concéntrico con disipación mínima, NSR-10 F.3 / AISC 341 F1.6a): la conexión se diseña con la menor entre Ry·Fy·Ag = ${r3(Ry)}·${A.Fy}·${Math.round(Ag)}/1000 = ${r2(Pt)} kN y Ω0·|Pu| = ${om} × ${r2(Math.abs(Pu))} = ${r2(Math.abs(PuO))} kN → manda Ω0·Pu = ${r2(Math.abs(PuO))} kN${Pu < 0 ? ' a compresión' : ' a tensión'}.`);
+    R.req.push(['Sismo DMI: pernos pretensionados en agujeros estándar o de ranura corta perpendicular a la fuerza', true, 'indicar en planos']);
+    if(R.sug?.txt) R.sug.txt = R.sug.txt.replace(/\.?$/, ' (con Ω0·Pu).');
+    return R;
+  }
   const sis = ['DMO', 'DES'].includes(c.sismo) ? c.sismo : '';
   let R;
   if(sis){
