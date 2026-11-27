@@ -1107,7 +1107,9 @@ function defaultsCartela(){
     // Diagonal de tubo cuadrado ranurado y soldado a la cartela (opción A de Amo, 20-nov)
     diag:'L', Bt:100, Dt:114.3, tt:4.8, aceroT:'A500 Gr C', Lws:150, wt:4,
     // Revisión con Amo (20-nov, puntos 1–8)
-    Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'' };
+    Leg:38, bWg:'', duct:true, eW:0, sismo:'no', Pnd:'',
+    // Platinas de refuerzo en la ranura del tubo cuadrado (27-nov, pedido de Amo; AISC 341 F2.5b): 2 platinas sobre las caras sin ranura
+    rRef:false, bRf:100, tRf:6.4, LRf:'', aceroRf:'A572 Gr 50', wRf:4 };
 }
 function calcCartela0(c){
   const ch = [], av = [], pasos = [], req = [], add = addF(ch);
@@ -1115,7 +1117,7 @@ function calcCartela0(c){
   const aL = ACEROS[c.aceroL], ag = ACEROS[c.aceroG], FEXX = ELECTRODOS[c.electrodo];
   const dh = agujero(d), dn = anchoNeto(d), bm = bordeMin(d), rv = fv(c, d);
   const tub = esTubo(c), red = c.diag === 'redondo';
-  let Lw, U = 0, xb = 0;
+  let Lw, U = 0, xb = 0, LRg = 0;
   if(tub){
     // Tubo cuadrado B × t o redondo D × t (24-nov) ranurado en dos caras opuestas; la cartela entra por la ranura y se suelda con 4 filetes longitudinales de largo Lws
     const B = red ? +c.Dt : +c.Bt, td = 0.93 * +c.tt, at = ACEROS[c.aceroT] || ACEROS['A500 Gr C'], Lws = +c.Lws, wt = +c.wt, sl = tg + 3;
@@ -1130,10 +1132,33 @@ function calcCartela0(c){
     const AeT = U * AnT, nomT = red ? `redondo ⌀${B}×${c.tt}` : `${B}×${B}×${c.tt}`, casoU = red ? 'Tabla D3.1 caso 5' : 'Tabla D3.1 caso 6';
     pasos.push(`Diagonal tubo ${nomT} mm (${c.aceroT}; espesor de diseño 0.93t = ${r2(td)} mm): Ag = ${r1(AgT)} mm²; Pu = ${r2(P)} kN (${P >= 0 ? 'tensión' : 'compresión'})`);
     pasos.push(`Ranura en dos caras opuestas de ancho tg + 3 = ${r1(sl)} mm → An = Ag − 2·t·ancho = ${r1(AnT)} mm²; x̄ = ${red ? 'D/π' : '(B² + 2BH)/(4(B + H))'} = ${r1(xb)} mm, l = ${Lws} mm → U = ${red && Lws >= 1.3 * B ? '1.0 (l ≥ 1.3D)' : `1 − x̄/l = ${r3(U)}`}, Ae = ${r1(AeT)} mm²`);
+    // Platinas de refuerzo (27-nov): 2 platinas bR × tR sobre las caras SIN ranura, de L1 antes del fin de la ranura y L2 después
+    const ref = !red && !!c.rRef, bR = +c.bRf || 100, tR = +c.tRf || 6.4, aR = ACEROS[c.aceroRf] || ACEROS['A572 Gr 50'], wR = +c.wRf || 4;
+    // largo automático: lo que piden los filetes (Fy·b·t con 2 cordones + el extremo) y la pared del tubo, y al menos el ancho de la platina
+    const L1 = Math.max(Lws - 25, 0), FdevR = aR.Fy * bR * tR / 1000, fwR0 = fw(FEXX, wR), vPar = 2 * Math.min(0.6 * at.Fy, 0.75 * 0.6 * at.Fu) * td / 1000;
+    const L2auto = Math.ceil(Math.max(bR, (FdevR / Math.max(fwR0, 1e-9) - bR) / 2, FdevR / Math.max(vPar, 1e-9)) / 25) * 25;
+    const LR = ref ? (+c.LRf || (L1 + L2auto)) : 0, L2 = Math.max(LR - L1, 0), AR = ref ? 2 * bR * tR : 0; LRg = LR;
+    if(ref) pasos.push(`Platinas de refuerzo: 2 de ${bR} × ${tR} mm (${c.aceroRf}), largo ${r1(LR)} mm${+c.LRf ? '' : ' (automático)'} (${r1(L1)} mm antes y ${r1(L2)} mm después del fin de la ranura); en la sección de la ranura suman A = 2·b·t = ${r1(AR)} mm² con su Fu = ${aR.Fu} MPa.`);
     if(P > 0){
       add('diagonal', 'Fluencia a tensión del tubo', 'F.2.4.2 (D2-1)', P, 0.9 * at.Fy * AgT / 1000, 'kN', '');
-      add('diagonal', 'Rotura a tensión del tubo en la ranura', `F.2.4.2 (D2-2), ${casoU}`, P, 0.75 * at.Fu * AeT / 1000, 'kN', `U = ${r3(U)}, Ae = ${r1(AeT)} mm²`);
-      if(0.75 * at.Fu * AeT / 1000 < P) av.push('La sección neta del tubo en la ranura no alcanza: alargue la soldadura (sube U) o refuerce el tubo con platinas soldadas a las caras sin ranura.');
+      const capRf = 0.75 * aR.Fu * AR / 1000;
+      add('diagonal', 'Rotura a tensión del tubo en la ranura', `F.2.4.2 (D2-2), ${casoU}${ref ? ' + platinas de refuerzo' : ''}`, P, 0.75 * at.Fu * AeT / 1000 + capRf, 'kN', `U = ${r3(U)}, Ae = ${r1(AeT)} mm²${ref ? ` + 2 platinas ${bR}×${tR} (${r1(AR)} mm²)` : ''}`);
+      if(ref) ch.at(-1).capR = capRf;                                   // la parte de las platinas no lleva Rt con sismo
+      if(0.75 * at.Fu * AeT / 1000 + capRf < P) av.push(ref ? 'Con las platinas de refuerzo la sección de la ranura todavía no alcanza: súbales el ancho o el espesor.' : 'La sección neta del tubo en la ranura no alcanza: active «Platinas de refuerzo en la ranura» (2 platinas soldadas a las caras sin ranura).');
+      if(ref){
+        const Fdev = aR.Fy * bR * tR / 1000, Lmin = Math.min(L1, L2), fwR = fw(FEXX, wR);
+        pasos.push(`Cada platina debe poder desarrollar su fluencia a cada lado de la ranura: Fy·b·t = ${aR.Fy}·${bR}·${tR} = ${r2(Fdev)} kN, con 2 filetes longitudinales de L = ${r1(Lmin)} mm (el lado más corto) + el filete transversal del extremo (b).`);
+        add('soldadura', 'Filetes de cada platina de refuerzo al tubo (lado más corto de la ranura)', 'F.2.10.2.4 (J2-4)', Fdev, fwR * (2 * Lmin + bR), 'kN', `w = ${wR} mm × (2·${r1(Lmin)} + ${bR}) mm`);
+        add('diagonal', 'Pared del tubo junto a los filetes de las platinas (cortante)', 'F.2.10.4.2 (J4-3, J4-4)', Fdev, 2 * Math.min(1.0 * 0.6 * at.Fy, 0.75 * 0.6 * at.Fu) * td * Lmin / 1000, 'kN', `2 planos × ${r1(Lmin)} mm × t ${r2(td)} mm`);
+      }
+    }
+    if(ref){
+      const plano = B - 4 * +c.tt, tmin = Math.min(td, tR), wMinR = tmin <= 6 ? 3 : tmin <= 13 ? 5 : tmin <= 19 ? 6 : 8;
+      req.push([`Platinas de refuerzo dentro de la parte plana de la cara: b ≤ B − 4t = ${r1(plano)} mm`, bR <= plano + 1e-6, `${bR} mm`]);
+      req.push([`Platinas pasan al menos su ancho más allá del fin de la ranura`, L2 >= bR - 1e-6, `${r1(L2)} ≥ ${bR} mm`]);
+      req.push(['Filete de las platinas ≥ mín. Tabla J2.4', wR >= wMinR, `${wR} ≥ ${wMinR} mm`]);
+      req.push(['Filete de las platinas ≤ espesor de la platina (− 1.6 mm si t ≥ 6.4)', wR <= (tR >= 6.4 ? tR - 1.6 : tR) + 1e-6, `${wR} mm`]);
+      if(wR > td) av.push(`El filete de las platinas (${wR} mm) es mayor que la pared del tubo (${r2(td)} mm): la pared limita; se revisa aparte.`);
     } else pasos.push('Compresión: el pandeo del tubo se revisa como elemento (Anexo D); aquí solo la conexión.');
     const fwT = fw(FEXX, wt);
     add('soldadura', 'Filetes tubo–cartela (4 cordones longitudinales)', 'F.2.10.2.4 (J2-4)', Pa, 4 * fwT * Lws, 'kN', `4 × ${Lws} mm, w = ${wt} mm`);
@@ -1190,8 +1215,8 @@ function calcCartela0(c){
     add('cartela', 'Rotura en la sección de Whitmore (por el agujero)', 'F.2.10.4.1 (J4-2), An ≤ 0.85·Ag', P, 0.75 * ag.Fu * AnW / 1000, 'kN', `An = mín((Lw − dh)·tg; 0.85·Aw) = ${r1(AnW)} mm²`); }
   if(P <= 0){ const KLr = +c.K * +c.Lcr / (tg / Math.sqrt(12));
     add('cartela', 'Pandeo de la cartela (sección de Whitmore)', 'F.2.10.4.4 (J4-6) / E3', Pa, 0.9 * fcrE3(ag.Fy, KLr) * Aw / 1000, 'kN', `KL/r = ${c.K}·${c.Lcr}/r = ${r1(KLr)}`); }
-  if(c.tipo === 'esquina'){ const g = ufmEsquina(c, { ch, av, pasos, req, add, Pa, P, tg, ag, FEXX }); return g.error ? g : fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb, ...g }); }
-  if(c.tipo === 'cruce'){ cruceX(c, { ch, av, pasos, req, add, Pa, P, tg, ag, dh }); return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb }); }
+  if(c.tipo === 'esquina'){ const g = ufmEsquina(c, { ch, av, pasos, req, add, Pa, P, tg, ag, FEXX }); return g.error ? g : fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb, LRf:LRg, ...g }); }
+  if(c.tipo === 'cruce'){ cruceX(c, { ch, av, pasos, req, add, Pa, P, tg, ag, dh }); return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb, LRf:LRg }); }
   // Soldadura cartela–soporte
   const th = (+c.theta || 0) * Math.PI / 180, Lwg = +c.Lwg, w = +c.w, fd = c.duct === false ? 1 : 1.25, Pw = fd * Pa, eW = nz(c.eW);
   if(fd > 1) pasos.push(`Soldadura cartela–soporte con factor de ductilidad 1.25 (Manual AISC parte 13): fuerza de diseño ${r2(Pw)} kN`);
@@ -1202,7 +1227,7 @@ function calcCartela0(c){
   else if(Pa > 0) pasos.push('Soldadura cartela–soporte: se supone que el eje de la diagonal pasa por el centro del cordón (e = 0); si no, escriba la excentricidad para revisar el momento.');
   add('cartela', 'Cartela junto a la soldadura (cortante + tensión)', 'F.2.10.4 · F.2.10.2.4', Pa, Math.min(0.6 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.cos(th), 0.01), 0.9 * ag.Fy * tg * Lwg / 1000 / Math.max(Math.sin(th), 0.01)), 'kN', 'componentes de la fuerza contra fluencia por cortante y por tensión');
   req.push(['Filete ≥ mín. Tabla J2.4', w >= (tg > 19 ? 8 : tg > 12.7 ? 6 : tg > 6.4 ? 5 : 3), `${w} mm`]);
-  return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb });
+  return fin(ch, req, av, pasos, { dh, Lw, Lw0, U, xb, LRf:LRg });
 }
 
 const esTubo = c => c.diag === 'tubo' || c.diag === 'redondo';
@@ -1297,7 +1322,7 @@ function calcCartela(c){
     // la diagonal fluye por diseño: no se revisa su fluencia; en sus estados de rotura se puede usar Rt·Fu (AISC 341 A3.2)
     const rt = RT(ac);
     Rt.ch = Rt.ch.filter(x => !(x.grupo === 'diagonal' && /^Fluencia/.test(x.nombre)));
-    Rt.ch.forEach(x => { if(x.grupo === 'diagonal' && /Rotura|Bloque|Pared/.test(x.nombre)){ x.cap *= rt; x.ratio = x.dem / x.cap; x.extra = `${x.extra ? x.extra + ' · ' : ''}con Rt = ${rt}`; } x.nombre += ' · tensión esperada'; });
+    Rt.ch.forEach(x => { if(x.grupo === 'diagonal' && /Rotura|Bloque|Pared/.test(x.nombre)){ x.cap = x.capR != null ? (x.cap - x.capR) * rt + x.capR : x.cap * rt; x.ratio = x.dem / x.cap; x.extra = `${x.extra ? x.extra + ' · ' : ''}con Rt = ${rt}`; } x.nombre += ' · tensión esperada'; });
     R = Rt;
     R.pasos.unshift(`Sismo ${sis} (pórtico arriostrado concéntrico ${sis === 'DES' ? 'especial' : 'ordinario/moderado'}, NSR-10 F.3 / AISC 341 ${sis === 'DES' ? 'F2.6c' : 'F1.6a'}): la conexión se diseña para lo que la diagonal puede llegar a dar → tensión Ry·Fy·Ag = ${r3(Ry)}·${A.Fy}·${Math.round(Ag)} = ${r2(Pt)} kN${Pnd ? `; compresión 1.1·Ry·Pn = 1.1·${r3(Ry)}·${r2(Pnd)} = ${r2(Pc)} kN` : ''}.`);
     if(Pnd > 0 || nz(c.Pu) < 0){ const Rc = calcCartela0({ ...c, Pu:-Math.max(Pc, Math.abs(Math.min(nz(c.Pu), 0))) });
@@ -2676,11 +2701,12 @@ function calcEmpCol(c){
 const FX_W = [3, 5, 6, 8, 10, 12, 14, 16];
 const FX = {
   pern:{ d:'pernos', grado:'grado', rosca:'rosca', n:'pernos', nf:'filas de pernos en cada ala', nw:'pernos en el alma', filas:'filas de pernos', cols:'columnas de pernos', nbc:'pernos de compresión', ncw:'columnas de pernos en el alma' },
-  esp:{ tp:'la platina', tAng:'los angulares', t:'el angular', tpf:'las cubrejuntas de las alas', tpw:'las cubrejuntas del alma', tpi:'las cubrejuntas interiores', tg:'la cartela', tL:'los angulares', ts:'la platina de rigidez', tsE:'el rigidizador de la extensión', tsC:'las placas de continuidad', tcw:'la platina de la cartela', tph:'el patín de la cartela', tdp:'la placa de refuerzo', tpb:'la placa de tope' },
-  sol:{ w:'el filete', wAla:'el filete de las alas', wAlma:'el filete del alma', wS:'el filete al soporte', wR:'los filetes de la platina', wC:'el filete cartela–viga', wCc:'el filete cartela–columna', wPA:'el filete patín–alma', wsC:'el filete de las placas de continuidad', wsE:'el filete del rigidizador', wdp:'el filete de la placa de refuerzo', wT:'el filete placa–ala', wt:'el filete al tubo', wB:'el filete cartela–viga', wI:'el filete inferior' },
-  lar:{ bp:'el ancho de la placa', bpf:'el ancho de las cubrejuntas de las alas', hpw:'el alto de las cubrejuntas del alma', Lws:'el largo de la soldadura del tubo', Lwg:'el largo de la cartela', LhC:'el largo de la cartela Lh', hhC:'el alto de la cartela hh', Lt:'el traslapo', La:'el largo del angular', W:'el ancho de la platina de rigidez', hs:'el alto de la platina de rigidez', Lh:'el largo de la cartela sobre la viga', Lv:'el alto de la cartela', a:'el desfase del corte', bPl:'el ancho de la platina del cruce', bv:'el ala vertical', bh:'el ala horizontal' },
-  ace:{ aceroPl:'la platina', aceroAng:'el angular', aceroG:'la cartela', aceroL:'los angulares', aceroRig:'la platina de rigidez', aceroRigC:'las placas de continuidad', aceroCart:'la cartela' } };
+  esp:{ tRf:'las platinas de refuerzo de la ranura', tp:'la platina', tAng:'los angulares', t:'el angular', tpf:'las cubrejuntas de las alas', tpw:'las cubrejuntas del alma', tpi:'las cubrejuntas interiores', tg:'la cartela', tL:'los angulares', ts:'la platina de rigidez', tsE:'el rigidizador de la extensión', tsC:'las placas de continuidad', tcw:'la platina de la cartela', tph:'el patín de la cartela', tdp:'la placa de refuerzo', tpb:'la placa de tope' },
+  sol:{ wRf:'el filete de las platinas de refuerzo', w:'el filete', wAla:'el filete de las alas', wAlma:'el filete del alma', wS:'el filete al soporte', wR:'los filetes de la platina', wC:'el filete cartela–viga', wCc:'el filete cartela–columna', wPA:'el filete patín–alma', wsC:'el filete de las placas de continuidad', wsE:'el filete del rigidizador', wdp:'el filete de la placa de refuerzo', wT:'el filete placa–ala', wt:'el filete al tubo', wB:'el filete cartela–viga', wI:'el filete inferior' },
+  lar:{ bRf:'el ancho de las platinas de refuerzo', LRf:'el largo de las platinas de refuerzo', bp:'el ancho de la placa', bpf:'el ancho de las cubrejuntas de las alas', hpw:'el alto de las cubrejuntas del alma', Lws:'el largo de la soldadura del tubo', Lwg:'el largo de la cartela', LhC:'el largo de la cartela Lh', hhC:'el alto de la cartela hh', Lt:'el traslapo', La:'el largo del angular', W:'el ancho de la platina de rigidez', hs:'el alto de la platina de rigidez', Lh:'el largo de la cartela sobre la viga', Lv:'el alto de la cartela', a:'el desfase del corte', bPl:'el ancho de la platina del cruce', bv:'el ala vertical', bh:'el ala horizontal' },
+  ace:{ aceroRf:'las platinas de refuerzo', aceroPl:'la platina', aceroAng:'el angular', aceroG:'la cartela', aceroL:'los angulares', aceroRig:'la platina de rigidez', aceroRigC:'las placas de continuidad', aceroCart:'la cartela' } };
 function fxRelevante(c, k){
+  if(['bRf', 'tRf', 'LRf', 'wRf', 'aceroRf'].includes(k)) return !!c.rRef && c.diag === 'tubo' && (k !== 'LRf' || c[k] !== '');
   if(c[k] === '' || c[k] == null) return k === 'wAlma' && c.union !== 'cjp' && c.tipo === 'soldada';
   if(['ts', 'W', 'hs', 'wR', 'aceroRig'].includes(k)) return c.tipo === 'asiento' && !!c.rig;
   if(['tsC', 'wsC', 'aceroRigC'].includes(k)) return c.rigCol !== 'no';
@@ -2722,6 +2748,7 @@ function fxOpciones(c){
   if(c.tipo === 'empalme' && !c.interior) o.push({ patch:{ interior:true }, txt:'Agregue cubrejuntas interiores en las alas' });
   if(c.tipo === 'asiento' && !c.rig) o.push({ patch:{ rig:true }, txt:'Agregue una platina de rigidez (pie de amigo) bajo el asiento' });
   if(c.tipo === 'testa' && c.config !== '8ES') o.push({ patch:{ config:'8ES' }, txt:'Pase a la chapa de 8 pernos con rigidizador (8ES)' });
+  if(['cartela', 'esquina', 'cruce'].includes(c.tipo) && c.diag === 'tubo' && !c.rRef) o.push({ patch:{ rRef:true }, txt:`Ponga platinas de refuerzo en la ranura: 2 de ${c.bRf || 100} × ${c.tRf || 6.4} mm sobre las caras sin ranura` });
   if(c.tipo === 'cartela' && (c.diag || 'L') === 'L' && +c.nL < 2) o.push({ patch:{ nL:2 }, txt:'Use dos angulares en vez de uno' });
   return o; }
 const FX_ORDEN = [[/perno|aplastamiento|desgarro|deslizamiento|palanca|tensión de los/i, ['pern', 'esp', 'ace', 'lar', 'op']],

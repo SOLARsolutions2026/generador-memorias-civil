@@ -85,6 +85,17 @@ function iFigTras(hl){
     ${hl === 'Lt' ? iCota(70, 92, 150, 92, 'Lt', 104, 106) : ''}
     ${hl === 'wT' ? `<line x1="70" y1="46" x2="150" y2="46" stroke="${IR}" stroke-width="3"/><line x1="70" y1="74" x2="150" y2="74" stroke="${IR}" stroke-width="3"/><line x1="150" y1="46" x2="150" y2="74" stroke="${IR}" stroke-width="3"/>` : ''}`);
 }
+function iFigRefT(hl){
+  const r = k => hl === k;
+  return iSvg(260, 118, `<polygon points="6,20 70,20 70,104 6,112" fill="#dbeafe" stroke="${IAB}"/>
+    <rect x="44" y="40" width="210" height="48" fill="#e5e7eb" stroke="${ILN}"/><text x="206" y="68" font-size="9" fill="#334155">tubo</text>
+    <line x1="44" y1="40" x2="140" y2="40" stroke="${INA}" stroke-width="3"/><line x1="44" y1="88" x2="140" y2="88" stroke="${INA}" stroke-width="3"/>
+    <line x1="140" y1="30" x2="140" y2="98" stroke="${IR}" stroke-dasharray="3 2"/><text x="132" y="27" font-size="8.5" fill="${IR}">fin de la ranura</text>
+    <rect x="56" y="50" width="134" height="28" fill="${r('t') ? '#fecaca' : IMO}" stroke="${IMB}"/>
+    ${r('w') ? `<path d="M56 50 H190 V78 H56" fill="none" stroke="${IR}" stroke-width="3"/>` : ''}
+    ${r('b') ? iCota(200, 50, 200, 78, 'b', 204, 68) : ''}${r('L') ? iCota(56, 100, 190, 100, 'largo', 104, 114) : ''}
+    ${r('t') ? `<text x="70" y="68" font-size="10" font-weight="700" fill="${IR}">espesor t</text>` : ''}`);
+}
 const INFO = {
   rigCol: c => [iFigPC(''), '<b>Placas de continuidad:</b> láminas dentro de la columna, entre sus dos alas, a la altura de cada ala de la viga (2 por ala, una a cada lado del alma). Llevan la fuerza de las alas de la viga a la columna. «Automático» las pone solo si hacen falta.'],
   bsC: c => { const cl = Conex.perfil(c.columna); const mx = cl ? Math.floor((cl.bf - cl.tw) / 2 - 2) : null;
@@ -111,6 +122,11 @@ const INFO = {
   W: c => [iFigAs('W'), '<b>Ancho W:</b> lo que mide la platina en horizontal, bajo el ala del asiento.'],
   hs: c => [iFigAs('hs'), '<b>Alto</b> de la platina triangular, contra el soporte.'],
   wR: c => [iFigAs('wR'), '<b>Filetes de la platina:</b> al ala del asiento y al soporte (en rojo).'],
+  rRef: c => [iFigRefT(''), '<b>Platinas de refuerzo en la ranura:</b> dos platinas soldadas sobre las dos caras del tubo que NO tienen ranura (adelante y atrás), tapando el sitio donde termina la ranura. Le devuelven al tubo el área que le quitó el corte.'],
+  bRf: c => [iFigRefT('b'), `<b>Ancho b</b> de cada platina. Debe caber en la parte plana de la cara: b ≤ B − 4t${+c.Bt ? ` (≈ ${Math.round(+c.Bt - 4 * +c.tt)} mm)` : ''}.`],
+  tRf: c => [iFigRefT('t'), '<b>Espesor t</b> de cada platina. El filete puede ser hasta t − 1.6 mm.'],
+  LRf: c => [iFigRefT('L'), '<b>Largo</b> de cada platina: empieza cerca de la punta del tubo y pasa más allá del fin de la ranura. Vacío = la app pone lo que piden los filetes y la pared del tubo.'],
+  wRf: c => [iFigRefT('w'), '<b>Filete</b> de la platina al tubo: en los dos bordes largos y en el extremo (en rojo).'],
   Lt: c => [iFigTras('Lt'), '<b>Traslapo Lt:</b> cuánto pasa la placa por encima del ala de la viga (eje débil, placa traslapada).'],
   wT: c => [iFigTras('wT'), '<b>Filete placa–ala:</b> los cordones que unen la placa con el ala de la viga (en rojo).'],
 };
@@ -497,7 +513,13 @@ function seccionesDe0(c){
         ...(tbo ? [red ? campo(c, 'Dt', 'Diámetro exterior D [mm]') : campo(c, 'Bt', 'Lado del tubo B [mm]'), campo(c, 'tt', 'Espesor nominal t [mm]', { h:'Se diseña con 0.93t' }), campo(c, 'aceroT', 'Acero', { sel:SEL_ACERO })]
           : [campo(c, 'nL', 'Angulares', { sel:[['1', '1 angular'], ['2', '2 angulares (espalda con espalda)']] }), campo(c, 'bL', 'Ala b [mm]'), campo(c, 'tL', 'Espesor t [mm]'), campo(c, 'aceroL', 'Acero', { sel:SEL_ACERO })]))],
     ...(tbo ? [['stub', 'Soldadura tubo–cartela', () => `4 filetes de ${c.wt} mm × ${c.Lws} mm · ${c.electrodo}`,
-      g3(campo(c, 'Lws', 'Largo de cada cordón Lws [mm]', { h:red ? 'Traslapo sobre la cartela; ≥ D (con ≥ 1.3D, U = 1)' : 'Traslapo del tubo sobre la cartela; ≥ B' }), campo(c, 'wt', 'Filete w [mm]', { h:'4 cordones: 2 por cada cara ranurada' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))]] : [
+      g3(campo(c, 'Lws', 'Largo de cada cordón Lws [mm]', { h:red ? 'Traslapo sobre la cartela; ≥ D (con ≥ 1.3D, U = 1)' : 'Traslapo del tubo sobre la cartela; ≥ B' }), campo(c, 'wt', 'Filete w [mm]', { h:'4 cordones: 2 por cada cara ranurada' }), campo(c, 'electrodo', 'Electrodo', { sel:Object.keys(Conex.ELECTRODOS) }))],
+      ...(c.diag === 'tubo' ? [['refR', 'Platinas de refuerzo en la ranura', () => c.rRef ? `2 platinas ${c.bRf ?? 100} × ${c.tRf ?? 6.4} mm · ${c.aceroRf || 'A572 Gr 50'} · largo ${c.LRf || 'automático'} · filete ${c.wRf ?? 4} mm` : 'sin platinas',
+        `<div class="f"><label class="ck"><input type="checkbox" data-k="rRef" ${c.rRef ? 'checked' : ''} ${esIng() ? '' : 'disabled'}/> Poner 2 platinas de refuerzo sobre las caras del tubo sin ranura${infoIco('rRef', c)}</label></div>`
+        + (c.rRef ? (c.bRf ??= 100, c.tRf ??= 6.4, c.aceroRf ??= 'A572 Gr 50', c.wRf ??= 4, c.LRf ??= '',
+          g3(campo(c, 'bRf', 'Ancho de cada platina b [mm]', { h:`En la parte plana: ≤ B − 4t = ${Math.round(+c.Bt - 4 * +c.tt)} mm`, info:true }), campo(c, 'tRf', 'Espesor t [mm]', { info:true }), campo(c, 'aceroRf', 'Acero', { sel:SEL_ACERO }),
+            campo(c, 'LRf', 'Largo de cada platina [mm]', { h:'Vacío = automático (lo que piden los filetes y la pared del tubo)', info:true }), campo(c, 'wRf', 'Filete platina–tubo [mm]', { h:'En los dos bordes largos y en el extremo', info:true })))
+          : '<p class="hint">Con sismo (DMO/DES) la sección del tubo en la ranura casi nunca alcanza a desarrollar Ry·Fy·Ag: estas platinas le devuelven el área que quita la ranura.</p>')]] : [])] : [
     ['pern', 'Pernos', () => `${c.n} × ${dnom(c)} ${c.grado}-${c.rosca} · s ${c.s} · Le ${c.Le} · ga ${c.ga}`,
       g3(...pernosTipo) + g3(campo(c, 'n', 'Número de pernos n'), campo(c, 's', 'Separación s [mm]'), campo(c, 'Le', 'Borde al extremo Le [mm]'), campo(c, 'ga', 'Gramil en el angular ga [mm]', { h:'Del talón a la línea de pernos' }), campo(c, 'Leg', 'Borde de la cartela Leg [mm]', { h:'Del perno más lejano al borde de la cartela' }))]]),
     ['cart', 'Cartela', () => `t ${c.tg} mm · ${c.aceroG} · Lcr ${c.Lcr} mm · K ${c.K}${nz(c.bWg) ? ` · ancho ${c.bWg} mm` : ''}`,
@@ -812,24 +834,28 @@ function dibCartela(c, r){
   const L0 = Lcr / Math.max(uy, 0.3);                                   // del soporte a la sección de Whitmore, sobre el eje
   const P = t => [Lwg / 2 - (L0 + l / 2) * ux * 0.5 + t * ux, t * uy];  // punto sobre el eje de la diagonal (t desde el soporte)
   const p0 = P(L0), pf = P(L0 + l), tip = P(L0 + l + (tub ? 0 : Math.max(Le, 35)));
-  const yMax = P(L0 + l + 160)[1] + 10, xMin = Math.min(-20, P(L0 + l + 160)[0] - 40), xMax = Math.max(Lwg + 60, P(L0 + l + 160)[0] + 60);
+  const LRd = tub && !red && c.rRef ? (+c.LRf || (r.geo && r.geo.LRf) || (Math.max(l - 25, 0) + 175)) : 0, ext = Math.max(l + 160, LRd ? 25 + LRd + 60 : 0);
+  const yMax = P(L0 + ext)[1] + 10, xMin = Math.min(-20, P(L0 + ext)[0] - 40), xMax = Math.max(Lwg + 60, P(L0 + ext)[0] + 60);
   const k = 380 / Math.max(xMax - xMin, yMax + 40), X = v => 30 + (v - xMin) * k, Y = v => 20 + (yMax - v) * k;
   const wx = tub ? Bt / 2 + Math.tan(Math.PI / 6) * l : Math.tan(Math.PI / 6) * l, w0 = tub ? Bt / 2 : 0;
   const hb = tub ? Bt / 2 + 20 : 35;                                    // con tubo la cartela atraviesa las dos paredes ranuradas: es más ancha que B
   let h = `<rect x="${X(-20)}" y="${Y(0)}" width="${(Lwg + 60) * k}" height="${14}" class="sop"/>
     <path d="M${X(0)} ${Y(0)} L${X(0)} ${Y(30)} L${X(tip[0] - 45 * ux + hb * nx)} ${Y(tip[1] - 45 * uy + hb * ny)} L${X(tip[0] + hb * nx)} ${Y(tip[1] + hb * ny)} L${X(tip[0] - hb * nx)} ${Y(tip[1] - hb * ny)} L${X(Lwg)} ${Y(40)} L${X(Lwg)} ${Y(0)} Z" class="pl"/>`;
-  if(tub){ const a = P(L0), b = P(L0 + l + 170), bw = Bt / 2, sl = P(L0 + l + 25);
+  if(tub){ const a = P(L0), b = P(L0 + ext + 10), bw = Bt / 2, sl = P(L0 + l + 25);
     h += `<path d="M${X(a[0] + bw * nx)} ${Y(a[1] + bw * ny)} L${X(b[0] + bw * nx)} ${Y(b[1] + bw * ny)} L${X(b[0] - bw * nx)} ${Y(b[1] - bw * ny)} L${X(a[0] - bw * nx)} ${Y(a[1] - bw * ny)} Z" fill="#cbd5e1" stroke="#475569" opacity=".75"/>
       ${[1, -1].map(sg => `<line x1="${X(pf[0] + sg * bw * nx)}" y1="${Y(pf[1] + sg * bw * ny)}" x2="${X(sl[0] + sg * bw * nx)}" y2="${Y(sl[1] + sg * bw * ny)}" stroke="#1e293b" stroke-width="3" stroke-dasharray="3 2"/>`).join('')}
       ${[1, -1].map(sg => `<line x1="${X(a[0] + sg * bw * nx)}" y1="${Y(a[1] + sg * bw * ny)}" x2="${X(pf[0] + sg * bw * nx)}" y2="${Y(pf[1] + sg * bw * ny)}" stroke="#ea580c" stroke-width="3.5"/>`).join('')}
-      <text x="${X(b[0] + bw * nx) + 4}" y="${Y(b[1] + bw * ny)}" class="lbl">tubo ${red ? `⌀${c.Dt}` : `${c.Bt}×${c.Bt}`}×${c.tt}</text>`; }
+      <text x="${X(b[0] + bw * nx) + 4}" y="${Y(b[1] + bw * ny)}" class="lbl">tubo ${red ? `⌀${c.Dt}` : `${c.Bt}×${c.Bt}`}×${c.tt}</text>`
+    if(!red && c.rRef){ const bR = (+c.bRf || 100) / 2, LR = LRd, q0 = P(L0 + 25), q1 = P(L0 + 25 + LR);
+      h += `<path d="M${X(q0[0] + bR * nx)} ${Y(q0[1] + bR * ny)} L${X(q1[0] + bR * nx)} ${Y(q1[1] + bR * ny)} L${X(q1[0] - bR * nx)} ${Y(q1[1] - bR * ny)} L${X(q0[0] - bR * nx)} ${Y(q0[1] - bR * ny)} Z" fill="#c4b5fd" fill-opacity=".8" stroke="#7c3aed" stroke-width="1.5"/>
+`; } }
   else { const a = P(L0 - Le), b = P(L0 + l + 170);
     h += `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="#475569" stroke-width="${Math.max(6, +c.bL * k * 0.5)}" opacity=".55"/>`; }
   h += `<path d="M${X(pf[0] + w0 * nx)} ${Y(pf[1] + w0 * ny)} L${X(p0[0] + wx * nx)} ${Y(p0[1] + wx * ny)} M${X(pf[0] - w0 * nx)} ${Y(pf[1] - w0 * ny)} L${X(p0[0] - wx * nx)} ${Y(p0[1] - wx * ny)} M${X(p0[0] + wx * nx)} ${Y(p0[1] + wx * ny)} L${X(p0[0] - wx * nx)} ${Y(p0[1] - wx * ny)}" fill="none" stroke="#7c3aed" stroke-dasharray="4 3" stroke-width="1.5"/>`;
   for(let i = 0; i < n; i++){ const q = P(L0 + i * s); h += `<circle cx="${X(q[0])}" cy="${Y(q[1])}" r="${Math.max(3, r.geo.dh / 2 * k)}" class="bolt"/>`; }
   h += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(Lwg)}" y2="${Y(0)}" class="wl"/>${cotaH(Y(0) + 26, X(0), X(Lwg), `soldadura L = ${Lwg}`)}
     <text x="${X(p0[0] - wx * nx) + 4}" y="${Y(p0[1] - wx * ny) + 12}" class="lbl" style="fill:#7c3aed">Whitmore ${f2(r.geo.Lw, 0)}</text>`;
-  return svgW(X(xMax) + 10, Y(0) + 44, h, 'Diagonal a cartela', `θ = ${c.theta}° · Pu = ${f2(+c.Pu, 1)} kN · línea morada = sección de Whitmore (30° desde ${tub ? 'el final de la soldadura' : 'el perno más lejano'})${tub ? ' · en naranja los cordones tubo–cartela; punteado la ranura' : ''}`);
+  return svgW(X(xMax) + 10, Y(0) + 44, h, 'Diagonal a cartela', `θ = ${c.theta}° · Pu = ${f2(+c.Pu, 1)} kN · línea morada = sección de Whitmore (30° desde ${tub ? 'el final de la soldadura' : 'el perno más lejano'})${tub ? ' · en naranja los cordones tubo–cartela; punteado la ranura' : ''}${tub && !red && c.rRef ? ` · en morado la platina de refuerzo ${c.bRf || 100}×${c.tRf || 6.4} × ${Math.round(LRd)} mm (una adelante y otra atrás)` : ''}`);
 }
 // Cartela de esquina (24-nov): elevación con la columna a la izquierda, la viga abajo y la cartela en la esquina
 function dibEsquina(c, r){
