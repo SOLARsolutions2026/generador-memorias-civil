@@ -113,7 +113,7 @@ function paneCombos(){
     ${esIng() ? '<button class="btn sm" type="button" id="addK" style="margin-top:6px">＋ Agregar combinación</button>' : ''}
     <div class="hint" style="margin-top:4px">Símbolos: ${Object.keys(Combos.SIMB).join(', ')}.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn grn" type="button" id="copiaK">📋 Copiar tabla para el software / Excel</button><button class="btn" type="button" id="bajaK">⬇ Descargar (.txt)</button></div>
-    <div class="hint" style="margin-top:6px">La tabla trae una fila por caso: ComboName, ComboType, CaseType, CaseName, ScaleSF (las componentes van antes de las envolventes que las usan). Al subir el modelo en el Anexo C, la app revisa que estas combinaciones estén con los mismos factores.</div></div>`;
+    <div class="hint" style="margin-top:6px">La tabla sale con las mismas columnas de la ventana del software (ComboName, ComboType, AutoDesign, CaseName, ModeNumber, ScaleFactor y los cuatro diseños), una fila por caso, con las componentes antes de las envolventes. Para pegarla: <b>Edit → Interactive Database Editing → Combination Definitions</b>; borre primero todas las filas que haya (selecciónelas y «Delete Rows») y pegue en la primera celda de ComboName; revise y dé «Apply to Model». Al subir el modelo en el Anexo C, la app revisa que las combinaciones estén con los mismos factores.</div></div>`;
   h += `<div class="note blue">Estas tablas se explicarán en la <b>memoria general</b> (pendiente de construir); aquí se trabajan y se revisan.</div>`;
   pane(h);
   if(K.redImg) urlDe(K.redImg).then(u => { const b = $('#redImgV'); if(b) b.innerHTML = u ? `<img src="${esc(u)}" alt="Cálculo de la redundancia" style="max-width:100%;max-height:300px"/>` : '<span class="muted">No se encontró la foto.</span>'; });
@@ -152,7 +152,8 @@ function paneCombos(){
   if($('#addK')) $('#addK').onclick = () => { K.otras.push({ nom:'', txt:'' }); guardarMemoria(); paneCombos(); };
   $$('[data-delk]').forEach(b => b.onclick = () => { K.otras.splice(+b.dataset.delk, 1); guardarMemoria(); paneCombos(); });
   const txt = () => Combos.tablaSAP(calcK().activas);
-  $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt()); toast('Tabla copiada. Pégala en Excel o en el software.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
+  // Copiar = sin la fila de títulos (se pega directo en la primera celda de ComboName del software); Descargar = con títulos
+  $('#copiaK').onclick = async () => { try{ await navigator.clipboard.writeText(txt().split('\n').slice(1).join('\n')); toast('Tabla copiada (sin títulos). Pégala en la primera celda de ComboName del software.'); }catch(e){ toast('No se pudo copiar; usa Descargar.'); } };
   $('#bajaK').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt()], { type:'text/plain' })); a.download = `${S.m.consecutivo}_combinaciones.txt`; a.click(); };
 }
 

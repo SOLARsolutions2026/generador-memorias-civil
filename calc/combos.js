@@ -184,10 +184,17 @@ function calcular(K, conSismo){
 }
 
 // Texto para pegar en Excel / SAP (Load Combination Definitions)
+// Tabla para pegar en «Interactive Database Editing → Combination Definitions» del software (27-nov, captura de Amo, v24.2):
+// mismas columnas y en el mismo orden que muestra esa ventana; ComboType, AutoDesign y los diseños solo en la primera fila de cada combinación.
+// El tipo de caso (patrón o combinación) lo deduce el software por el nombre. Componentes antes de las envolventes que las usan.
 function tablaSAP(lista){
-  const combos = new Set(lista.map(c => c.id));
-  const filas = [['ComboName', 'ComboType', 'CaseType', 'CaseName', 'ScaleSF']];
-  for(const c of lista) for(const [p, f] of Object.entries(c.sap)) filas.push([c.id, c.tipo || 'Linear Add', combos.has(p) ? 'Combination' : 'Linear Static', p, f]);
+  const filas = [['ComboName', 'ComboType', 'AutoDesign', 'CaseName', 'ModeNumber', 'ScaleFactor', 'SteelDesign', 'ConcDesign', 'AlumDesign', 'ColdDesign']];
+  for(const c of lista){
+    const res = c.grupo === 'Resistencia' || c.grupo === 'Impacto' || c.grupo === 'Otras';
+    Object.entries(c.sap).forEach(([p, f], i) => filas.push(i === 0
+      ? [c.id, c.tipo || 'Linear Add', 'No', p, '', f, res ? 'Strength' : 'None', 'None', 'None', 'None']
+      : [c.id, '', '', p, '', f, '', '', '', '']));
+  }
   return filas.map(r => r.join('\t')).join('\n');
 }
 
