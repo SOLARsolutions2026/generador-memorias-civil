@@ -49,14 +49,16 @@ function paneCombos(){
   h += `<div class="card"><div class="ct">Irregularidades y coeficiente de capacidad de disipación R (NSR-10 A.3.3)</div>`;
   if(!sis) h += `<div class="note green"><b>Sin análisis sísmico.</b> No se evalúan irregularidades ni se generan combinaciones con sismo.</div></div>`;
   else {
-    const opS = Combos.R0S.map(s => [s.k, s.n + (s.R0 ? ` — R0 = ${s.R0}, Ω0 = ${s.om}` : '')]);
-    const infoS = (s, R0, om) => `<div class="hint" style="margin-top:2px">${s.tab ? `Tabla ${s.tab}` : 'Sistema escrito a mano'} · R0 = ${fx(R0,1)} · Ω0 = ${fx(om,1)}${s.niv ? ` · disipación ${s.niv.toUpperCase()}` : ''}</div>`;
+    // Escoger el sistema (opción A de Amo, 27-nov): lista agrupada con nombres cortos y pastillas con los datos
+    const GRP_S = [['mom', 'Pórticos de acero resistentes a momento · Tabla A.3-3'], ['comb', 'Sistema combinado con diagonales concéntricas · Tabla A.3-2'], ['otro', 'Otro']];
+    const selSis = (campo, val) => `<div class="f"><select class="sis-sel" data-a="${campo}" data-re="1" ${ro_}>${GRP_S.map(([g, t]) => `<optgroup label="${esc(t)}">${Combos.R0S.filter(x => x.g === g).map(x => `<option value="${x.k}" ${x.k === val ? 'selected' : ''}>${esc(x.c + (x.R0 ? ` · R0 ${fx(x.R0,1)}` : ''))}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
+    const pills = (sx, R0, om, Rv, nR) => `<div class="sis-pills">${sx.tab ? `<span>Tabla <b>${sx.tab}</b></span>` : ''}<span>R0 <b>${fx(R0,1)}</b></span><span>Ω0 <b>${fx(om,1)}</b></span>${sx.niv ? `<span>Disipación <b>${sx.niv.toUpperCase()}</b></span>` : ''}<span>${nR} <b>${fx(Rv,2)}</b></span></div>`;
+    const caja = (tit, campo, val, sx, R0, om, Rv, nR, otro) => `<div class="sis-box"><h5>${tit}</h5>${selSis(campo, val)}
+      ${val === 'otro' ? `<div class="fg g2" style="margin-top:8px">${fIn(K, otro[0], 'R0', { ph:'escribe R0' })}${fIn(K, otro[1], 'Ω0', { ph:'escribe Ω0' })}</div>` : ''}${pills(sx, R0, om, Rv, nR)}</div>`;
     h += `<label class="chk" style="margin-bottom:8px"><input type="checkbox" data-a="dosSis" data-re="1" ${K.dosSis ? 'checked' : ''} ${ro_}/> Un sistema distinto en cada sentido (NSR-10 A.3.2)</label>
-      <div class="fg g4">${fSel(K,'sisR',K.dosSis ? 'Sistema en el sentido X' : 'Sistema estructural (Tablas A.3-3 y A.3-2)',opS,{cls:'span4',re:1})}
-        ${K.sisR === 'otro' ? fIn(K,'R0','R0',{ph:'escribe R0'}) + fIn(K,'Om0','Ω0',{ph:'escribe Ω0'}) : ''}</div>${infoS(R.sis, R.R0, R.Om0x)}
-      ${K.dosSis ? `<div class="fg g4" style="margin-top:8px">${fSel(K,'sisY','Sistema en el sentido Y',opS,{cls:'span4',re:1})}
-        ${K.sisY === 'otro' ? fIn(K,'R0y','R0 (Y)',{ph:'escribe R0'}) + fIn(K,'Om0y','Ω0 (Y)',{ph:'escribe Ω0'}) : ''}</div>${infoS(R.sisY, R.R0y, R.Om0y)}
-        <div class="hint" style="margin-top:6px">Cada sentido se diseña con el R de su sistema. Los elementos comunes a los dos sistemas (columnas) cumplen el requisito de disipación más exigente.</div>` : ''}
+      <div class="sis-grid ${K.dosSis ? 'dos' : ''}">${caja(K.dosSis ? 'Sentido X' : 'Sistema estructural', 'sisR', K.sisR, R.sis, R.R0, R.Om0x, R.Rx, K.dosSis ? 'Rx' : 'R', ['R0', 'Om0'])}
+        ${K.dosSis ? caja('Sentido Y', 'sisY', K.sisY, R.sisY, R.R0y, R.Om0y, R.Ry, 'Ry', ['R0y', 'Om0y']) : ''}</div>
+      ${K.dosSis ? '<div class="hint" style="margin-top:6px">Cada sentido se diseña con el R de su sistema. Los elementos comunes a los dos sistemas (columnas) cumplen el requisito de disipación más exigente.</div>' : ''}
       <div class="hint" style="margin:8px 0 2px">Toca una fila (▸) para abrir su figura y sus datos. Con los datos completos la revisión fija el Sí/No; 4P y 5P se deciden mirando la figura.</div>
       <h4 class="sub">En planta (Tabla A.3-6) → φp</h4>${Combos.IRR_P.map(i => filaIrr(i, 'irrP')).join('')}
       <h4 class="sub">En altura (Tabla A.3-7) → φa</h4>${Combos.IRR_A.map(i => filaIrr(i, 'irrA')).join('')}

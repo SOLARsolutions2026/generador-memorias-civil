@@ -24,14 +24,14 @@ const IRR_A = [ // Tabla A.3-7 — irregularidades en altura
   { k:'5bA', n:'Piso débil (discontinuidad extrema en la resistencia)', phi:0.8 },
 ];
 const R0S = [ // Tabla A.3-3 — pórticos de acero resistentes a momento (Ω0 = 3.0) · Tabla A.3-2 — sistema combinado (filas 3.a–3.d)
-  { k:'des', n:'Pórtico de acero resistente a momento con disipación especial (DES)', R0:7.0, om:3.0, niv:'des', tab:'A.3-3' },
-  { k:'dmo', n:'Pórtico de acero resistente a momento con disipación moderada (DMO)', R0:5.0, om:3.0, niv:'dmo', tab:'A.3-3' },
-  { k:'dmi', n:'Pórtico de acero resistente a momento con disipación mínima (DMI)', R0:3.0, om:3.0, niv:'dmi', tab:'A.3-3' },
-  { k:'c3a', n:'3.a Pórticos de acero con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.5, niv:'des', tab:'A.3-2', arr:true },
-  { k:'c3b', n:'3.b Pórticos de acero con diagonales concéntricas DMI, pórticos no resistentes a momentos (sistema combinado)', R0:4.0, om:2.5, niv:'dmi', tab:'A.3-2', arr:true },
-  { k:'c3c', n:'3.c Pórticos mixtos con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.0, niv:'des', tab:'A.3-2', arr:true },
-  { k:'c3d', n:'3.d Pórticos mixtos con diagonales concéntricas DMI (sistema combinado)', R0:3.0, om:2.0, niv:'dmi', tab:'A.3-2', arr:true },
-  { k:'otro', n:'Otro sistema (escribir R0 y Ω0)', R0:null, om:null, niv:'', tab:'' },
+  { k:'des', g:'mom', c:'DES — disipación especial', n:'Pórtico de acero resistente a momento con disipación especial (DES)', R0:7.0, om:3.0, niv:'des', tab:'A.3-3' },
+  { k:'dmo', g:'mom', c:'DMO — disipación moderada', n:'Pórtico de acero resistente a momento con disipación moderada (DMO)', R0:5.0, om:3.0, niv:'dmo', tab:'A.3-3' },
+  { k:'dmi', g:'mom', c:'DMI — disipación mínima', n:'Pórtico de acero resistente a momento con disipación mínima (DMI)', R0:3.0, om:3.0, niv:'dmi', tab:'A.3-3' },
+  { k:'c3a', g:'comb', c:'3.a Diagonales de acero DES', n:'3.a Pórticos de acero con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.5, niv:'des', tab:'A.3-2', arr:true },
+  { k:'c3b', g:'comb', c:'3.b Diagonales de acero DMI (pórticos sin momento)', n:'3.b Pórticos de acero con diagonales concéntricas DMI, pórticos no resistentes a momentos (sistema combinado)', R0:4.0, om:2.5, niv:'dmi', tab:'A.3-2', arr:true },
+  { k:'c3c', g:'comb', c:'3.c Pórticos mixtos, diagonales DES', n:'3.c Pórticos mixtos con diagonales concéntricas DES (sistema combinado)', R0:5.0, om:2.0, niv:'des', tab:'A.3-2', arr:true },
+  { k:'c3d', g:'comb', c:'3.d Pórticos mixtos, diagonales DMI', n:'3.d Pórticos mixtos con diagonales concéntricas DMI (sistema combinado)', R0:3.0, om:2.0, niv:'dmi', tab:'A.3-2', arr:true },
+  { k:'otro', g:'otro', c:'Escribir R0 y Ω0', n:'Otro sistema (escribir R0 y Ω0)', R0:null, om:null, niv:'', tab:'' },
 ];
 // Símbolos de carga y su nombre
 const SIMB = { D:'Muerta', Lr:'Viva de cubierta', W:'Viento', Ex:'Sismo X', Ey:'Sismo Y', Tx:'Torsión X', Ty:'Torsión Y', IMPx:'Impacto X', IMPy:'Impacto Y' };

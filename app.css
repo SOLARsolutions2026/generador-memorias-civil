@@ -896,3 +896,14 @@ th.n{text-align:right}
 .irr-grid.tor{grid-template-columns:minmax(200px,260px) 1fr}
 .tor-bar .tlim.on{border-left:2px solid #334155}.tor-bar .tlim.on span{color:#0f172a;font-weight:700}
 .tor-bar .tlim.off{opacity:.45}
+
+/* Escoger el sistema estructural por sentido (27-nov, opción A de Amo) */
+.sis-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:4px}
+.sis-grid.dos{grid-template-columns:1fr 1fr}
+.sis-box{border:1px solid #d6dde6;border-radius:12px;padding:12px;background:#fff}
+.sis-box h5{margin:0 0 8px;font-size:13.5px;color:#1f3b63}
+.sis-box select.sis-sel{width:100%}
+.sis-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.sis-pills span{background:#eef2f7;border-radius:20px;padding:3px 10px;font-size:12px;color:#41505f}
+.sis-pills b{color:#1f3b63}
+@media (max-width:900px){.sis-grid.dos{grid-template-columns:1fr}}
