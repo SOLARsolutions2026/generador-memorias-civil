@@ -864,20 +864,25 @@ function dibEsquina(c, r){
   const g = r.geo || {}, vg = g.vg || { d:300, nom:c.viga }, cl = g.cl || { d:300, bf:300, nom:c.columna }, u = g.ufm || {};
   const alma = c.cara === 'alma', wc = alma ? cl.bf : cl.d, Lh = +c.Lh, Lv = +c.Lv, ang = (+c.ang || 45) * Math.PI / 180;
   const W = wc + Lh + 260, H = vg.d + Lv + 220, k = 380 / Math.max(W, H);
-  const X = v => 80 + (v + wc) * k, Y = v => 20 + (Lv + 200 - v) * k;      // x = 0 cara de la columna, y = 0 cara superior de la viga
-  const wp = [-(alma ? 0 : wc / 2), -vg.d / 2], far = [wp[0] + (W) * Math.cos(ang), wp[1] + W * Math.sin(ang)];
-  let h = `<rect x="${X(-wc)}" y="${Y(Lv + 200)}" width="${wc * k}" height="${(Lv + 200 + vg.d + 20) * k}" class="sop"/>
+  const X = v => 80 + (v + (alma ? cl.bf / 2 + (+cl.tw || 9) / 2 : wc)) * k, Y = v => 20 + (Lv + 200 - v) * k;      // x = 0 cara de la columna donde se suelda (ala o alma), y = 0 cara superior de la viga
+  // Por el alma (27-nov, observación de Amo): x = 0 es la cara del ALMA, que está en el centro de bf; las alas sobresalen (bf − tw)/2
+  // hacia la viga, por delante y por detrás de la cartela. El punto de trabajo queda en el eje de la columna (x = −tw/2).
+  const tw = +cl.tw || 9, wp = [-(alma ? tw / 2 : wc / 2), -vg.d / 2], far = [wp[0] + (W) * Math.cos(ang), wp[1] + W * Math.sin(ang)];
+  const xc0 = alma ? -tw / 2 - cl.bf / 2 : -wc, hc = (Lv + 200 + vg.d + 20) * k;
+  let h = `<rect x="${X(xc0)}" y="${Y(Lv + 200)}" width="${wc * k}" height="${hc}" class="sop"${alma ? ' style="opacity:.45"' : ''}/>
+    ${alma ? `<rect x="${X(-tw)}" y="${Y(Lv + 200)}" width="${Math.max(2, tw * k)}" height="${hc}" fill="#64748b"/>
+    <line x1="${X(-tw / 2)}" y1="${Y(Lv + 200)}" x2="${X(-tw / 2)}" y2="${Y(-vg.d - 20)}" stroke="#64748b" stroke-width="1" stroke-dasharray="8 3 2 3"/>` : ''}
     <rect x="${X(0)}" y="${Y(0)}" width="${(Lh + 260) * k}" height="${vg.d * k}" class="vg"/>
     <path d="M${X(0)} ${Y(0)} L${X(Lh)} ${Y(0)} L${X(Lh)} ${Y(Lv * 0.25)} L${X(Lh * 0.35)} ${Y(Lv)} L${X(0)} ${Y(Lv)} Z" class="pl"/>
     <line x1="${X(wp[0])}" y1="${Y(wp[1])}" x2="${X(far[0])}" y2="${Y(far[1])}" stroke="#475569" stroke-width="2" stroke-dasharray="6 4"/>
     <line x1="${X(Lh * 0.45)}" y1="${Y(Lh * 0.45 * Math.tan(ang) + wp[1] - wp[0] * Math.tan(ang))}" x2="${X(far[0])}" y2="${Y(far[1])}" stroke="#475569" stroke-width="${Math.max(6, 14)}" opacity=".5"/>
     <line x1="${X(0)}" y1="${Y(0)}" x2="${X(Lh)}" y2="${Y(0)}" class="wl"/><line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(Lv)}" class="wl"/>
     <circle cx="${X(wp[0])}" cy="${Y(wp[1])}" r="3.5" fill="#dc2626"/><text x="${X(wp[0]) + 5}" y="${Y(wp[1]) + 12}" class="lbl" style="fill:#dc2626">punto de trabajo</text>
-    <text x="${X(-wc / 2)}" y="${Y(Lv + 160)}" class="lbl" text-anchor="middle">${esc(cl.nom || c.columna)}${alma ? ' (alma)' : ''}</text><text x="${X(Lh + 130)}" y="${Y(-vg.d / 2) + 4}" class="lbl" text-anchor="middle">${esc(vg.nom || c.viga)}</text>`;
-  h += cotaH(Y(-vg.d) + 16, X(0), X(Lh), `Lh = ${Lh}`) + cotaV(X(-wc) - 8, Y(0), Y(Lv), `Lv = ${Lv}`);
+    <text x="${X(alma ? xc0 + 4 : -wc / 2)}" y="${Y(Lv + 160)}" class="lbl" text-anchor="${alma ? 'start' : 'middle'}">${esc(cl.nom || c.columna)}${alma ? ' (alma)' : ''}</text><text x="${X(Lh + 130)}" y="${Y(-vg.d / 2) + 4}" class="lbl" text-anchor="middle">${esc(vg.nom || c.viga)}</text>`;
+  h += cotaH(Y(-vg.d) + 16, X(0), X(Lh), `Lh = ${Lh}`) + cotaV(X(xc0) - 8, Y(0), Y(Lv), `Lv = ${Lv}`);
   if(u.Hb != null) h += `<text x="${X(Lh * 0.5)}" y="${Y(0) - 6}" class="lbl" text-anchor="middle" style="fill:#ea580c">Hb ${f2(u.Hb, 0)} · Vb ${f2(u.Vb, 0)} kN</text>
     <text x="${X(0) + 6}" y="${Y(Lv * 0.55)}" class="lbl" style="fill:#ea580c">Vc ${f2(u.Vc, 0)} · Hc ${f2(u.Hc, 0)} kN</text>`;
-  return svgW(X(Lh + 260) + 10, Y(-vg.d) + 40, h, 'Cartela de esquina', `Diagonal a ${c.ang}° · el eje pasa por el punto de trabajo (cruce de los ejes de viga y columna) · en naranja las soldaduras y las fuerzas de cada interfaz (fuerza uniforme)`);
+  return svgW(X(Lh + 260) + 10, Y(-vg.d) + 40, h, 'Cartela de esquina', `Diagonal a ${c.ang}°${c.cara === 'alma' ? ' · unión al alma: el alma está en el centro de la columna y las alas sobresalen a los lados de la cartela' : ''} · el eje pasa por el punto de trabajo (cruce de los ejes de viga y columna) · en naranja las soldaduras y las fuerzas de cada interfaz (fuerza uniforme)`);
 }
 // Cruce en X (24-nov): la diagonal continua en gris, la interrumpida llega por los dos lados a la platina
 function dibCruce(c, r){
