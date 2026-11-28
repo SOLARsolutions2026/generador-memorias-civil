@@ -171,7 +171,7 @@ function resZapHTML(X, imp, sg){
   const T = imp ? (cab, filas) => `<table class="ax-tb"><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.map(r => `<tr>${r.map((c,i) => `<td class="${i?'c':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>` : tabla;
   const rel = r => imp ? fx(r,3) : barra3(r), ok = r => imp ? (r <= 1 ? 'Cumple' : '<b>No cumple</b>') : okP(r);
   const filas = [
-    ['Presión del suelo (servicio)', `q máx = ${fx(s.qmax,1)} kN/m²`, `qa = ${fx(X.qa,1)} kN/m²`, rel(s.rel), ok(s.rel) + bb('suelo', s.rel > 1), filaReacTxt(s.f)],
+    ['Presión del suelo (servicio)' + (s.sinT ? ' · sin tracción' : ''), s.fuera ? 'la resultante sale de la zapata' : `q máx = ${fx(s.qmax,1)} kN/m²${s.sinT ? ` (contacto ${fx(s.cont*100,0)} %)` : ''}`, `qa = ${fx(X.qa,1)} kN/m²`, rel(s.rel), ok(s.rel) + bb('suelo', s.rel > 1), filaReacTxt(s.f)],
     ['Excentricidad dentro del núcleo', `6ex/B + 6ey/L = ${fx(6*s.ex/(X.B/1000) + 6*s.ey/(X.L/1000),3)}`, '≤ 1.00', '', s.nucleo ? (imp ? 'Cumple' : okP(0)) : (imp ? '<b>No cumple</b>' : okP(9) + bb('nucleo', true)), ''],
     ['Cortante en una dirección, x (C.11.2)', `${k3(X.cx.Vu)} kN`, `${k3(X.cx.phiVc)} kN`, rel(X.cx.rel), ok(X.cx.rel) + bb('corteX', X.cx.rel > 1), filaReacTxt(u.f)],
     ['Cortante en una dirección, y', `${k3(X.cy.Vu)} kN`, `${k3(X.cy.phiVc)} kN`, rel(X.cy.rel), ok(X.cy.rel) + bb('corteY', X.cy.rel > 1), ''],
@@ -193,8 +193,9 @@ function detZapCalc(X, imp){
   return `<h4 class="sub">Cargas y presiones</h4>${kv([
     ['Área A = B·L', fx(X.A,3) + ' m²'], ['Pesos: zapata · pedestal · relleno · sobre el terreno', `${fx(p.Wz,2)} · ${fx(p.Wp,2)} · ${fx(p.Ws,2)} · ${fx(p.Wq,2)} kN`],
     ['Servicio: P total · Mx · My (incluye V·(Hp + h) y la excentricidad del pedestal)', `${fx(s.P,2)} kN · ${fx(s.Mx,2)} · ${fx(s.My,2)} kN·m`],
-    ['q = P/A·(1 ± 6ex/B ± 6ey/L)', `máx ${fx(s.qmax,1)} · mín ${fx(s.qmin,1)} kN/m²`],
-    ['Resistencia: Pu · Mux · Muy', `${fx(u.P,2)} kN · ${fx(u.Mx,2)} · ${fx(u.My,2)} kN·m`], ['Presión última neta máxima qu', fx(u.qu,1) + ' kN/m²']])}
+    s.sinT ? ['q sin tracción en el suelo (6ex/B + 6ey/L > 1: un lado se despega; plano de presiones que equilibra P, Mx y My, uniaxial = 2P/(3·L·(B/2 − e)))', s.fuera ? 'la resultante sale de la zapata: no hay equilibrio' : `máx ${fx(s.qmax,1)} kN/m² · zona en contacto ${fx(s.cont*100,0)} % del área`]
+      : ['q = P/A·(1 ± 6ex/B ± 6ey/L)', `máx ${fx(s.qmax,1)} · mín ${fx(s.qmin,1)} kN/m²`],
+    ['Resistencia: Pu · Mux · Muy', `${fx(u.P,2)} kN · ${fx(u.Mx,2)} · ${fx(u.My,2)} kN·m`], ['Presión última neta máxima qu' + (u.sinT ? ' (sin tracción en el suelo)' : ''), u.fuera ? 'la resultante sale de la zapata' : fx(u.qu,1) + ' kN/m²']])}
     <h4 class="sub">Cortante y punzonamiento</h4>${kv([
     ['d en x · d en y (capa inferior / superior)', `${fx(X.dx,1)} · ${fx(X.dy,1)} mm`], ['Voladizos desde la cara del pedestal x · y', `${fx(X.vx,0)} · ${fx(X.vy,0)} mm`],
     ['φVc = 0.75·0.17·√f\'c·b·d', `x: ${fx(X.cx.phiVc/1e3,2)} · y: ${fx(X.cy.phiVc/1e3,2)} kN`],

@@ -54,14 +54,44 @@ function zapata(z, servicio, resistencia){
   const brazoS = (Hp + h)/1000, brazoU = Hp/1000;                      // m: el cortante del apoyo se traslada a la base (suelo) o a la cara superior (concreto)
   const cargas = (f, brazo) => ({ P:Math.max(0, f.F3), Mx:Math.abs(f.M1) + Math.abs(f.F2)*brazo, My:Math.abs(f.M2) + Math.abs(f.F1)*brazo });
 
+  // Presión del suelo SIN tracción (28-nov, corrección pedida por Amo): si la resultante sale del núcleo (6ex/B + 6ey/L > 1),
+  // q = P/A·(1 ± …) supondría que el suelo jala; se busca el plano q = q0 + a·x + b·y recortado en 0 que equilibra P, Mx y My
+  // (Newton sobre una malla de 60 × 60). Uniaxial coincide con q = 2P/(3·L·(B/2 − e)). Sin solución = la resultante sale de la zapata.
+  const sinTraccion = (P, Mx, My) => {
+    const Bm = B/1000, Lm = L/1000, kx = 6*(My/P)/Bm, ky = 6*(Mx/P)/Lm, k = kx + ky;
+    if(!(P > 0)) return { qmax:0, qmin:0, k, cont:1, lineal:true };
+    if(k <= 1 + 1e-9) return { qmax:P/A*(1 + k), qmin:P/A*(1 - k), k, cont:1, lineal:true };
+    const n = 80, dxg = Bm/n, dyg = Lm/n, dA = dxg*dyg;
+    let q0 = P/A, a = 12*My/(Bm**3*Lm), b = 12*Mx/(Lm**3*Bm), ok = false;
+    for(let it = 0; it < 200 && !ok; it++){
+      let F = [0, 0, 0], J = [[0,0,0],[0,0,0],[0,0,0]];
+      for(let i = 0; i < n; i++) for(let j = 0; j < n; j++){
+        const x = -Bm/2 + (i + 0.5)*dxg, y = -Lm/2 + (j + 0.5)*dyg, q = q0 + a*x + b*y;
+        if(q <= 0) continue; const v = [1, x, y];
+        for(let r = 0; r < 3; r++){ F[r] += q*v[r]*dA; for(let c = 0; c < 3; c++) J[r][c] += v[r]*v[c]*dA; }
+      }
+      const R = [F[0] - P, F[1] - My, F[2] - Mx];
+      if(Math.abs(R[0]) < 1e-4*P && Math.abs(R[1]) < 1e-4*P*Bm && Math.abs(R[2]) < 1e-4*P*Lm){ ok = true; break; }
+      const det = m => m[0][0]*(m[1][1]*m[2][2] - m[1][2]*m[2][1]) - m[0][1]*(m[1][0]*m[2][2] - m[1][2]*m[2][0]) + m[0][2]*(m[1][0]*m[2][1] - m[1][1]*m[2][0]);
+      const D = det(J); if(!(Math.abs(D) > 1e-18)) break;
+      const sol = [0, 1, 2].map(c => det(J.map((row, r) => row.map((v, cc) => cc === c ? R[r] : v))) / D);
+      q0 -= sol[0]; a -= sol[1]; b -= sol[2];
+      if(!isFinite(q0 + a + b)) break;
+    }
+    if(!ok) return { qmax:Infinity, qmin:0, k, cont:0, lineal:false, fuera:true };
+    let qm = 0, nc = 0;
+    for(const sx of [-1, 1]) for(const sy of [-1, 1]) qm = Math.max(qm, q0 + a*sx*Bm/2 + b*sy*Lm/2);
+    for(let i = 0; i < n; i++) for(let j = 0; j < n; j++) if(q0 + a*(-Bm/2 + (i + 0.5)*dxg) + b*(-Lm/2 + (j + 0.5)*dyg) > 0) nc++;
+    return { qmax:qm, qmin:0, k, cont:nc/(n*n), lineal:false };
+  };
   // Z1 — presión de contacto con cargas de servicio (q = P/A ± 6M/…; e dentro del núcleo)
   let serv = null;
   for(const f of servicio){
     const c = cargas(f, brazoS), P = c.P + Wz + Wp + Ws + Wq;
     const Mx = c.Mx + c.P*yc/1000, My = c.My + c.P*xc/1000;          // + momento por la excentricidad del pedestal
-    const ex = My/P, ey = Mx/P, k = 6*ex/(B/1000) + 6*ey/(L/1000);
-    const qmax = P/A*(1 + k), qmin = P/A*(1 - k);
-    const r = { f, P, Mx, My, ex, ey, qmax, qmin, nucleo:k <= 1 + 1e-9, rel:qmax/qa };
+    const ex = My/P, ey = Mx/P, st = sinTraccion(P, Mx, My), k = st.k;
+    const qmax = st.qmax, qmin = st.qmin;
+    const r = { f, P, Mx, My, ex, ey, qmax, qmin, nucleo:k <= 1 + 1e-9, rel:qmax/qa, sinT:!st.lineal, cont:st.cont, fuera:!!st.fuera };
     if(!serv || r.qmax > serv.qmax) serv = r;
   }
   // Presión última neta (cargas mayoradas del apoyo, sin pesos propios que se cancelan con el suelo)
@@ -69,8 +99,8 @@ function zapata(z, servicio, resistencia){
   let ult = null;
   for(const f of resistencia){
     const c = cargas(f, brazoU), P = c.P, Mx = c.Mx + P*yc/1000, My = c.My + P*xc/1000;
-    const k = P > 0 ? 6*(My/P)/(B/1000) + 6*(Mx/P)/(L/1000) : 0, qu = P/A*(1 + k);
-    if(!ult || qu > ult.qu) ult = { f, P, Mx, My, qu, quMin:P/A*(1 - k) };
+    const st = sinTraccion(P, Mx, My), qu = st.qmax;
+    if(!ult || qu > ult.qu) ult = { f, P, Mx, My, qu, quMin:st.qmin, sinT:!st.lineal, cont:st.cont, fuera:!!st.fuera };
   }
   const qu = ult.qu/1000;                                              // kN/m² → N/mm²·… (qu en MPa = kN/m² /1000)
   // Voladizos desde la cara del pedestal (si el pedestal está en un borde, el voladizo es el lado largo)
